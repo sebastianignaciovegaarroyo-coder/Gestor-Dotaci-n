@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor de Dotación en Tiempo Real</title>
+    <title>BRAMAQ - Gestor de Dotación</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y ReactDOM -->
@@ -11,7 +11,7 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <!-- Babel para compilar JSX en el navegador -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- SheetJS para Excel -->
+    <!-- SheetJS para leer y escribir Excel (.xlsx) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -56,7 +56,7 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const saved = localStorage.getItem('bramaq_cloud_sync_v700');
+              const saved = localStorage.getItem('bramaq_master_stable_v800');
               if (saved) {
                 const parsed = JSON.parse(saved);
                 if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -66,7 +66,6 @@
           });
 
           const [isOnline, setIsOnline] = useState(navigator.onLine);
-          const [isSyncing, setIsSyncing] = useState(false);
           const [searchTerm, setSearchTerm] = useState('');
           const [activeFilter, setActiveFilter] = useState('TODOS');
           const [activeTab, setActiveTab] = useState('dashboard');
@@ -98,60 +97,22 @@
 
           const [editingLogId, setEditingLogId] = useState(null);
 
-          // URL centralizada en la nube pública
-          const CLOUD_API_URL = "https://api.npoint.io/c8872b3a1a45b34208a3";
-
-          const sincronizarConNube = async () => {
-            setIsSyncing(true);
-            try {
-              const res = await fetch(CLOUD_API_URL + "?v=" + Date.now(), { cache: 'no-store' });
-              if (res.ok) {
-                const data = await res.json();
-                if (data && Array.isArray(data.employees) && data.employees.length > 0) {
-                  setEmployees(data.employees);
-                  localStorage.setItem('bramaq_cloud_sync_v700', JSON.stringify(data.employees));
-                }
-              }
-            } catch (e) {
-              // Mantener datos locales en caso de offline
-            } finally {
-              setIsSyncing(false);
-            }
-          };
-
           useEffect(() => {
             const handleOnline = () => setIsOnline(true);
             const handleOffline = () => setIsOnline(false);
             window.addEventListener('online', handleOnline);
             window.addEventListener('offline', handleOffline);
-
-            sincronizarConNube();
-            // Actualización automática en tiempo real cada 10 segundos
-            const interval = setInterval(sincronizarConNube, 10000);
-
             return () => {
-              clearInterval(interval);
               window.removeEventListener('online', handleOnline);
               window.removeEventListener('offline', handleOffline);
             };
           }, []);
 
-          const guardarYSubirCloud = async (nuevaLista) => {
+          const guardarDatos = (nuevaLista) => {
             setEmployees(nuevaLista);
-            localStorage.setItem('bramaq_cloud_sync_v700', JSON.stringify(nuevaLista));
-
-            setIsSyncing(true);
             try {
-              await fetch(CLOUD_API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ employees: nuevaLista })
-              });
-            } catch (e) {
-              alert("⚠️ Sin conexión a internet. Los cambios se guardaron localmente.");
-            } finally {
-              setIsSyncing(false);
-            }
+              localStorage.setItem('bramaq_master_stable_v800', JSON.stringify(nuevaLista));
+            } catch (e) {}
           };
 
           useEffect(() => {
@@ -432,7 +393,7 @@
               const newId = Date.now();
               updatedList = [...employees, { ...finalData, id: newId, historial: [] }];
             }
-            guardarYSubirCloud(updatedList);
+            guardarDatos(updatedList);
             setIsModalOpen(false);
           };
 
@@ -538,7 +499,7 @@
               return emp;
             });
 
-            guardarYSubirCloud(updatedList);
+            guardarDatos(updatedList);
             setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
 
             setNewLog({ 
@@ -556,7 +517,7 @@
             if (confirm("¿Estás seguro de eliminar este registro de la hoja de vida?")) {
               const updatedHistorial = (selectedEmployeeForHistory.historial || []).filter(log => log.id !== logId);
               const updatedList = employees.map(emp => emp.rut === selectedEmployeeForHistory.rut ? { ...emp, historial: updatedHistorial } : emp);
-              guardarYSubirCloud(updatedList);
+              guardarDatos(updatedList);
               setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
             }
           };
@@ -649,7 +610,7 @@
             if (confirm("¿Confirmas la eliminación de este registro del sistema?")) {
               const cleanTarget = (rutTarget || '').replace(/[^0-9kK]/g, '').toLowerCase();
               const updatedList = employees.filter(emp => (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase() !== cleanTarget);
-              guardarYSubirCloud(updatedList);
+              guardarDatos(updatedList);
             }
           };
 
@@ -730,8 +691,8 @@
                   }
                 });
                 const updatedList = Array.from(uniqueMap.values());
-                guardarYSubirCloud(updatedList);
-                alert(`¡Excel subido y sincronizado! Se agregaron ${newEmployees.length} registros y se actualizaron en la nube para todos.`);
+                guardarDatos(updatedList);
+                alert(`¡Excel integrado! Se cargaron ${newEmployees.length} registros nuevos.`);
               }
             };
             reader.readAsArrayBuffer(file);
@@ -755,22 +716,14 @@
                         <div>
                           <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación BRAMAQ</span>
                           <span className="text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 text-emerald-400">
-                            <span className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-500 animate-ping' : 'bg-emerald-500 animate-pulse'}`}></span>
-                            {isSyncing ? 'Sincronizando Nube...' : 'Nube Cloud Activa'}
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Sistema Oficial Operativo
                           </span>
                         </div>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-2 flex-wrap justify-center w-full md:w-auto">
-                      <button 
-                        onClick={sincronizarDatosNube}
-                        className="bg-sky-600 hover:bg-sky-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow flex items-center gap-1.5"
-                        title="Actualizar datos desde la nube"
-                      >
-                        <i data-lucide="cloud-download" className="w-4 h-4"></i> Actualizar desde Nube
-                      </button>
-
                       <div className="flex items-center gap-2 bg-slate-700/60 px-3 py-1.5 rounded-xl border border-slate-600 text-xs">
                         <span className="font-bold text-slate-300">Perfil:</span>
                         <select 
