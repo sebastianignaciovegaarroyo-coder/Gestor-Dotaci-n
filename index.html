@@ -23,9 +23,9 @@
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
       import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-      import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+      import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-      window.firebaseModules = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, collection, doc, setDoc, onSnapshot };
+      window.firebaseModules = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, setDoc, getDoc };
     </script>
 
     <script type="text/babel">
@@ -51,17 +51,24 @@
         };
 
         function App() {
-          const [employees, setEmployees] = useState(defaultData);
+          const [employees, setEmployees] = useState(() => {
+            try {
+              const localSaved = localStorage.getItem('bramaq_persistent_data_v22');
+              return localSaved ? JSON.parse(localSaved) : defaultData;
+            } catch (e) {
+              return defaultData;
+            }
+          });
           const [isCloudSynced, setIsCloudSynced] = useState(false);
 
-          // Inicialización optimizada de Firestore con ID permanente
+          // Sincronización robusta con respaldo local y nube
           useEffect(() => {
             const initCloud = async () => {
               if (!window.firebaseModules) return;
               try {
-                const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, onSnapshot, setDoc } = window.firebaseModules;
+                const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, getDoc, setDoc } = window.firebaseModules;
                 
-                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "AIzaSyDummyKeyForBramaq", projectId: "bramaq-cloud-db" };
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "AIzaSyDummy", projectId: "bramaq-db" };
                 const app = initializeApp(firebaseConfig);
                 const auth = getAuth(app);
                 const db = getFirestore(app);
@@ -69,26 +76,28 @@
 
                 await signInAnonymously(auth);
 
-                onAuthStateChanged(auth, (user) => {
+                onAuthStateChanged(auth, async (user) => {
                   if (!user) return;
                   const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'dotacion_general');
                   
-                  onSnapshot(docRef, (docSnap) => {
+                  try {
+                    const docSnap = await getDoc(docRef);
                     if (docSnap.exists()) {
                       const cloudData = docSnap.data().employees;
                       if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
                         setEmployees(cloudData);
+                        localStorage.setItem('bramaq_persistent_data_v22', JSON.stringify(cloudData));
                         setIsCloudSynced(true);
                       }
                     } else {
-                      setDoc(docRef, { employees: defaultData });
+                      await setDoc(docRef, { employees: employees });
                     }
-                  }, (error) => {
-                    console.error("Error en nube:", error);
-                  });
+                  } catch (e) {
+                    console.log("Usando datos locales por restricciones de red.");
+                  }
                 });
               } catch (err) {
-                console.log("Modo offline activo.");
+                console.log("Modo local activo.");
               }
             };
             initCloud();
@@ -96,6 +105,10 @@
 
           const updateEmployeesInCloud = (newEmployeesList) => {
             setEmployees(newEmployeesList);
+            try {
+              localStorage.setItem('bramaq_persistent_data_v22', JSON.stringify(newEmployeesList));
+            } catch (e) {}
+
             if (window.firebaseModules) {
               try {
                 const { getFirestore, doc, setDoc } = window.firebaseModules;
@@ -676,7 +689,7 @@
                 });
                 const updatedList = Array.from(uniqueMap.values());
                 updateEmployeesInCloud(updatedList);
-                alert(`¡Archivo cargado y sincronizado en la nube permanente! Se procesaron ${newEmployees.length} registros.`);
+                alert(`¡Archivo cargado y guardado permanentemente! Se procesaron ${newEmployees.length} registros.`);
               }
             };
             reader.readAsArrayBuffer(file);
@@ -699,7 +712,7 @@
                       <div>
                         <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación Cloud</span>
                         <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-widest flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Nube Permanente Activa
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Almacenamiento Dual Activo
                         </span>
                       </div>
                     </div>
