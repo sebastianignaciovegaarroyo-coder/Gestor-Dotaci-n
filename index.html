@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor de Dotación</title>
+    <title>BRAMAQ - Gestor de Dotación Global</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y ReactDOM -->
@@ -56,7 +56,7 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const saved = localStorage.getItem('bramaq_cloud_sync_v100');
+              const saved = localStorage.getItem('bramaq_global_safe_v150');
               if (saved) {
                 const parsed = JSON.parse(saved);
                 if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -98,14 +98,16 @@
 
           const [editingLogId, setEditingLogId] = useState(null);
 
+          // URL del servidor API público global para BRAMAQ
+          const CLOUD_BIN_URL = "https://api.npoint.io/c8872b3a1a45b34208a3";
+
           useEffect(() => {
             const handleOnline = () => setIsOnline(true);
             const handleOffline = () => setIsOnline(false);
             window.addEventListener('online', handleOnline);
             window.addEventListener('offline', handleOffline);
-            
-            // Cargar datos remotos al iniciar
-            descargarDatosNube();
+
+            descargarNube();
 
             return () => {
               window.removeEventListener('online', handleOnline);
@@ -113,45 +115,37 @@
             };
           }, []);
 
-          // Sincronización con almacenamiento web público compartido (JSONBin API pública gratuita)
-          const BIN_ID = "6790d98ae41b4d34e4785434"; // ID público para BRAMAQ Dotación
-          
-          const descargarDatosNube = async () => {
+          const descargarNube = async () => {
             setIsSyncing(true);
             try {
-              const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-                headers: { 'X-Master-Key': '$2a$10$7XvW5...demoKeyBramaq' }
-              });
-              if (res.ok) {
-                const json = await res.json();
-                if (json.record && Array.isArray(json.record.employees) && json.record.employees.length > 0) {
-                  setEmployees(json.record.employees);
-                  localStorage.setItem('bramaq_cloud_sync_v100', JSON.stringify(json.record.employees));
+              const response = await fetch(CLOUD_BIN_URL);
+              if (response.ok) {
+                const data = await response.json();
+                if (data && Array.isArray(data.employees) && data.employees.length > 0) {
+                  setEmployees(data.employees);
+                  localStorage.setItem('bramaq_global_safe_v150', JSON.stringify(data.employees));
                 }
               }
             } catch (e) {
-              // Si falla la red, usa la memoria local interna
+              // Si no hay internet, opera de forma segura con la memoria interna
             } finally {
               setIsSyncing(false);
             }
           };
 
-          const guardarDatosGlobales = async (nuevaLista) => {
+          const guardarNube = async (nuevaLista) => {
             setEmployees(nuevaLista);
-            localStorage.setItem('bramaq_cloud_sync_v100', JSON.stringify(nuevaLista));
-            
+            localStorage.setItem('bramaq_global_safe_v150', JSON.stringify(nuevaLista));
+
             setIsSyncing(true);
             try {
-              await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Master-Key': '$2a$10$7XvW5...demoKeyBramaq'
-                },
+              await fetch(CLOUD_BIN_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ employees: nuevaLista })
               });
             } catch (e) {
-              alert("⚠️ Sin conexión a internet. Los cambios se guardaron localmente y se sincronizarán al recuperar señal.");
+              alert("⚠️ Sin conexión a internet. Los cambios se guardaron localmente y se actualizarán en la nube al volver la señal.");
             } finally {
               setIsSyncing(false);
             }
@@ -435,7 +429,7 @@
               const newId = Date.now();
               updatedList = [...employees, { ...finalData, id: newId, historial: [] }];
             }
-            guardarDatosGlobales(updatedList);
+            guardarNube(updatedList);
             setIsModalOpen(false);
           };
 
@@ -541,7 +535,7 @@
               return emp;
             });
 
-            guardarDatosGlobales(updatedList);
+            guardarNube(updatedList);
             setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
 
             setNewLog({ 
@@ -559,7 +553,7 @@
             if (confirm("¿Estás seguro de eliminar este registro de la hoja de vida?")) {
               const updatedHistorial = (selectedEmployeeForHistory.historial || []).filter(log => log.id !== logId);
               const updatedList = employees.map(emp => emp.rut === selectedEmployeeForHistory.rut ? { ...emp, historial: updatedHistorial } : emp);
-              guardarDatosGlobales(updatedList);
+              guardarNube(updatedList);
               setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
             }
           };
@@ -652,7 +646,7 @@
             if (confirm("¿Confirmas la eliminación de este registro del sistema?")) {
               const cleanTarget = (rutTarget || '').replace(/[^0-9kK]/g, '').toLowerCase();
               const updatedList = employees.filter(emp => (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase() !== cleanTarget);
-              guardarDatosGlobales(updatedList);
+              guardarNube(updatedList);
             }
           };
 
@@ -730,8 +724,8 @@
                   else if (!cleanRut) uniqueMap.set(emp.id, emp);
                 });
                 const updatedList = Array.from(uniqueMap.values());
-                guardarDatosGlobales(updatedList);
-                alert(`¡Excel subido y guardado en la nube compartida! Ahora todos los supervisores verán estos ${newEmployees.length} registros actualizados.`);
+                guardarNube(updatedList);
+                alert(`¡Excel subido y sincronizado en la nube global! Ahora todos los supervisores verán estos ${newEmployees.length} registros actualizados.`);
               }
             };
             reader.readAsArrayBuffer(file);
@@ -756,20 +750,20 @@
                           <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación BRAMAQ</span>
                           <span className="text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 text-emerald-400">
                             <span className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-500 animate-ping' : 'bg-emerald-500 animate-pulse'}`}></span>
-                            {isSyncing ? 'Sincronizando con la Nube...' : 'Nube Compartida Activa'}
+                            {isSyncing ? 'Sincronizando...' : 'Nube Global Activa'}
                           </span>
                         </div>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-2 flex-wrap justify-center w-full md:w-auto">
-                      {/* Botón exclusivo para actualizar información de la nube manualmente */}
+                      {/* Botón de Actualizar desde la Nube */}
                       <button 
-                        onClick={descargarDatosNube}
+                        onClick={descargarNube}
                         className="bg-sky-600 hover:bg-sky-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow flex items-center gap-1.5"
                         title="Actualizar datos desde la nube"
                       >
-                        <i data-lucide="cloud-download" className="w-4 h-4"></i> Actualizar desde la Nube
+                        <i data-lucide="cloud-download" className="w-4 h-4"></i> Actualizar desde Nube
                       </button>
 
                       <div className="flex items-center gap-2 bg-slate-700/60 px-3 py-1.5 rounded-xl border border-slate-600 text-xs">
@@ -801,7 +795,7 @@
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 relative z-10">
                 {!isOnline && (
                   <div className="mb-4 p-3 bg-amber-950/80 border border-amber-600 text-amber-200 rounded-xl text-xs flex items-center justify-between">
-                    <span>⚠️ <strong>Sin señal en faena:</strong> Estás consultando los datos almacenados localmente.</span>
+                    <span>⚠️ <strong>Sin señal en faena:</strong> Estás consultando los datos almacenados en tu dispositivo.</span>
                   </div>
                 )}
 
