@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor de Dotación y Hoja de Vida</title>
+    <title>BRAMAQ - Gestor de Dotación Cloud</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y ReactDOM -->
@@ -18,6 +18,15 @@
 </head>
 <body class="bg-slate-900 text-slate-100">
     <div id="root"></div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+      import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+      import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+      window.firebaseModules = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, collection, doc, setDoc, onSnapshot };
+    </script>
 
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
@@ -42,14 +51,63 @@
         };
 
         function App() {
-          const [employees, setEmployees] = useState(() => {
-            try {
-              const saved = localStorage.getItem('bramaq_hr_employees_v21');
-              return saved ? JSON.parse(saved) : defaultData;
-            } catch (e) {
-              return defaultData;
+          const [employees, setEmployees] = useState(defaultData);
+          const [isCloudSynced, setIsCloudSynced] = useState(false);
+
+          // Inicializar Firebase Firestore en la nube
+          useEffect(() => {
+            const initCloud = async () => {
+              if (!window.firebaseModules) return;
+              try {
+                const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, onSnapshot, setDoc } = window.firebaseModules;
+                
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "demo", projectId: "demo-bramaq" };
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                const db = getFirestore(app);
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'bramaq-forest-app-v1';
+
+                await signInAnonymously(auth);
+
+                onAuthStateChanged(auth, (user) => {
+                  if (!user) return;
+                  const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'dotacion_general');
+                  
+                  onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                      const cloudData = docSnap.data().employees;
+                      if (cloudData && Array.isArray(cloudData)) {
+                        setEmployees(cloudData);
+                        setIsCloudSynced(true);
+                      }
+                    } else {
+                      // Guardar datos iniciales si la nube está vacía
+                      setDoc(docRef, { employees: defaultData });
+                    }
+                  }, (error) => {
+                    console.error("Error sincronizando con la nube:", error);
+                  });
+                });
+              } catch (err) {
+                console.log("Modo local activo por entorno offline.");
+              }
+            };
+            initCloud();
+          }, []);
+
+          // Función para guardar cambios en Firestore de manera centralizada
+          const updateEmployeesInCloud = (newEmployeesList) => {
+            setEmployees(newEmployeesList);
+            if (window.firebaseModules && typeof __firebase_config !== 'undefined') {
+              try {
+                const { getFirestore, doc, setDoc } = window.firebaseModules;
+                const db = getFirestore();
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'bramaq-forest-app-v1';
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'dotacion_general');
+                setDoc(docRef, { employees: newEmployeesList });
+              } catch (e) {}
             }
-          });
+          };
 
           const [searchTerm, setSearchTerm] = useState('');
           const [isModalOpen, setIsModalOpen] = useState(false);
@@ -79,12 +137,6 @@
 
           const [editingLogId, setEditingLogId] = useState(null);
           const [activeTab, setActiveTab] = useState('dashboard');
-
-          useEffect(() => {
-            try {
-              localStorage.setItem('bramaq_hr_employees_v21', JSON.stringify(employees));
-            } catch (e) {}
-          }, [employees]);
 
           useEffect(() => {
             if (window.lucide) {
@@ -323,12 +375,15 @@
               emergenciaFono: formattedEmergencyPhone
             };
 
+            let updatedList;
             if (currentEmployee) {
-              setEmployees(employees.map(emp => emp.rut === currentEmployee.rut ? { ...finalData, id: emp.id, historial: emp.historial || [] } : emp));
+              updatedList = employees.map(emp => emp.rut === currentEmployee.rut ? { ...finalData, id: emp.id, historial: emp.historial || [] } : emp);
             } else {
               const newId = Date.now();
-              setEmployees([...employees, { ...finalData, id: newId, historial: [] }]);
+              updatedList = [...employees, { ...finalData, id: newId, historial: [] }];
             }
+            
+            updateEmployeesInCloud(updatedList);
             setIsModalOpen(false);
           };
 
@@ -392,9 +447,10 @@
           const handleSaveLog = (e) => {
             e.preventDefault();
             const esLicencia = newLog.tipo === 'Licencia Médica';
+            let updatedHistorial;
             
             if (editingLogId) {
-              const updatedHistorial = (selectedEmployeeForHistory.historial || []).map(log => {
+              updatedHistorial = (selectedEmployeeForHistory.historial || []).map(log => {
                 if (log.id === editingLogId) {
                   return {
                     ...log,
@@ -409,19 +465,6 @@
                 }
                 return log;
               });
-
-              setEmployees(prev => prev.map(emp => {
-                if (emp.rut === selectedEmployeeForHistory.rut) {
-                  return { ...emp, historial: updatedHistorial };
-                }
-                return emp;
-              }));
-
-              setSelectedEmployeeForHistory(prev => ({
-                ...prev,
-                historial: updatedHistorial
-              }));
-
               setEditingLogId(null);
             } else {
               const logEntry = {
@@ -436,20 +479,18 @@
                 esExtension: esLicencia ? newLog.esExtension : false,
                 archivos: newLog.archivosList
               };
-
-              setEmployees(prev => prev.map(emp => {
-                if (emp.rut === selectedEmployeeForHistory.rut) {
-                  const historialActual = emp.historial || [];
-                  return { ...emp, historial: [logEntry, ...historialActual] };
-                }
-                return emp;
-              }));
-
-              setSelectedEmployeeForHistory(prev => ({
-                ...prev,
-                historial: [logEntry, ...(prev.historial || [])]
-              }));
+              updatedHistorial = [logEntry, ...(selectedEmployeeForHistory.historial || [])];
             }
+
+            const updatedList = employees.map(emp => {
+              if (emp.rut === selectedEmployeeForHistory.rut) {
+                return { ...emp, historial: updatedHistorial };
+              }
+              return emp;
+            });
+
+            updateEmployeesInCloud(updatedList);
+            setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
 
             setNewLog({ 
               tipo: tiposPermitidosPorRol[0]?.value || 'Licencia Médica', 
@@ -465,7 +506,8 @@
           const handleDeleteLog = (logId) => {
             if (confirm("¿Estás seguro de eliminar este registro de la hoja de vida?")) {
               const updatedHistorial = (selectedEmployeeForHistory.historial || []).filter(log => log.id !== logId);
-              setEmployees(prev => prev.map(emp => emp.rut === selectedEmployeeForHistory.rut ? { ...emp, historial: updatedHistorial } : emp));
+              const updatedList = employees.map(emp => emp.rut === selectedEmployeeForHistory.rut ? { ...emp, historial: updatedHistorial } : emp);
+              updateEmployeesInCloud(updatedList);
               setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
             }
           };
@@ -557,7 +599,8 @@
           const handleDelete = (rutTarget) => {
             if (confirm("¿Confirmas la eliminación de este registro del sistema?")) {
               const cleanTarget = (rutTarget || '').replace(/[^0-9kK]/g, '').toLowerCase();
-              setEmployees(prev => prev.filter(emp => (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase() !== cleanTarget));
+              const updatedList = employees.filter(emp => (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase() !== cleanTarget);
+              updateEmployeesInCloud(updatedList);
             }
           };
 
@@ -626,17 +669,16 @@
               }
 
               if (newEmployees.length > 0) {
-                setEmployees(prev => {
-                  const combined = [...prev, ...newEmployees];
-                  const uniqueMap = new Map();
-                  combined.forEach(emp => {
-                    const cleanRut = (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase();
-                    if (cleanRut && !uniqueMap.has(cleanRut)) uniqueMap.set(cleanRut, emp);
-                    else if (!cleanRut) uniqueMap.set(emp.id, emp);
-                  });
-                  return Array.from(uniqueMap.values());
+                const combined = [...employees, ...newEmployees];
+                const uniqueMap = new Map();
+                combined.forEach(emp => {
+                  const cleanRut = (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase();
+                  if (cleanRut && !uniqueMap.has(cleanRut)) uniqueMap.set(cleanRut, emp);
+                  else if (!cleanRut) uniqueMap.set(emp.id, emp);
                 });
-                alert(`¡Archivo cargado con éxito! Se procesaron ${newEmployees.length} registros.`);
+                const updatedList = Array.from(uniqueMap.values());
+                updateEmployeesInCloud(updatedList);
+                alert(`¡Archivo cargado y sincronizado en la nube! Se procesaron ${newEmployees.length} registros.`);
               }
             };
             reader.readAsArrayBuffer(file);
@@ -657,8 +699,10 @@
                     <div className="flex items-center gap-3">
                       <div className="bg-amber-600 p-2.5 rounded-xl text-white font-black tracking-wider shadow-inner text-sm">🏗️ BRAMAQ</div>
                       <div>
-                        <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación y KPIs</span>
-                        <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-widest">Maquinaria y Operaciones</span>
+                        <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación Cloud</span>
+                        <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-widest flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Sincronizado en la nube
+                        </span>
                       </div>
                     </div>
                     
@@ -1023,7 +1067,7 @@
                       <div><label className="text-xs font-bold text-slate-300">Teléfono Principal (8 dígitos)</label><input type="text" name="telefono" value={formData.telefono} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="Ej. 30803392" /></div>
                       <div><label className="text-xs font-bold text-slate-300">Correo Electrónico</label><input type="email" name="correo" value={formData.correo} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="correo@dominio.com" /></div>
                       <div><label className="text-xs font-bold text-slate-300">Contacto Emergencia</label><input type="text" name="emergenciaNombre" value={formData.emergenciaNombre} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" /></div>
-                      <div><label className="text-xs font-bold text-slate-300">Teléfono Emergencia (8 dígitos)</label><input type="text" name="emergenciaFono" value={formData.emergenciaFono} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="Ej. 98797367" /></div>
+                      <div><label className="text-xs font-bold text-slate-700 text-slate-300">Teléfono Emergencia (8 dígitos)</label><input type="text" name="emergenciaFono" value={formData.emergenciaFono} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="Ej. 98797367" /></div>
                       <div className="md:col-span-2 flex justify-end gap-2 mt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 rounded-lg">Cancelar</button><button type="submit" className="px-5 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-sm">Guardar Ficha</button></div>
                     </form>
                   </div>
