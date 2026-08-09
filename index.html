@@ -53,12 +53,15 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const localSaved = localStorage.getItem('bramaq_master_sync_v26');
-              return localSaved ? JSON.parse(localSaved) : defaultData;
-            } catch (e) {
-              return defaultData;
-            }
+              const localSaved = localStorage.getItem('bramaq_master_sync_v27');
+              if (localSaved) {
+                const parsed = JSON.parse(localSaved);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+              }
+            } catch (e) {}
+            return defaultData;
           });
+
           const [isOnline, setIsOnline] = useState(navigator.onLine);
           const [isCloudSynced, setIsCloudSynced] = useState(false);
 
@@ -73,7 +76,7 @@
             };
           }, []);
 
-          // Sincronización robusta con Firestore sin sobreescribir datos locales vacíos
+          // Sincronización blindada con Firebase
           useEffect(() => {
             const initSmartSync = async () => {
               if (!window.firebaseModules) return;
@@ -96,8 +99,14 @@
                     if (docSnap.exists()) {
                       const cloudData = docSnap.data().employees;
                       if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
-                        setEmployees(cloudData);
-                        localStorage.setItem('bramaq_master_sync_v26', JSON.stringify(cloudData));
+                        setEmployees(prev => {
+                          // Solo actualizamos si la nube trae datos reales y válidos
+                          if (cloudData.length >= prev.length || prev === defaultData) {
+                            localStorage.setItem('bramaq_master_sync_v27', JSON.stringify(cloudData));
+                            return cloudData;
+                          }
+                          return prev;
+                        });
                         setIsCloudSynced(true);
                       }
                     }
@@ -115,7 +124,7 @@
           const updateCentralCloud = (newList) => {
             setEmployees(newList);
             try {
-              localStorage.setItem('bramaq_master_sync_v26', JSON.stringify(newList));
+              localStorage.setItem('bramaq_master_sync_v27', JSON.stringify(newList));
             } catch (e) {}
 
             if (window.firebaseModules) {
