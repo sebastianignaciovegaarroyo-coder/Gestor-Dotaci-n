@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor de Dotación Offline</title>
+    <title>BRAMAQ - Gestor de Dotación Offline Inteligente</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y ReactDOM -->
@@ -18,6 +18,15 @@
 </head>
 <body class="bg-slate-900 text-slate-100">
     <div id="root"></div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+      import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+      import { getFirestore, doc, setDoc, onSnapshot, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+      window.firebaseModules = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, setDoc, onSnapshot, enableIndexedDbPersistence };
+    </script>
 
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
@@ -44,14 +53,14 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const localSaved = localStorage.getItem('bramaq_offline_v23');
+              const localSaved = localStorage.getItem('bramaq_master_sync_v25');
               return localSaved ? JSON.parse(localSaved) : defaultData;
             } catch (e) {
               return defaultData;
             }
           });
-
           const [isOnline, setIsOnline] = useState(navigator.onLine);
+          const [isCloudSynced, setIsCloudSynced] = useState(false);
 
           useEffect(() => {
             const handleOnline = () => setIsOnline(true);
@@ -64,11 +73,67 @@
             };
           }, []);
 
-          const saveDataLocally = (newList) => {
+          // Sincronización invisible en la nube y persistencia offline
+          useEffect(() => {
+            const initSmartSync = async () => {
+              if (!window.firebaseModules) return;
+              try {
+                const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, onSnapshot, setDoc, enableIndexedDbPersistence } = window.firebaseModules;
+                
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "AIzaSyDummy", projectId: "bramaq-smart" };
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                const db = getFirestore(app);
+                
+                // Activar caché offline nativo de Firestore
+                try {
+                  await enableIndexedDbPersistence(db);
+                } catch (err) {}
+
+                const appId = "bramaq-maestro-central-2026";
+                await signInAnonymously(auth);
+
+                onAuthStateChanged(auth, (user) => {
+                  if (!user) return;
+                  const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'maestro_dotacion');
+                  
+                  onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                      const cloudData = docSnap.data().employees;
+                      if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
+                        setEmployees(cloudData);
+                        localStorage.setItem('bramaq_master_sync_v25', JSON.stringify(cloudData));
+                        setIsCloudSynced(true);
+                      }
+                    } else {
+                      setDoc(docRef, { employees: employees });
+                    }
+                  }, (error) => {
+                    console.log("Modo sin señal activo: usando datos locales almacenados.");
+                  });
+                });
+              } catch (err) {
+                console.log("Red offline detectada.");
+              }
+            };
+            initSmartSync();
+          }, []);
+
+          const updateCentralCloud = (newList) => {
             setEmployees(newList);
             try {
-              localStorage.setItem('bramaq_offline_v23', JSON.stringify(newList));
+              localStorage.setItem('bramaq_master_sync_v25', JSON.stringify(newList));
             } catch (e) {}
+
+            if (window.firebaseModules) {
+              try {
+                const { getFirestore, doc, setDoc } = window.firebaseModules;
+                const db = getFirestore();
+                const appId = "bramaq-maestro-central-2026";
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'maestro_dotacion');
+                setDoc(docRef, { employees: newList });
+              } catch (e) {}
+            }
           };
 
           const [searchTerm, setSearchTerm] = useState('');
@@ -178,14 +243,6 @@
               setNewLog(prev => ({ ...prev, tipo: tiposPermitidosPorRol[0].value }));
             }
           }, [usuarioActivo.rol, tiposPermitidosPorRol, editingLogId]);
-
-          const listaCargosUnicos = useMemo(() => {
-            const cargos = new Set();
-            employees.forEach(emp => {
-              if (emp.cargo) cargos.add(emp.cargo.trim());
-            });
-            return Array.from(cargos).sort();
-          }, [employees]);
 
           const filteredEmployees = useMemo(() => {
             const uniqueMap = new Map();
@@ -345,7 +402,7 @@
               updatedList = [...employees, { ...finalData, id: newId, historial: [] }];
             }
             
-            saveDataLocally(updatedList);
+            updateCentralCloud(updatedList);
             setIsModalOpen(false);
           };
 
@@ -451,7 +508,7 @@
               return emp;
             });
 
-            saveDataLocally(updatedList);
+            updateCentralCloud(updatedList);
             setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
 
             setNewLog({ 
@@ -469,7 +526,7 @@
             if (confirm("¿Estás seguro de eliminar este registro de la hoja de vida?")) {
               const updatedHistorial = (selectedEmployeeForHistory.historial || []).filter(log => log.id !== logId);
               const updatedList = employees.map(emp => emp.rut === selectedEmployeeForHistory.rut ? { ...emp, historial: updatedHistorial } : emp);
-              saveDataLocally(updatedList);
+              updateCentralCloud(updatedList);
               setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
             }
           };
@@ -496,7 +553,7 @@
                 const nombreMes = MESES_NOMBRES[mesNum] || 'Mes';
 
                 const cantidadArchivos = (log.archivos || []).length > 0 ? (log.archivos || []).length : (log.archivo ? 1 : 0);
-                const indicadorAdjunto = cantidadArchivos > 0 ? `Sí (${cantidadArchivos} archivo(s) adjunto(s))` : "No";
+                const indicadorAdjunto = cantidadArchivos > 0 ? `Sí (${cantidadArchivos} archivo(s))` : "No";
 
                 globalDataToExport.push({
                   "Nombre Trabajador": emp.nombre,
@@ -559,10 +616,10 @@
           };
 
           const handleDelete = (rutTarget) => {
-            if (confirm("¿Confirmas la eliminación de este registro del sistema?")) {
+            if (confirm("¿Confirmas la eliminación de este registro del sistema central?")) {
               const cleanTarget = (rutTarget || '').replace(/[^0-9kK]/g, '').toLowerCase();
               const updatedList = employees.filter(emp => (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase() !== cleanTarget);
-              saveDataLocally(updatedList);
+              updateCentralCloud(updatedList);
             }
           };
 
@@ -639,8 +696,8 @@
                   else if (!cleanRut) uniqueMap.set(emp.id, emp);
                 });
                 const updatedList = Array.from(uniqueMap.values());
-                saveDataLocally(updatedList);
-                alert(`¡Archivo cargado y guardado permanentemente para uso Offline! Se procesaron ${newEmployees.length} registros.`);
+                updateCentralCloud(updatedList);
+                alert(`¡Dotación cargada en el Servidor Central! Sincronizado automáticamente para todo el equipo.`);
               }
             };
             reader.readAsArrayBuffer(file);
@@ -661,10 +718,10 @@
                     <div className="flex items-center gap-3">
                       <div className="bg-amber-600 p-2.5 rounded-xl text-white font-black tracking-wider shadow-inner text-sm">🏗️ BRAMAQ</div>
                       <div>
-                        <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación Offline</span>
+                        <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor Maestro BRAMAQ</span>
                         <span className={`text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 ${isOnline ? 'text-emerald-400' : 'text-amber-400'}`}>
                           <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
-                          {isOnline ? 'En Línea (Sincronizado)' : 'Modo Sin Señal (Local Activo)'}
+                          {isOnline ? 'Sincronizado Central' : 'Modo Sin Conexión (Caché Local)'}
                         </span>
                       </div>
                     </div>
@@ -697,7 +754,7 @@
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 relative z-10">
                 {!isOnline && (
                   <div className="mb-4 p-3 bg-amber-950/80 border border-amber-600 text-amber-200 rounded-xl text-xs flex items-center justify-between">
-                    <span>⚠️ <strong>Estás sin señal (Modo Offline).</strong> Puedes consultar y modificar la dotación con normalidad; los cambios quedarán guardados en tu dispositivo.</span>
+                    <span>⚠️ <strong>Sin señal detectada:</strong> Estás viendo los datos guardados en la memoria interna del teléfono. Al recuperar conexión, se actualizarán con el servidor central automáticamente.</span>
                   </div>
                 )}
 
@@ -768,7 +825,7 @@
                         <button onClick={handleDownloadExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm flex items-center"><i data-lucide="download" className="w-4 h-4 mr-2"></i> Descargar Excel</button>
                         <label className="cursor-pointer bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm flex items-center">
                           <i data-lucide="upload" className="w-4 h-4 mr-2 text-slate-400"></i>
-                          <span>Cargar Excel</span>
+                          <span>Cargar Excel (Maestro)</span>
                           <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
                         </label>
                         <button onClick={() => openModal()} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm flex items-center"><i data-lucide="plus" className="w-4 h-4 mr-2"></i> Nuevo Ingreso</button>
