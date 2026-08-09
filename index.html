@@ -15,15 +15,37 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-</head>
-<body class="bg-slate-900 text-slate-100">
-    <div id="root"></div>
-
+    
+    <!-- PWA Manifest incrustado para instalación nativa -->
     <script>
+      const manifestData = {
+        "name": "BRAMAQ Dotación",
+        "short_name": "BRAMAQ",
+        "start_url": "./",
+        "display": "standalone",
+        "background_color": "#0f172a",
+        "theme_color": "#d97706",
+        "icons": [
+          {
+            "src": "https://cdn-icons-png.flaticon.com/512/2921/2921222.png",
+            "sizes": "512x512",
+            "type": "image/png"
+          }
+        ]
+      };
+      const stringManifest = JSON.stringify(manifestData);
+      const blobManifest = new Blob([stringManifest], {type: 'application/json'});
+      const manifestURL = URL.createObjectURL(blobManifest);
+      const link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = manifestURL;
+      document.head.appendChild(link);
+
+      // Service Worker para funcionamiento offline total y soporte de instalación
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           const swScript = `
-            const CACHE_NAME = 'bramaq-cache-v44';
+            const CACHE_NAME = 'bramaq-cache-v45';
             self.addEventListener('install', e => { self.skipWaiting(); });
             self.addEventListener('activate', e => {
               e.waitUntil(
@@ -43,6 +65,9 @@
         });
       }
     </script>
+</head>
+<body class="bg-slate-900 text-slate-100">
+    <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
@@ -81,12 +106,12 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const saved = localStorage.getItem('bramaq_ultimate_v44');
+              const saved = localStorage.getItem('bramaq_ultimate_v45');
               if (saved) {
                 const parsed = JSON.parse(saved);
                 if (Array.isArray(parsed) && parsed.length > 0) return parsed;
               }
-              const backup = localStorage.getItem('bramaq_ultimate_v43');
+              const backup = localStorage.getItem('bramaq_ultimate_v44');
               if (backup) {
                 const parsedBackup = JSON.parse(backup);
                 if (Array.isArray(parsedBackup) && parsedBackup.length > 0) return parsedBackup;
@@ -142,8 +167,8 @@
             try {
               if (employees && employees.length > 0) {
                 const dataString = JSON.stringify(employees);
+                localStorage.setItem('bramaq_ultimate_v45', dataString);
                 localStorage.setItem('bramaq_ultimate_v44', dataString);
-                localStorage.setItem('bramaq_ultimate_v43', dataString);
               }
             } catch (e) {}
           }, [employees]);
@@ -742,7 +767,7 @@
                         <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación BRAMAQ</span>
                         <span className={`text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 ${isOnline ? 'text-emerald-400' : 'text-amber-400'}`}>
                           <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
-                          {isOnline ? 'Modo Offline PWA Activo' : 'Sin Señal (Memoria Local)'}
+                          {isOnline ? 'Modo PWA Instalable' : 'Sin Señal (Memoria Local)'}
                         </span>
                       </div>
                     </div>
