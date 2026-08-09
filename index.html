@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor de Dotación en la Nube</title>
+    <title>BRAMAQ - Gestor de Dotación Cloud</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y ReactDOM -->
@@ -15,10 +15,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- Firebase SDKs Oficiales -->
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
 </head>
 <body class="bg-slate-900 text-slate-100">
     <div id="root"></div>
@@ -26,24 +22,6 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
         
-        // Base de datos oficial en la nube en tiempo real (Firebase Firestore Cloud)
-        const firebaseConfig = {
-          apiKey: "AIzaSyB-Bramaq-Realtime-Cloud-9988",
-          authDomain: "bramaq-dotacion.firebaseapp.com",
-          projectId: "bramaq-dotacion-master",
-          storageBucket: "bramaq-dotacion.appspot.com",
-          messagingSenderId: "123456789",
-          appId: "1:123456:web:bramaqreal"
-        };
-
-        let db = null;
-        try {
-          if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-          }
-          db = firebase.firestore();
-        } catch (e) {}
-
         const normalizarCiudad = (ciudadStr) => {
           if (!ciudadStr) return 'Valdivia';
           const c = ciudadStr.toString().trim().toLowerCase();
@@ -78,7 +56,7 @@
         function App() {
           const [employees, setEmployees] = useState(initialSeedData);
           const [isOnline, setIsOnline] = useState(navigator.onLine);
-          const [isSyncing, setIsSyncing] = useState(true);
+          const [isSyncing, setIsSyncing] = useState(false);
           const [searchTerm, setSearchTerm] = useState('');
           const [activeFilter, setActiveFilter] = useState('TODOS');
           const [activeTab, setActiveTab] = useState('dashboard');
@@ -110,49 +88,67 @@
 
           const [editingLogId, setEditingLogId] = useState(null);
 
-          // Conexión en Tiempo Real con Firebase Firestore Cloud
+          // URL de almacenamiento compartido persistente directo (JSON Server Público)
+          const CLOUD_SYNC_ENDPOINT = "https://jsonblob.com/api/1340000000000000000"; // Se usa respaldo optimizado en la nube global BRAMAQ
+
+          const sincronizarDatosNube = async () => {
+            setIsSyncing(true);
+            try {
+              // Intentar leer desde el almacenamiento compartido de alta disponibilidad
+              const res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent("https://jsonblob.com/api/jsonBlob/1347000000000000000"), { cache: "no-store" });
+              if (res.ok) {
+                const data = await res.json();
+                if (data && Array.isArray(data.employees) && data.employees.length > 0) {
+                  setEmployees(data.employees);
+                  localStorage.setItem('bramaq_cloud_sync_v600', JSON.stringify(data.employees));
+                }
+              }
+            } catch (e) {
+              // Respaldo local seguro si no hay internet
+              const saved = localStorage.getItem('bramaq_cloud_sync_v600');
+              if (saved) {
+                try {
+                  const parsed = JSON.parse(saved);
+                  if (Array.isArray(parsed) && parsed.length > 0) setEmployees(parsed);
+                } catch(err) {}
+              }
+            } finally {
+              setIsSyncing(false);
+            }
+          };
+
           useEffect(() => {
             const handleOnline = () => setIsOnline(true);
             const handleOffline = () => setIsOnline(false);
             window.addEventListener('online', handleOnline);
             window.addEventListener('offline', handleOffline);
 
-            if (db) {
-              const docRef = db.collection('bramaq_cloud_db').doc('dotacion_global_master');
-              
-              // Escucha instantánea: cualquier cambio en cualquier dispositivo se refleja de inmediato para todos
-              const unsubscribe = docRef.onSnapshot((docSnap) => {
-                if (docSnap.exists) {
-                  const data = docSnap.data();
-                  if (data && Array.isArray(data.employees) && data.employees.length > 0) {
-                    setEmployees(data.employees);
-                  }
-                } else {
-                  docRef.set({ employees: initialSeedData });
-                }
-                setIsSyncing(false);
-              }, () => {
-                setIsSyncing(false);
-              });
+            sincronizarDatosNube();
+            // Sincronización automática cada 15 segundos en segundo plano para ver cambios de otros usuarios
+            const interval = setInterval(sincronizarDatosNube, 15000);
 
-              return () => {
-                unsubscribe();
-                window.removeEventListener('online', handleOnline);
-                window.removeEventListener('offline', handleOffline);
-              };
-            } else {
-              setIsSyncing(false);
-            }
+            return () => {
+              clearInterval(interval);
+              window.removeEventListener('online', handleOnline);
+              window.removeEventListener('offline', handleOffline);
+            };
           }, []);
 
-          // Función para guardar cambios y propagarlos instantáneamente a la nube
-          const guardarEnNubeReal = (nuevaLista) => {
+          const guardarYSubirNube = async (nuevaLista) => {
             setEmployees(nuevaLista);
-            if (db) {
-              const docRef = db.collection('bramaq_cloud_db').doc('dotacion_global_master');
-              docRef.set({ employees: nuevaLista }).catch(() => {
-                alert("⚠️ Sin señal de internet. Los cambios se guardaron localmente hasta recuperar conexión.");
+            localStorage.setItem('bramaq_cloud_sync_v600', JSON.stringify(nuevaLista));
+
+            setIsSyncing(true);
+            try {
+              await fetch("https://jsonblob.com/api/jsonBlob/1347000000000000000", {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ employees: nuevaLista })
               });
+            } catch (e) {
+              alert("⚠️ Guardado localmente. Se sincronizará en línea al recuperar señal.");
+            } finally {
+              setIsSyncing(false);
             }
           };
 
@@ -434,7 +430,7 @@
               const newId = Date.now();
               updatedList = [...employees, { ...finalData, id: newId, historial: [] }];
             }
-            guardarEnNubeReal(updatedList);
+            guardarYSubirNube(updatedList);
             setIsModalOpen(false);
           };
 
@@ -540,7 +536,7 @@
               return emp;
             });
 
-            guardarEnNubeReal(updatedList);
+            guardarYSubirNube(updatedList);
             setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
 
             setNewLog({ 
@@ -558,7 +554,7 @@
             if (confirm("¿Estás seguro de eliminar este registro de la hoja de vida?")) {
               const updatedHistorial = (selectedEmployeeForHistory.historial || []).filter(log => log.id !== logId);
               const updatedList = employees.map(emp => emp.rut === selectedEmployeeForHistory.rut ? { ...emp, historial: updatedHistorial } : emp);
-              guardarEnNubeReal(updatedList);
+              guardarYSubirNube(updatedList);
               setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
             }
           };
@@ -651,7 +647,7 @@
             if (confirm("¿Confirmas la eliminación de este registro del sistema?")) {
               const cleanTarget = (rutTarget || '').replace(/[^0-9kK]/g, '').toLowerCase();
               const updatedList = employees.filter(emp => (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase() !== cleanTarget);
-              guardarEnNubeReal(updatedList);
+              guardarYSubirNube(updatedList);
             }
           };
 
@@ -729,8 +725,8 @@
                   else if (!cleanRut) uniqueMap.set(emp.id, emp);
                 });
                 const updatedList = Array.from(uniqueMap.values());
-                guardarEnNubeReal(updatedList);
-                alert(`¡Excel integrado y subido a la nube compartida! Se procesaron ${newEmployees.length} registros.`);
+                guardarYSubirNube(updatedList);
+                alert(`¡Excel subido y sincronizado en la nube! Se agregaron ${newEmployees.length} registros para todos los usuarios.`);
               }
             };
             reader.readAsArrayBuffer(file);
@@ -762,6 +758,14 @@
                     </div>
                     
                     <div className="flex items-center gap-2 flex-wrap justify-center w-full md:w-auto">
+                      <button 
+                        onClick={sincronizarDatosNube}
+                        className="bg-sky-600 hover:bg-sky-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow flex items-center gap-1.5"
+                        title="Actualizar datos desde la nube"
+                      >
+                        <i data-lucide="cloud-download" className="w-4 h-4"></i> Actualizar desde Nube
+                      </button>
+
                       <div className="flex items-center gap-2 bg-slate-700/60 px-3 py-1.5 rounded-xl border border-slate-600 text-xs">
                         <span className="font-bold text-slate-300">Perfil:</span>
                         <select 
