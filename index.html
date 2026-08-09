@@ -13,7 +13,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Firebase SDKs (Compat / Modular via CDN para máxima estabilidad inmediata) -->
+    <!-- Firebase SDKs (Compat / Modular vía CDN) -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
@@ -24,28 +24,25 @@
         const { useState, useEffect, useMemo } = React;
 
         // ==========================================
-        // CONFIGURACIÓN DE FIREBASE (NUBE EN TIEMPO REAL)
+        // CREDENCIALES OFICIALES DE TU PROYECTO FIREBASE
         // ==========================================
-        // Reemplaza estas credenciales con las de tu proyecto real de Firebase Console
         const firebaseConfig = {
-          apiKey: "TU_API_KEY_AQUI",
-          authDomain: "tu-proyecto.firebaseapp.com",
-          projectId: "tu-proyecto",
-          storageBucket: "tu-proyecto.appspot.com",
-          messagingSenderId: "123456789",
-          appId: "1:123456789:web:abcde"
+          apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9V...",
+          authDomain: "bramaqcloud.firebaseapp.com",
+          projectId: "bramaqcloud",
+          storageBucket: "bramaqcloud.appspot.com",
+          messagingSenderId: "369713509600",
+          appId: "1:369713509600:web:b6d878c..."
         };
 
-        // Inicializar Firebase de forma segura (con manejo si ya está inicializada)
         let db;
         try {
           if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
           }
           db = firebase.firestore();
-          // Habilitar persistencia offline para evitar pérdida de datos sin internet
           db.enablePersistence().catch((err) => {
-            console.warn("Persistencia offline no disponible en este entorno:", err.code);
+            console.warn("Persistencia offline no disponible:", err.code);
           });
         } catch (error) {
           console.error("Error inicializando Firebase:", error);
@@ -59,17 +56,15 @@
           const [activeFilter, setActiveFilter] = useState('TODOS');
           const [activeTab, setActiveTab] = useState('directorio');
           
-          // Modales y Estados de Formulario
           const [isModalOpen, setIsModalOpen] = useState(false);
           const [currentEmployee, setCurrentEmployee] = useState(null);
           const [formError, setFormError] = useState('');
           const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
           const [selectedEmpForHistory, setSelectedEmpForHistory] = useState(null);
           
-          // Control de Roles Simulado / Real
           const [userSession, setUserSession] = useState({
             nombre: "Administrador General",
-            rol: "Administrativo" // Administrativo, Supervisor, Prevencionista
+            rol: "Administrativo"
           });
 
           const [formData, setFormData] = useState({
@@ -83,9 +78,6 @@
             nota: ''
           });
 
-          // ==========================================
-          // SINCRONIZACIÓN EN TIEMPO REAL CON FIRESTORE
-          // ==========================================
           useEffect(() => {
             const handleOnline = () => setOnlineStatus(true);
             const handleOffline = () => setOnlineStatus(false);
@@ -97,7 +89,6 @@
               return;
             }
 
-            // onSnapshot escucha cambios en tiempo real desde la nube sin requerir F5
             const unsubscribe = db.collection('employees').onSnapshot((snapshot) => {
               const items = [];
               snapshot.forEach((doc) => {
@@ -107,7 +98,7 @@
               setLoading(false);
             }, (error) => {
               console.error("Error al sincronizar en tiempo real:", error);
-              setFormError("Error de sincronización con la nube. Verifique su conexión.");
+              setFormError("Error de sincronización con la nube.");
               setLoading(false);
             });
 
@@ -122,9 +113,6 @@
             if (window.lucide) window.lucide.createIcons();
           });
 
-          // ==========================================
-          // OPERACIONES CRUD EN LA NUBE
-          // ==========================================
           const handleSaveEmployee = async (e) => {
             e.preventDefault();
             setFormError('');
@@ -136,13 +124,11 @@
 
             try {
               if (currentEmployee) {
-                // Actualizar registro existente
                 await db.collection('employees').doc(currentEmployee.id).update({
                   ...formData,
                   updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
               } else {
-                // Crear nuevo registro
                 await db.collection('employees').add({
                   ...formData,
                   historial: [],
@@ -161,7 +147,7 @@
               alert("No cuenta con permisos de Administrador para eliminar registros.");
               return;
             }
-            if (confirm("¿Está seguro de eliminar este trabajador del sistema central?")) {
+            if (confirm("¿Está seguro de eliminar este trabajador?")) {
               try {
                 await db.collection('employees').doc(id).delete();
               } catch (error) {
@@ -170,7 +156,6 @@
             }
           };
 
-          // Agregar evento a la Hoja de Vida (Bitácora) en tiempo real
           const handleAddLog = async (e) => {
             e.preventDefault();
             if (!selectedEmpForHistory) return;
@@ -194,13 +179,12 @@
               
               setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
               setNewLog({ tipo: 'Licencia Médica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], nota: '' });
-              alert("Evento agregado correctamente a la Hoja de Vida.");
+              alert("Evento agregado correctamente.");
             } catch (error) {
               alert("Error al registrar evento: " + error.message);
             }
           };
 
-          // Filtros inteligentes y KPIs
           const filteredEmployees = useMemo(() => {
             return employees.filter(emp => {
               const matchesSearch = (emp.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -225,33 +209,30 @@
 
           return (
             <div className="min-h-screen bg-slate-950 text-slate-100">
-              {/* BARRA DE ESTADO DE CONEXIÓN */}
               <div className={`text-center text-xs py-1 font-bold ${onlineStatus ? 'bg-emerald-950 text-emerald-400 border-b border-emerald-900' : 'bg-red-950 text-red-400 border-b border-red-950 animate-pulse'}`}>
-                {onlineStatus ? '🟢 Sistema Conectado a la Nube en Tiempo Real (Multi-Usuario Activo)' : '🔴 Sin Conexión a Internet - Trabajando en Modo Local (Se sincronizará al reconectar)'}
+                {onlineStatus ? '🟢 Conectado a la Nube (Tiempo Real Activo)' : '🔴 Sin Conexión - Modo Local Activo'}
               </div>
 
-              {/* NAVEGACIÓN PRINCIPAL */}
               <nav className="bg-slate-900 border-b border-slate-800 sticky top-0 z-20 shadow-xl">
                 <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
                   <div className="flex items-center gap-3">
                     <div className="bg-amber-600 p-2.5 rounded-xl text-white font-black text-sm shadow">🏗️ BRAMAQ CLOUD</div>
                     <div>
                       <h1 className="font-bold text-lg text-white leading-tight">Gestor Enterprise Master</h1>
-                      <span className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Web & Desktop Sync Engine</span>
+                      <span className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Base de Datos: bramaqcloud</span>
                     </div>
                   </div>
 
-                  {/* SELECTOR DE ROL Y USUARIO */}
                   <div className="flex items-center gap-3 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700 text-xs">
-                    <span className="font-bold text-slate-300">Rol Activo:</span>
+                    <span className="font-bold text-slate-300">Rol:</span>
                     <select 
                       value={userSession.rol} 
                       onChange={(e) => setUserSession({ ...userSession, rol: e.target.value })} 
                       className="bg-slate-950 font-bold text-amber-400 px-2 py-1 rounded border border-slate-700 outline-none cursor-pointer"
                     >
-                      <option value="Administrativo">Administrador (Control Total)</option>
+                      <option value="Administrativo">Administrador</option>
                       <option value="Supervisor">Supervisor de Faena</option>
-                      <option value="Prevencionista">Prevencionista de Riesgos</option>
+                      <option value="Prevencionista">Prevencionista</option>
                     </select>
                   </div>
 
@@ -273,7 +254,7 @@
                       <div className="space-y-6">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                           <div onClick={() => setActiveFilter('TODOS')} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 cursor-pointer hover:border-amber-500 transition-all">
-                            <span className="text-slate-400 text-xs font-medium block">Total Dotación Nube</span>
+                            <span className="text-slate-400 text-xs font-medium block">Total Dotación</span>
                             <span className="text-3xl font-bold text-white mt-1 block">{kpis.total}</span>
                           </div>
                           <div onClick={() => setActiveFilter('SUPERVISORES')} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 cursor-pointer hover:border-amber-500 transition-all">
@@ -300,7 +281,7 @@
                             <input 
                               type="text" 
                               className="w-full pl-9 pr-4 py-2.5 bg-slate-900 border border-slate-800 text-white rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500" 
-                              placeholder="Buscar en tiempo real por nombre, RUT, cargo..." 
+                              placeholder="Buscar por nombre, RUT, cargo..." 
                               value={searchTerm} 
                               onChange={(e) => setSearchTerm(e.target.value)} 
                             />
@@ -325,7 +306,6 @@
                           </div>
                         </div>
 
-                        {/* TABLA DE REGISTROS */}
                         <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
                           <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
@@ -333,7 +313,7 @@
                                 <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
                                   <th className="p-4 font-semibold">Trabajador / RUT</th>
                                   <th className="p-4 font-semibold">Cargo y Ciudad</th>
-                                  <th className="p-4 font-semibold">Contacto Directo</th>
+                                  <th className="p-4 font-semibold">Contacto</th>
                                   <th className="p-4 font-semibold">Emergencia</th>
                                   <th className="p-4 font-semibold text-center">Hoja de Vida</th>
                                   <th className="p-4 font-semibold text-right">Acciones</th>
@@ -342,7 +322,7 @@
                               <tbody className="divide-y divide-slate-800/60">
                                 {filteredEmployees.length === 0 ? (
                                   <tr>
-                                    <td colSpan="6" className="p-8 text-center text-slate-500 text-sm">No se encontraron registros en la base de datos cloud.</td>
+                                    <td colSpan="6" className="p-8 text-center text-slate-500 text-sm">No hay registros en la base de datos. Agrega el primero.</td>
                                   </tr>
                                 ) : (
                                   filteredEmployees.map(emp => (
@@ -409,25 +389,25 @@
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 rounded-3xl shadow-2xl w-full max-w-xl border border-slate-800 p-6">
                     <div className="flex justify-between items-center pb-4 border-b border-slate-800 mb-4">
-                      <h3 className="text-lg font-bold text-white">{currentEmployee ? 'Editar Ficha de Trabajador' : 'Nuevo Registro de Trabajador'}</h3>
+                      <h3 className="text-lg font-bold text-white">{currentEmployee ? 'Editar Ficha' : 'Nuevo Trabajador'}</h3>
                       <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white"><i data-lucide="x" className="w-5 h-5"></i></button>
                     </div>
                     {formError && <div className="mb-4 p-3 bg-red-950/80 text-red-400 text-xs rounded-xl border border-red-900">{formError}</div>}
                     <form onSubmit={handleSaveEmployee} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="text-xs font-bold text-slate-300">Nombre Completo *</label>
-                        <input required type="text" value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="Ej: Pérez Soto Juan" />
+                        <input required type="text" value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="Ej: Juan Pérez" />
                       </div>
                       <div>
                         <label className="text-xs font-bold text-slate-300">RUT *</label>
                         <input required type="text" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="12.345.678-9" />
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-slate-300">Cargo Operativo</label>
-                        <input type="text" value={formData.cargo} onChange={(e) => setFormData({...formData, cargo: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="Ej: OPERADOR GRUA" />
+                        <label className="text-xs font-bold text-slate-300">Cargo</label>
+                        <input type="text" value={formData.cargo} onChange={(e) => setFormData({...formData, cargo: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="Ej: OPERADOR" />
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-slate-300">Ciudad de Faena</label>
+                        <label className="text-xs font-bold text-slate-300">Ciudad</label>
                         <select value={formData.ciudad} onChange={(e) => setFormData({...formData, ciudad: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500">
                           <option value="Valdivia">Valdivia</option>
                           <option value="Lanco">Lanco</option>
@@ -436,31 +416,31 @@
                         </select>
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-slate-300">Teléfono Personal</label>
-                        <input type="text" value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="+56 9 ..." />
+                        <label className="text-xs font-bold text-slate-300">Teléfono</label>
+                        <input type="text" value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="+569..." />
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-slate-300">Correo Electrónico</label>
+                        <label className="text-xs font-bold text-slate-300">Correo</label>
                         <input type="email" value={formData.correo} onChange={(e) => setFormData({...formData, correo: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="correo@mail.com" />
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-slate-300">Contacto de Emergencia</label>
-                        <input type="text" value={formData.emergenciaNombre} onChange={(e) => setFormData({...formData, emergenciaNombre: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="Nombre Familiar" />
+                        <label className="text-xs font-bold text-slate-300">Contacto Emergencia</label>
+                        <input type="text" value={formData.emergenciaNombre} onChange={(e) => setFormData({...formData, emergenciaNombre: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="Nombre" />
                       </div>
                       <div>
                         <label className="text-xs font-bold text-slate-300">Teléfono Emergencia</label>
-                        <input type="text" value={formData.emergenciaFono} onChange={(e) => setFormData({...formData, emergenciaFono: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="+56 9 ..." />
+                        <input type="text" value={formData.emergenciaFono} onChange={(e) => setFormData({...formData, emergenciaFono: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="+569..." />
                       </div>
                       <div className="md:col-span-2 flex justify-end gap-2 mt-4 pt-4 border-t border-slate-800">
                         <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 rounded-xl">Cancelar</button>
-                        <button type="submit" className="px-5 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-lg">Guardar en la Nube</button>
+                        <button type="submit" className="px-5 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-lg">Guardar en Nube</button>
                       </div>
                     </form>
                   </div>
                 </div>
               )}
 
-              {/* MODAL DE HOJA DE VIDA / HISTORIAL */}
+              {/* MODAL DE HOJA DE VIDA */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl border border-slate-800 p-6">
@@ -474,13 +454,13 @@
 
                     <div className="space-y-4 max-h-64 overflow-y-auto pr-2 mb-6">
                       {(!selectedEmpForHistory.historial || selectedEmpForHistory.historial.length === 0) ? (
-                        <p className="text-slate-500 text-sm text-center py-4">No hay eventos registrados en la hoja de vida de este trabajador.</p>
+                        <p className="text-slate-500 text-sm text-center py-4">No hay eventos registrados en la hoja de vida.</p>
                       ) : (
                         selectedEmpForHistory.historial.map((log) => (
                           <div key={log.id} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
                             <div className="flex justify-between items-center">
                               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-950 text-amber-300 border border-amber-900">{log.tipo}</span>
-                              <span className="text-xs text-slate-400 font-mono">{log.fechaInicio} {log.fechaTermino && ` al ${log.fechaTermino}`}</span>
+                              <span className="text-xs text-slate-400 font-mono">{log.fechaInicio}</span>
                             </div>
                             <p className="text-sm text-slate-200 mt-2">{log.nota}</p>
                             <div className="text-[10px] text-slate-400 text-right mt-1">Registrado por: {log.autor} ({log.rolAutor})</div>
@@ -489,18 +469,17 @@
                       )}
                     </div>
 
-                    {/* FORMULARIO NUEVO EVENTO */}
                     <form onSubmit={handleAddLog} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400">Agregar Nuevo Evento / Bitácora</h4>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400">Agregar Evento / Comentario a Hoja de Vida</h4>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
-                          <label className="text-[10px] font-bold text-slate-400">Tipo de Evento</label>
+                          <label className="text-[10px] font-bold text-slate-400">Tipo</label>
                           <select value={newLog.tipo} onChange={(e) => setNewLog({...newLog, tipo: e.target.value})} className="w-full mt-1 px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs">
                             <option value="Licencia Médica">Licencia Médica</option>
-                            <option value="Permiso sin goce">Permiso sin goce</option>
-                            <option value="Incidente / Accidente">Incidente / Accidente</option>
-                            <option value="Felicitación / Logro">Felicitación / Reconocimiento</option>
-                            <option value="Observación de Campo">Observación de Campo</option>
+                            <option value="Permiso">Permiso</option>
+                            <option value="Incidente">Incidente</option>
+                            <option value="Felicitación">Felicitación</option>
+                            <option value="Observación">Observación</option>
                           </select>
                         </div>
                         <div>
@@ -513,11 +492,11 @@
                         </div>
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-400">Detalle / Nota / Comentario</label>
-                        <textarea required rows="2" value={newLog.nota} onChange={(e) => setNewLog({...newLog, nota: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs outline-none focus:border-amber-500" placeholder="Escriba el detalle del evento operativo..."></textarea>
+                        <label className="text-[10px] font-bold text-slate-400">Comentario / Detalle</label>
+                        <textarea required rows="2" value={newLog.nota} onChange={(e) => setNewLog({...newLog, nota: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs outline-none focus:border-amber-500" placeholder="Detalle del evento..."></textarea>
                       </div>
                       <div className="flex justify-end">
-                        <button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow">Registrar en Historial Cloud</button>
+                        <button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow">Registrar en Nube</button>
                       </div>
                     </form>
                   </div>
