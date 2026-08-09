@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor de Dotación Cloud</title>
+    <title>BRAMAQ - Gestor de Dotación</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y ReactDOM -->
@@ -19,13 +19,45 @@
 <body class="bg-slate-900 text-slate-100">
     <div id="root"></div>
 
-    <!-- Firebase SDKs -->
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-      import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-      import { getFirestore, doc, setDoc, onSnapshot, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-      window.firebaseModules = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, setDoc, onSnapshot, enableIndexedDbPersistence };
+    <script>
+      // Service Worker optimizado para funcionamiento offline total en iPhone y Android
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          const swScript = `
+            const CACHE_NAME = 'bramaq-cache-v40';
+            self.addEventListener('install', e => {
+              self.skipWaiting();
+            });
+            self.addEventListener('activate', e => {
+              e.waitUntil(
+                caches.keys().then(keys => {
+                  return Promise.all(
+                    keys.map(key => {
+                      if (key !== CACHE_NAME) return caches.delete(key);
+                    })
+                  );
+                }).then(() => clients.claim())
+              );
+            });
+            self.addEventListener('fetch', e => {
+              e.respondWith(
+                fetch(e.request)
+                  .then(res => {
+                    const resClone = res.clone();
+                    caches.open(CACHE_NAME).then(cache => {
+                      cache.put(e.request, resClone);
+                    });
+                    return res;
+                  })
+                  .catch(() => caches.match(e.request))
+              );
+            });
+          `;
+          const blob = new Blob([swScript], { type: 'application/javascript' });
+          const swUrl = URL.createObjectURL(blob);
+          navigator.serviceWorker.register(swUrl).catch(() => {});
+        });
+      }
     </script>
 
     <script type="text/babel">
@@ -51,8 +83,22 @@
         };
 
         function App() {
-          const [employees, setEmployees] = useState(initialSeedData);
-          const [isCloudSynced, setIsCloudSynced] = useState(false);
+          const [employees, setEmployees] = useState(() => {
+            try {
+              const saved = localStorage.getItem('bramaq_ultimate_v40');
+              if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+              }
+              const backup = localStorage.getItem('bramaq_master_permanent_v36') || localStorage.getItem('bramaq_permanent_db_v30');
+              if (backup) {
+                const parsedBackup = JSON.parse(backup);
+                if (Array.isArray(parsedBackup) && parsedBackup.length > 0) return parsedBackup;
+              }
+            } catch (e) {}
+            return initialSeedData;
+          });
+
           const [isOnline, setIsOnline] = useState(navigator.onLine);
 
           useEffect(() => {
@@ -66,64 +112,16 @@
             };
           }, []);
 
-          // Conexión centralizada a Firestore con persistencia offline automática
+          // Guardado permanente instantáneo en múltiples llaves del navegador
           useEffect(() => {
-            const initCloudServer = async () => {
-              if (!window.firebaseModules) return;
-              try {
-                const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, onSnapshot, setDoc, enableIndexedDbPersistence } = window.firebaseModules;
-                
-                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "AIzaSyDummyServer", projectId: "bramaq-server-db" };
-                const app = initializeApp(firebaseConfig);
-                const auth = getAuth(app);
-                const db = getFirestore(app);
-
-                try {
-                  await enableIndexedDbPersistence(db);
-                } catch (e) {}
-
-                const appId = "bramaq-servidor-oficial-2026";
-                await signInAnonymously(auth);
-
-                onAuthStateChanged(auth, (user) => {
-                  if (!user) return;
-                  const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'base_central');
-                  
-                  onSnapshot(docRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                      const cloudData = docSnap.data().employees;
-                      if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
-                        setEmployees(cloudData);
-                        setIsCloudSynced(true);
-                      }
-                    } else {
-                      // Si el servidor está vacío, inicializamos con los datos por defecto
-                      setDoc(docRef, { employees: initialSeedData });
-                    }
-                  }, (error) => {
-                    console.log("Sin conexión: utilizando caché offline del servidor.");
-                  });
-                });
-              } catch (err) {
-                console.log("Error conectando al servidor.");
+            try {
+              if (employees && employees.length > 0) {
+                const dataString = JSON.stringify(employees);
+                localStorage.setItem('bramaq_ultimate_v40', dataString);
+                localStorage.setItem('bramaq_master_permanent_v36', dataString);
               }
-            };
-            initCloudServer();
-          }, []);
-
-          // Función centralizada para enviar cambios al Servidor Cloud
-          const updateServerCloud = (newList) => {
-            setEmployees(newList);
-            if (window.firebaseModules) {
-              try {
-                const { getFirestore, doc, setDoc } = window.firebaseModules;
-                const db = getFirestore();
-                const appId = "bramaq-servidor-oficial-2026";
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'base_central');
-                setDoc(docRef, { employees: newList });
-              } catch (e) {}
-            }
-          };
+            } catch (e) {}
+          }, [employees]);
 
           useEffect(() => {
             if (window.lucide) {
@@ -383,15 +381,12 @@
               emergenciaFono: formattedEmergencyPhone
             };
 
-            let updatedList;
             if (currentEmployee) {
-              updatedList = employees.map(emp => emp.rut === currentEmployee.rut ? { ...finalData, id: emp.id, historial: emp.historial || [] } : emp);
+              setEmployees(employees.map(emp => emp.rut === currentEmployee.rut ? { ...finalData, id: emp.id, historial: emp.historial || [] } : emp));
             } else {
               const newId = Date.now();
-              updatedList = [...employees, { ...finalData, id: newId, historial: [] }];
+              setEmployees([...employees, { ...finalData, id: newId, historial: [] }]);
             }
-            
-            updateServerCloud(updatedList);
             setIsModalOpen(false);
           };
 
@@ -497,7 +492,7 @@
               return emp;
             });
 
-            updateServerCloud(updatedList);
+            setEmployees(updatedList);
             setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
 
             setNewLog({ 
@@ -514,8 +509,7 @@
           const handleDeleteLog = (logId) => {
             if (confirm("¿Estás seguro de eliminar este registro de la hoja de vida?")) {
               const updatedHistorial = (selectedEmployeeForHistory.historial || []).filter(log => log.id !== logId);
-              const updatedList = employees.map(emp => emp.rut === selectedEmployeeForHistory.rut ? { ...emp, historial: updatedHistorial } : emp);
-              updateServerCloud(updatedList);
+              setEmployees(employees.map(emp => emp.rut === selectedEmployeeForHistory.rut ? { ...emp, historial: updatedHistorial } : emp));
               setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
             }
           };
@@ -605,10 +599,9 @@
           };
 
           const handleDelete = (rutTarget) => {
-            if (confirm("¿Confirmas la eliminación de este registro del servidor central?")) {
+            if (confirm("¿Confirmas la eliminación de este registro del sistema?")) {
               const cleanTarget = (rutTarget || '').replace(/[^0-9kK]/g, '').toLowerCase();
-              const updatedList = employees.filter(emp => (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase() !== cleanTarget);
-              updateServerCloud(updatedList);
+              setEmployees(employees.filter(emp => (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase() !== cleanTarget));
             }
           };
 
@@ -685,8 +678,8 @@
                   else if (!cleanRut) uniqueMap.set(emp.id, emp);
                 });
                 const updatedList = Array.from(uniqueMap.values());
-                updateServerCloud(updatedList);
-                alert(`¡Dotación subida al Servidor Cloud! Sincronizado para todo el equipo.`);
+                setEmployees(updatedList);
+                alert(`¡Dotación cargada con éxito! Se procesaron ${newEmployees.length} registros.`);
               }
             };
             reader.readAsArrayBuffer(file);
@@ -707,10 +700,10 @@
                     <div className="flex items-center gap-3">
                       <div className="bg-amber-600 p-2.5 rounded-xl text-white font-black tracking-wider shadow-inner text-sm">🏗️ BRAMAQ</div>
                       <div>
-                        <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación Cloud</span>
-                        <span className={`text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 ${isCloudSynced ? 'text-emerald-400' : 'text-amber-400'}`}>
-                          <span className={`w-2 h-2 rounded-full ${isCloudSynced ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
-                          {isCloudSynced ? 'Servidor Cloud Conectado' : 'Conectando al Servidor...'}
+                        <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación BRAMAQ</span>
+                        <span className={`text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 ${isOnline ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                          {isOnline ? 'Modo Offline PWA Activo' : 'Sin Señal (Memoria Local)'}
                         </span>
                       </div>
                     </div>
@@ -741,6 +734,12 @@
               </nav>
 
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 relative z-10">
+                {!isOnline && (
+                  <div className="mb-4 p-3 bg-amber-950/80 border border-amber-600 text-amber-200 rounded-xl text-xs flex items-center justify-between">
+                    <span>⚠️ <strong>Sin señal en faena:</strong> Estás consultando los datos almacenados de forma segura en la memoria interna de tu dispositivo.</span>
+                  </div>
+                )}
+
                 {activeTab === 'dashboard' && (
                   <div className="space-y-6">
                     <div>
@@ -808,7 +807,7 @@
                         <button onClick={handleDownloadExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm flex items-center"><i data-lucide="download" className="w-4 h-4 mr-2"></i> Descargar Excel</button>
                         <label className="cursor-pointer bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm flex items-center">
                           <i data-lucide="upload" className="w-4 h-4 mr-2 text-slate-400"></i>
-                          <span>Cargar Excel (Servidor)</span>
+                          <span>Cargar Excel</span>
                           <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
                         </label>
                         <button onClick={() => openModal()} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm flex items-center"><i data-lucide="plus" className="w-4 h-4 mr-2"></i> Nuevo Ingreso</button>
