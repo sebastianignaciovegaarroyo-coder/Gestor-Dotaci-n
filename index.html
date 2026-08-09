@@ -44,7 +44,7 @@
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           const swScript = `
-            const CACHE_NAME = 'bramaq-cache-v48';
+            const CACHE_NAME = 'bramaq-cache-v49';
             self.addEventListener('install', e => { self.skipWaiting(); });
             self.addEventListener('activate', e => {
               e.waitUntil(
@@ -105,7 +105,7 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const keys = ['bramaq_master_permanent_v48', 'bramaq_master_permanent_v47', 'bramaq_master_permanent_v46', 'bramaq_ultimate_v45'];
+              const keys = ['bramaq_master_permanent_v49', 'bramaq_master_permanent_v48', 'bramaq_master_permanent_v47', 'bramaq_master_permanent_v46', 'bramaq_ultimate_v45'];
               for (let key of keys) {
                 const saved = localStorage.getItem(key);
                 if (saved) {
@@ -153,7 +153,6 @@
           const [editingLogId, setEditingLogId] = useState(null);
 
           useEffect(() => {
-            // Detección estricta de modo standalone (App nativa instalada)
             const checkStandalone = () => {
               if (
                 window.matchMedia('(display-mode: standalone)').matches || 
@@ -204,7 +203,7 @@
             try {
               if (employees && employees.length > 0) {
                 const dataString = JSON.stringify(employees);
-                localStorage.setItem('bramaq_master_permanent_v48', dataString);
+                localStorage.setItem('bramaq_master_permanent_v49', dataString);
               }
             } catch (e) {}
           }, [employees]);
@@ -809,7 +808,7 @@
                     </div>
                     
                     <div className="flex items-center gap-3">
-                      {/* Botón inteligente: Se oculta automáticamente cuando ya instalaste la app en el dispositivo */}
+                      {/* Botón de instalación dinámico */}
                       {!isInstalled && (
                         <button 
                           onClick={handleInstallClick}
@@ -860,11 +859,17 @@
                         <h2 className="text-2xl font-bold text-white">Panel de Control de Dotación BRAMAQ</h2>
                         <p className="text-slate-400">Haz clic en cualquier tarjeta para ver inmediatamente el personal filtrado.</p>
                       </div>
-                      {activeFilter !== 'TODOS' && (
-                        <button onClick={() => setActiveFilter('TODOS')} className="bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center shadow-sm">
-                          🔄 Quitar filtro actual
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {activeFilter !== 'TODOS' && (
+                          <button onClick={() => setActiveFilter('TODOS')} className="bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center shadow-sm">
+                            🔄 Quitar filtro actual
+                          </button>
+                        )}
+                        <label className="cursor-pointer bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center shadow-sm">
+                          <i data-lucide="refresh-cw" className="w-3.5 h-3.5 mr-1.5"></i> Cargar / Actualizar Respaldo Excel
+                          <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
+                        </label>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-3">
