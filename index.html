@@ -44,7 +44,7 @@
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           const swScript = `
-            const CACHE_NAME = 'bramaq-cache-v46';
+            const CACHE_NAME = 'bramaq-cache-v47';
             self.addEventListener('install', e => { self.skipWaiting(); });
             self.addEventListener('activate', e => {
               e.waitUntil(
@@ -105,8 +105,7 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              // Verificamos todas las versiones anteriores posibles para recuperar la info sin perder nada
-              const keys = ['bramaq_master_permanent_v46', 'bramaq_ultimate_v45', 'bramaq_ultimate_v44', 'bramaq_ultimate_v42', 'bramaq_permanent_db_v30'];
+              const keys = ['bramaq_master_permanent_v47', 'bramaq_master_permanent_v46', 'bramaq_ultimate_v45'];
               for (let key of keys) {
                 const saved = localStorage.getItem(key);
                 if (saved) {
@@ -119,6 +118,9 @@
           });
 
           const [isOnline, setIsOnline] = useState(navigator.onLine);
+          const [isInstalled, setIsInstalled] = useState(false);
+          const [deferredPrompt, setDeferredPrompt] = useState(null);
+
           const [searchTerm, setSearchTerm] = useState('');
           const [activeFilter, setActiveFilter] = useState('TODOS');
           const [activeTab, setActiveTab] = useState('dashboard');
@@ -151,6 +153,16 @@
           const [editingLogId, setEditingLogId] = useState(null);
 
           useEffect(() => {
+            // Detectar si ya está instalada como App nativa
+            if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+              setIsInstalled(true);
+            }
+
+            window.addEventListener('beforeinstallprompt', (e) => {
+              e.preventDefault();
+              setDeferredPrompt(e);
+            });
+
             const handleOnline = () => setIsOnline(true);
             const handleOffline = () => setIsOnline(false);
             window.addEventListener('online', handleOnline);
@@ -161,13 +173,25 @@
             };
           }, []);
 
-          // Guardado permanente instantáneo sincronizado en múltiples llaves
+          const handleInstallClick = () => {
+            if (deferredPrompt) {
+              deferredPrompt.prompt();
+              deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                  setIsInstalled(true);
+                }
+                setDeferredPrompt(null);
+              });
+            } else {
+              alert("Para instalar la aplicación, toca el botón de Opciones / Menú de tu navegador (los tres puntos en Chrome o el botón Compartir en Safari) y selecciona 'Agregar a la pantalla de inicio'.");
+            }
+          };
+
           useEffect(() => {
             try {
               if (employees && employees.length > 0) {
                 const dataString = JSON.stringify(employees);
-                localStorage.setItem('bramaq_master_permanent_v46', dataString);
-                localStorage.setItem('bramaq_ultimate_v45', dataString);
+                localStorage.setItem('bramaq_master_permanent_v47', dataString);
               }
             } catch (e) {}
           }, [employees]);
@@ -766,26 +790,39 @@
                         <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación BRAMAQ</span>
                         <span className={`text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 ${isOnline ? 'text-emerald-400' : 'text-amber-400'}`}>
                           <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
-                          {isOnline ? 'Modo PWA Instalable' : 'Sin Señal (Memoria Local)'}
+                          {isOnline ? 'Modo Web Activo' : 'Sin Señal (Memoria Local)'}
                         </span>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2 bg-slate-700/60 px-3 py-1.5 rounded-xl border border-slate-600 text-xs">
-                      <span className="font-bold text-slate-300">Perfil:</span>
-                      <select 
-                        value={usuarioActivo.rol} 
-                        onChange={(e) => {
-                          const rol = e.target.value;
-                          const nombre = rol === 'Supervisor' && listaSupervisores.length > 0 ? listaSupervisores[0] : (rol === 'Administrativo' ? 'Administración RRHH' : 'Prevencionista Faena');
-                          setUsuarioActivo({ rol, nombre });
-                        }} 
-                        className="bg-slate-900 font-bold text-amber-400 px-2 py-1 rounded border border-slate-600 outline-none cursor-pointer"
-                      >
-                        <option value="Administrativo">Administrativo / RRHH</option>
-                        <option value="Supervisor">Supervisor de Faena</option>
-                        <option value="Prevencionista">Prevencionista de Riesgos</option>
-                      </select>
+                    <div className="flex items-center gap-3">
+                      {/* Botón de instalación dinámico: SE OCULTA automáticamente si ya está instalada como app nativa */}
+                      {!isInstalled && (
+                        <button 
+                          onClick={handleInstallClick}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow flex items-center gap-1 animate-bounce"
+                          title="Instalar como app en tu teléfono o PC"
+                        >
+                          <i data-lucide="download" className="w-3.5 h-3.5"></i> Instalar App
+                        </button>
+                      )}
+
+                      <div className="flex items-center gap-2 bg-slate-700/60 px-3 py-1.5 rounded-xl border border-slate-600 text-xs">
+                        <span className="font-bold text-slate-300">Perfil:</span>
+                        <select 
+                          value={usuarioActivo.rol} 
+                          onChange={(e) => {
+                            const rol = e.target.value;
+                            const nombre = rol === 'Supervisor' && listaSupervisores.length > 0 ? listaSupervisores[0] : (rol === 'Administrativo' ? 'Administración RRHH' : 'Prevencionista Faena');
+                            setUsuarioActivo({ rol, nombre });
+                          }} 
+                          className="bg-slate-900 font-bold text-amber-400 px-2 py-1 rounded border border-slate-600 outline-none cursor-pointer"
+                        >
+                          <option value="Administrativo">Administrativo / RRHH</option>
+                          <option value="Supervisor">Supervisor de Faena</option>
+                          <option value="Prevencionista">Prevencionista de Riesgos</option>
+                        </select>
+                      </div>
                     </div>
 
                     <div className="flex gap-1 sm:gap-2 bg-slate-700/50 p-1 rounded-xl border border-slate-600">
