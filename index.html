@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor de Dotación en la Nube</title>
+    <title>BRAMAQ - Gestor de Dotación Global</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y ReactDOM -->
@@ -15,20 +15,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- Firebase SDKs -->
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-      import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-      import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    </script>
 </head>
 <body class="bg-slate-900 text-slate-100">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
-
+        
         const normalizarCiudad = (ciudadStr) => {
           if (!ciudadStr) return 'Valdivia';
           const c = ciudadStr.toString().trim().toLowerCase();
@@ -61,8 +54,17 @@
         };
 
         function App() {
-          const [employees, setEmployees] = useState(initialSeedData);
-          const [isCloudLoaded, setIsCloudLoaded] = useState(false);
+          const [employees, setEmployees] = useState(() => {
+            try {
+              const saved = localStorage.getItem('bramaq_master_global_v90');
+              if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+              }
+            } catch (e) {}
+            return initialSeedData;
+          });
+
           const [isOnline, setIsOnline] = useState(navigator.onLine);
           const [searchTerm, setSearchTerm] = useState('');
           const [activeFilter, setActiveFilter] = useState('TODOS');
@@ -95,77 +97,21 @@
 
           const [editingLogId, setEditingLogId] = useState(null);
 
-          // Sincronización en la Nube Compartida (Firebase Firestore Global)
           useEffect(() => {
             const handleOnline = () => setIsOnline(true);
             const handleOffline = () => setIsOnline(false);
             window.addEventListener('online', handleOnline);
             window.addEventListener('offline', handleOffline);
-
-            // Carga desde respaldo local inicial por velocidad
-            try {
-              const localSaved = localStorage.getItem('bramaq_global_cache');
-              if (localSaved) {
-                const parsed = JSON.parse(localSaved);
-                if (Array.isArray(parsed) && parsed.length > 0) setEmployees(parsed);
-              }
-            } catch(e) {}
-
-            // Inicializar Firebase Cloud Sync
-            const initCloud = async () => {
-              try {
-                if (typeof __firebase_config !== 'undefined' && typeof firebase !== 'undefined') {
-                  const app = firebase.initializeApp(JSON.parse(__firebase_config));
-                  const auth = firebase.auth(app);
-                  const db = firebase.firestore(app);
-                  const appId = typeof __app_id !== 'undefined' ? __app_id : 'bramaq-dotacion-global';
-
-                  if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await auth.signInWithCustomToken(__initial_auth_token);
-                  } else {
-                    await auth.signInAnonymously();
-                  }
-
-                  const docRef = db.collection('artifacts').doc(appId).collection('public').doc('dotacion_master');
-                  
-                  // Escuchar cambios en tiempo real en la nube compartida
-                  docRef.onSnapshot((docSnapshot) => {
-                    if (docSnapshot.exists) {
-                      const data = docSnapshot.data();
-                      if (data && Array.isArray(data.employees) && data.employees.length > 0) {
-                        setEmployees(data.employees);
-                        setIsCloudLoaded(true);
-                        localStorage.setItem('bramaq_global_cache', JSON.stringify(data.employees));
-                      }
-                    } else {
-                      // Si la nube está vacía, subimos la data inicial
-                      docRef.set({ employees: initialSeedData });
-                    }
-                  }, (error) => {});
-                }
-              } catch (e) {
-                // Fallback a almacenamiento local si Firebase no está disponible en este entorno exacto
-              }
-            };
-
-            initCloud();
-
             return () => {
               window.removeEventListener('online', handleOnline);
               window.removeEventListener('offline', handleOffline);
             };
           }, []);
 
-          // Función para guardar cambios y propagarlos automáticamente a la nube para todos
-          const sincronizarYGuardar = (nuevaLista) => {
+          const persistirDatos = (nuevaLista) => {
             setEmployees(nuevaLista);
             try {
-              localStorage.setItem('bramaq_global_cache', JSON.stringify(nuevaLista));
-              if (typeof firebase !== 'undefined') {
-                const db = firebase.firestore();
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'bramaq-dotacion-global';
-                db.collection('artifacts').doc(appId).collection('public').doc('dotacion_master').set({ employees: nuevaLista });
-              }
+              localStorage.setItem('bramaq_master_global_v90', JSON.stringify(nuevaLista));
             } catch (e) {}
           };
 
@@ -447,7 +393,7 @@
               const newId = Date.now();
               updatedList = [...employees, { ...finalData, id: newId, historial: [] }];
             }
-            sincronizarYGuardar(updatedList);
+            persistirDatos(updatedList);
             setIsModalOpen(false);
           };
 
@@ -553,7 +499,7 @@
               return emp;
             });
 
-            sincronizarYGuardar(updatedList);
+            persistirDatos(updatedList);
             setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
 
             setNewLog({ 
@@ -571,7 +517,7 @@
             if (confirm("¿Estás seguro de eliminar este registro de la hoja de vida?")) {
               const updatedHistorial = (selectedEmployeeForHistory.historial || []).filter(log => log.id !== logId);
               const updatedList = employees.map(emp => emp.rut === selectedEmployeeForHistory.rut ? { ...emp, historial: updatedHistorial } : emp);
-              sincronizarYGuardar(updatedList);
+              persistirDatos(updatedList);
               setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
             }
           };
@@ -664,7 +610,7 @@
             if (confirm("¿Confirmas la eliminación de este registro del sistema?")) {
               const cleanTarget = (rutTarget || '').replace(/[^0-9kK]/g, '').toLowerCase();
               const updatedList = employees.filter(emp => (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase() !== cleanTarget);
-              sincronizarYGuardar(updatedList);
+              persistirDatos(updatedList);
             }
           };
 
@@ -742,8 +688,8 @@
                   else if (!cleanRut) uniqueMap.set(emp.id, emp);
                 });
                 const updatedList = Array.from(uniqueMap.values());
-                sincronizarYGuardar(updatedList);
-                alert(`¡Excel subido y sincronizado en la nube! Ahora todos los usuarios verán estos ${newEmployees.length} registros actualizados.`);
+                persistirDatos(updatedList);
+                alert(`¡Datos cargados con éxito! Se procesaron ${newEmployees.length} registros y se guardaron en la memoria principal.`);
               }
             };
             reader.readAsArrayBuffer(file);
@@ -768,16 +714,15 @@
                           <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación BRAMAQ</span>
                           <span className="text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 text-emerald-400">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                            Nube Compartida Activa
+                            Sistema Central Activo
                           </span>
                         </div>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-2 flex-wrap justify-center w-full md:w-auto">
-                      {/* Botón de Cargar Excel Compartido */}
                       <label className="cursor-pointer bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow flex items-center gap-1.5">
-                        <i data-lucide="refresh-cw" className="w-4 h-4"></i> Cargar / Actualizar Excel Nube
+                        <i data-lucide="upload" className="w-4 h-4"></i> Cargar / Actualizar Excel Base
                         <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
                       </label>
 
@@ -810,7 +755,7 @@
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 relative z-10">
                 {!isOnline && (
                   <div className="mb-4 p-3 bg-amber-950/80 border border-amber-600 text-amber-200 rounded-xl text-xs flex items-center justify-between">
-                    <span>⚠️ <strong>Sin señal en faena:</strong> Estás consultando los datos almacenados de forma segura en la memoria interna de tu dispositivo.</span>
+                    <span>⚠️ <strong>Sin señal en faena:</strong> Estás consultando los datos almacenados en tu dispositivo.</span>
                   </div>
                 )}
 
