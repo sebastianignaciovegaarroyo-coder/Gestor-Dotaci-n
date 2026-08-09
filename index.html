@@ -44,7 +44,7 @@
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           const swScript = `
-            const CACHE_NAME = 'bramaq-cache-v47';
+            const CACHE_NAME = 'bramaq-cache-v48';
             self.addEventListener('install', e => { self.skipWaiting(); });
             self.addEventListener('activate', e => {
               e.waitUntil(
@@ -105,7 +105,7 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const keys = ['bramaq_master_permanent_v47', 'bramaq_master_permanent_v46', 'bramaq_ultimate_v45'];
+              const keys = ['bramaq_master_permanent_v48', 'bramaq_master_permanent_v47', 'bramaq_master_permanent_v46', 'bramaq_ultimate_v45'];
               for (let key of keys) {
                 const saved = localStorage.getItem(key);
                 if (saved) {
@@ -153,14 +153,26 @@
           const [editingLogId, setEditingLogId] = useState(null);
 
           useEffect(() => {
-            // Detectar si ya está instalada como App nativa
-            if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
-              setIsInstalled(true);
-            }
+            // Detección estricta de modo standalone (App nativa instalada)
+            const checkStandalone = () => {
+              if (
+                window.matchMedia('(display-mode: standalone)').matches || 
+                window.matchMedia('(display-mode: fullscreen)').matches || 
+                window.navigator.standalone === true
+              ) {
+                setIsInstalled(true);
+              }
+            };
+            checkStandalone();
 
             window.addEventListener('beforeinstallprompt', (e) => {
               e.preventDefault();
               setDeferredPrompt(e);
+            });
+
+            window.addEventListener('appinstalled', () => {
+              setIsInstalled(true);
+              setDeferredPrompt(null);
             });
 
             const handleOnline = () => setIsOnline(true);
@@ -183,15 +195,16 @@
                 setDeferredPrompt(null);
               });
             } else {
-              alert("Para instalar la aplicación, toca el botón de Opciones / Menú de tu navegador (los tres puntos en Chrome o el botón Compartir en Safari) y selecciona 'Agregar a la pantalla de inicio'.");
+              alert("Para instalar la aplicación, toca el menú de tu navegador y selecciona 'Agregar a la pantalla de inicio'.");
             }
           };
 
+          // Guardado permanente instantáneo
           useEffect(() => {
             try {
               if (employees && employees.length > 0) {
                 const dataString = JSON.stringify(employees);
-                localStorage.setItem('bramaq_master_permanent_v47', dataString);
+                localStorage.setItem('bramaq_master_permanent_v48', dataString);
               }
             } catch (e) {}
           }, [employees]);
@@ -796,12 +809,12 @@
                     </div>
                     
                     <div className="flex items-center gap-3">
-                      {/* Botón de instalación dinámico: SE OCULTA automáticamente si ya está instalada como app nativa */}
+                      {/* Botón inteligente: Se oculta automáticamente cuando ya instalaste la app en el dispositivo */}
                       {!isInstalled && (
                         <button 
                           onClick={handleInstallClick}
                           className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow flex items-center gap-1 animate-bounce"
-                          title="Instalar como app en tu teléfono o PC"
+                          title="Instalar como app nativa"
                         >
                           <i data-lucide="download" className="w-3.5 h-3.5"></i> Instalar App
                         </button>
