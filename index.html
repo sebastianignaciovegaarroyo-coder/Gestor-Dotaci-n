@@ -20,42 +20,26 @@
     <div id="root"></div>
 
     <script>
-      // Service Worker optimizado para funcionamiento offline total en iPhone y Android
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           const swScript = `
-            const CACHE_NAME = 'bramaq-cache-v40';
-            self.addEventListener('install', e => {
-              self.skipWaiting();
-            });
+            const CACHE_NAME = 'bramaq-cache-v41';
+            self.addEventListener('install', e => { self.skipWaiting(); });
             self.addEventListener('activate', e => {
               e.waitUntil(
-                caches.keys().then(keys => {
-                  return Promise.all(
-                    keys.map(key => {
-                      if (key !== CACHE_NAME) return caches.delete(key);
-                    })
-                  );
-                }).then(() => clients.claim())
+                caches.keys().then(keys => Promise.all(keys.map(key => key !== CACHE_NAME && caches.delete(key)))).then(() => clients.claim())
               );
             });
             self.addEventListener('fetch', e => {
-              e.respondWith(
-                fetch(e.request)
-                  .then(res => {
-                    const resClone = res.clone();
-                    caches.open(CACHE_NAME).then(cache => {
-                      cache.put(e.request, resClone);
-                    });
-                    return res;
-                  })
-                  .catch(() => caches.match(e.request))
-              );
+              e.respondWith(fetch(e.request).then(res => {
+                const resClone = res.clone();
+                caches.open(CACHE_NAME).then(cache => cache.put(e.request, resClone));
+                return res;
+              }).catch(() => caches.match(e.request)));
             });
           `;
           const blob = new Blob([swScript], { type: 'application/javascript' });
-          const swUrl = URL.createObjectURL(blob);
-          navigator.serviceWorker.register(swUrl).catch(() => {});
+          navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
         });
       }
     </script>
@@ -85,12 +69,12 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const saved = localStorage.getItem('bramaq_ultimate_v40');
+              const saved = localStorage.getItem('bramaq_ultimate_v41');
               if (saved) {
                 const parsed = JSON.parse(saved);
                 if (Array.isArray(parsed) && parsed.length > 0) return parsed;
               }
-              const backup = localStorage.getItem('bramaq_master_permanent_v36') || localStorage.getItem('bramaq_permanent_db_v30');
+              const backup = localStorage.getItem('bramaq_ultimate_v40') || localStorage.getItem('bramaq_master_permanent_v36');
               if (backup) {
                 const parsedBackup = JSON.parse(backup);
                 if (Array.isArray(parsedBackup) && parsedBackup.length > 0) return parsedBackup;
@@ -100,36 +84,10 @@
           });
 
           const [isOnline, setIsOnline] = useState(navigator.onLine);
-
-          useEffect(() => {
-            const handleOnline = () => setIsOnline(true);
-            const handleOffline = () => setIsOnline(false);
-            window.addEventListener('online', handleOnline);
-            window.addEventListener('offline', handleOffline);
-            return () => {
-              window.removeEventListener('online', handleOnline);
-              window.removeEventListener('offline', handleOffline);
-            };
-          }, []);
-
-          // Guardado permanente instantáneo en múltiples llaves del navegador
-          useEffect(() => {
-            try {
-              if (employees && employees.length > 0) {
-                const dataString = JSON.stringify(employees);
-                localStorage.setItem('bramaq_ultimate_v40', dataString);
-                localStorage.setItem('bramaq_master_permanent_v36', dataString);
-              }
-            } catch (e) {}
-          }, [employees]);
-
-          useEffect(() => {
-            if (window.lucide) {
-              window.lucide.createIcons();
-            }
-          });
-
           const [searchTerm, setSearchTerm] = useState('');
+          const [activeFilter, setActiveFilter] = useState('TODOS');
+          const [activeTab, setActiveTab] = useState('dashboard');
+
           const [isModalOpen, setIsModalOpen] = useState(false);
           const [currentEmployee, setCurrentEmployee] = useState(null);
           const [formError, setFormError] = useState('');
@@ -156,7 +114,33 @@
           });
 
           const [editingLogId, setEditingLogId] = useState(null);
-          const [activeTab, setActiveTab] = useState('dashboard');
+
+          useEffect(() => {
+            const handleOnline = () => setIsOnline(true);
+            const handleOffline = () => setIsOnline(false);
+            window.addEventListener('online', handleOnline);
+            window.addEventListener('offline', handleOffline);
+            return () => {
+              window.removeEventListener('online', handleOnline);
+              window.removeEventListener('offline', handleOffline);
+            };
+          }, []);
+
+          useEffect(() => {
+            try {
+              if (employees && employees.length > 0) {
+                const dataString = JSON.stringify(employees);
+                localStorage.setItem('bramaq_ultimate_v41', dataString);
+                localStorage.setItem('bramaq_ultimate_v40', dataString);
+              }
+            } catch (e) {}
+          }, [employees]);
+
+          useEffect(() => {
+            if (window.lucide) {
+              window.lucide.createIcons();
+            }
+          });
 
           const [formData, setFormData] = useState({
             nombre: '', rut: '', direccion: '', ciudad: '', fechaNacimiento: '', 
@@ -242,7 +226,28 @@
               }
             });
 
-            const uniqueList = Array.from(uniqueMap.values());
+            let uniqueList = Array.from(uniqueMap.values());
+
+            // Filtro dinámico según la tarjeta seleccionada en el Panel Gerencial
+            if (activeFilter === 'INCOMPLETOS') {
+              uniqueList = uniqueList.filter(e => !e.telefono || !e.correo || !e.emergenciaNombre || !e.emergenciaFono || !e.direccion || !e.cargo || !e.ciudad);
+            } else if (activeFilter === 'SUPERVISORES') {
+              uniqueList = uniqueList.filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR') || (e.cargo || '').toUpperCase().includes('JEFE'));
+            } else if (activeFilter === 'PREVENCIONISTAS') {
+              uniqueList = uniqueList.filter(e => (e.cargo || '').toUpperCase().includes('PREVENCION') || (e.cargo || '').toUpperCase().includes('SSO'));
+            } else if (activeFilter === 'ADMINISTRATIVOS') {
+              uniqueList = uniqueList.filter(e => (e.cargo || '').toUpperCase().includes('ADMINISTRATIVO') || (e.cargo || '').toUpperCase().includes('SECRETARIA') || (e.cargo || '').toUpperCase().includes('OFICINA'));
+            } else if (activeFilter === 'GRUAS') {
+              uniqueList = uniqueList.filter(e => (e.cargo || '').toUpperCase().includes('GRUA'));
+            } else if (activeFilter === 'CARGADORES') {
+              uniqueList = uniqueList.filter(e => (e.cargo || '').toUpperCase().includes('CARGADOR'));
+            } else if (activeFilter === 'MECANICOS') {
+              uniqueList = uniqueList.filter(e => (e.cargo || '').toUpperCase().includes('MECANICO'));
+            } else if (activeFilter.startsWith('CIUDAD_')) {
+              const ciudadNombre = activeFilter.replace('CIUDAD_', '');
+              uniqueList = uniqueList.filter(e => (e.ciudad || '') === ciudadNombre);
+            }
+
             return uniqueList
               .filter(emp => 
                 (emp.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -251,7 +256,7 @@
                 (emp.ciudad || '').toLowerCase().includes(searchTerm.toLowerCase())
               )
               .sort((a, b) => (a.nombre || '').localeCompare((b.nombre || ''), 'es', { sensitivity: 'base' }));
-          }, [employees, searchTerm]);
+          }, [employees, searchTerm, activeFilter]);
 
           const availableMonths = useMemo(() => {
             const monthsSet = new Set();
@@ -281,19 +286,19 @@
           };
 
           const kpis = useMemo(() => {
-            const total = filteredEmployees.length;
-            const incompletos = filteredEmployees.filter(e => {
+            const total = employees.length;
+            const incompletos = employees.filter(e => {
               return !e.telefono || !e.correo || !e.emergenciaNombre || !e.emergenciaFono || !e.direccion || !e.cargo || !e.ciudad;
             }).length;
 
-            const gruas = filteredEmployees.filter(e => (e.cargo || '').toUpperCase().includes("GRUA")).length;
-            const cargadores = filteredEmployees.filter(e => (e.cargo || '').toUpperCase().includes("CARGADOR")).length;
-            const mecanicos = filteredEmployees.filter(e => (e.cargo || '').toUpperCase().includes("MECANICO")).length;
-            const supervisores = filteredEmployees.filter(e => (e.cargo || '').toUpperCase().includes("SUPERVISOR") || (e.cargo || '').toUpperCase().includes("JEFE")).length;
-            const prevencionistas = filteredEmployees.filter(e => (e.cargo || '').toUpperCase().includes("PREVENCION") || (e.cargo || '').toUpperCase().includes("SSO")).length;
-            const administrativos = filteredEmployees.filter(e => (e.cargo || '').toUpperCase().includes("ADMINISTRATIVO") || (e.cargo || '').toUpperCase().includes("SECRETARIA") || (e.cargo || '').toUpperCase().includes("OFICINA")).length;
+            const gruas = employees.filter(e => (e.cargo || '').toUpperCase().includes("GRUA")).length;
+            const cargadores = employees.filter(e => (e.cargo || '').toUpperCase().includes("CARGADOR")).length;
+            const mecanicos = employees.filter(e => (e.cargo || '').toUpperCase().includes("MECANICO")).length;
+            const supervisores = employees.filter(e => (e.cargo || '').toUpperCase().includes("SUPERVISOR") || (e.cargo || '').toUpperCase().includes("JEFE")).length;
+            const prevencionistas = employees.filter(e => (e.cargo || '').toUpperCase().includes("PREVENCION") || (e.cargo || '').toUpperCase().includes("SSO")).length;
+            const administrativos = employees.filter(e => (e.cargo || '').toUpperCase().includes("ADMINISTRATIVO") || (e.cargo || '').toUpperCase().includes("SECRETARIA") || (e.cargo || '').toUpperCase().includes("OFICINA")).length;
             
-            const porCiudad = filteredEmployees.reduce((acc, emp) => {
+            const porCiudad = employees.reduce((acc, emp) => {
               const ciudad = emp.ciudad || 'Desconocida';
               acc[ciudad] = (acc[ciudad] || 0) + 1;
               return acc;
@@ -301,7 +306,12 @@
             
             const ciudadesOrdenadas = Object.entries(porCiudad).sort((a, b) => b[1] - a[1]);
             return { total, incompletos, gruas, cargadores, mecanicos, supervisores, prevencionistas, administrativos, ciudadesOrdenadas };
-          }, [filteredEmployees]);
+          }, [employees]);
+
+          const handleCardClick = (filterType) => {
+            setActiveFilter(filterType);
+            setActiveTab('directorio');
+          };
 
           const getHistorialAgrupadoPorMes = (historial = []) => {
             const grupos = {};
@@ -742,45 +752,96 @@
 
                 {activeTab === 'dashboard' && (
                   <div className="space-y-6">
-                    <div>
-                      <h2 className="text-2xl font-bold text-white">Panel de Control de Dotación BRAMAQ</h2>
-                      <p className="text-slate-400">Indicadores operativos en tiempo real y control de personal.</p>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                      <div>
+                        <h2 className="text-2xl font-bold text-white">Panel de Control de Dotación BRAMAQ</h2>
+                        <p className="text-slate-400">Indicadores operativos en tiempo real. Haz clic en cualquier tarjeta para ver el personal filtrado.</p>
+                      </div>
+                      {activeFilter !== 'TODOS' && (
+                        <button onClick={() => setActiveFilter('TODOS')} className="bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center shadow-sm">
+                          🔄 Quitar filtro ({activeFilter})
+                        </button>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-                      <div className="bg-slate-800/90 p-4 rounded-2xl shadow-md border border-slate-700 flex flex-col"><span className="text-slate-400 text-xs font-medium mb-1">Total Dotación</span><span className="text-3xl font-bold text-white">{kpis.total}</span></div>
-                      <div className="bg-slate-800/90 p-4 rounded-2xl shadow-sm border border-red-900/50 bg-red-950/20 flex flex-col"><span className="text-red-400 text-xs font-medium mb-1">Incompletos</span><span className="text-3xl font-bold text-red-400">{kpis.incompletos}</span></div>
-                      <div className="bg-slate-800/90 p-4 rounded-2xl shadow-sm border border-slate-700 flex flex-col"><span className="text-slate-400 text-xs font-medium mb-1">Supervisores</span><span className="text-3xl font-bold text-indigo-400">{kpis.supervisores}</span></div>
-                      <div className="bg-slate-800/90 p-4 rounded-2xl shadow-sm border border-slate-700 flex flex-col"><span className="text-slate-400 text-xs font-medium mb-1">Prevencionistas</span><span className="text-3xl font-bold text-emerald-400">{kpis.prevencionistas}</span></div>
-                      <div className="bg-slate-800/90 p-4 rounded-2xl shadow-sm border border-slate-700 flex flex-col"><span className="text-slate-400 text-xs font-medium mb-1">Administrativos</span><span className="text-3xl font-bold text-purple-400">{kpis.administrativos}</span></div>
-                      <div className="bg-slate-800/90 p-4 rounded-2xl shadow-sm border border-slate-700 flex flex-col"><span className="text-slate-400 text-xs font-medium mb-1">Operadores Grúa</span><span className="text-3xl font-bold text-blue-400">{kpis.gruas}</span></div>
-                      <div className="bg-slate-800/90 p-4 rounded-2xl shadow-sm border border-slate-700 flex flex-col"><span className="text-slate-400 text-xs font-medium mb-1">Cargador Frontal</span><span className="text-3xl font-bold text-amber-500">{kpis.cargadores}</span></div>
-                      <div className="bg-slate-800/90 p-4 rounded-2xl shadow-sm border border-slate-700 flex flex-col"><span className="text-slate-400 text-xs font-medium mb-1">Mecánicos</span><span className="text-3xl font-bold text-slate-300">{kpis.mecanicos}</span></div>
+                      <div onClick={() => handleCardClick('TODOS')} className={`bg-slate-800/90 p-4 rounded-2xl shadow-md border ${activeFilter === 'TODOS' ? 'border-amber-500 ring-2 ring-amber-500/30' : 'border-slate-700'} flex flex-col cursor-pointer hover:bg-slate-800 transition-all`}>
+                        <span className="text-slate-400 text-xs font-medium mb-1">Total Dotación</span>
+                        <span className="text-3xl font-bold text-white">{kpis.total}</span>
+                        <span className="text-[10px] text-amber-400 mt-2 font-semibold">Ver todos →</span>
+                      </div>
+
+                      <div onClick={() => handleCardClick('INCOMPLETOS')} className={`bg-slate-800/90 p-4 rounded-2xl shadow-sm border ${activeFilter === 'INCOMPLETOS' ? 'border-amber-500 ring-2 ring-amber-500/30' : 'border-red-900/50'} bg-red-950/20 flex flex-col cursor-pointer hover:bg-red-950/30 transition-all`}>
+                        <span className="text-red-400 text-xs font-medium mb-1">Incompletos</span>
+                        <span className="text-3xl font-bold text-red-400">{kpis.incompletos}</span>
+                        <span className="text-[10px] text-red-300 mt-2 font-semibold">Filtrar →</span>
+                      </div>
+
+                      <div onClick={() => handleCardClick('SUPERVISORES')} className={`bg-slate-800/90 p-4 rounded-2xl shadow-sm border ${activeFilter === 'SUPERVISORES' ? 'border-amber-500 ring-2 ring-amber-500/30' : 'border-slate-700'} flex flex-col cursor-pointer hover:bg-slate-800 transition-all`}>
+                        <span className="text-slate-400 text-xs font-medium mb-1">Supervisores</span>
+                        <span className="text-3xl font-bold text-indigo-400">{kpis.supervisores}</span>
+                        <span className="text-[10px] text-indigo-300 mt-2 font-semibold">Filtrar →</span>
+                      </div>
+
+                      <div onClick={() => handleCardClick('PREVENCIONISTAS')} className={`bg-slate-800/90 p-4 rounded-2xl shadow-sm border ${activeFilter === 'PREVENCIONISTAS' ? 'border-amber-500 ring-2 ring-amber-500/30' : 'border-slate-700'} flex flex-col cursor-pointer hover:bg-slate-800 transition-all`}>
+                        <span className="text-slate-400 text-xs font-medium mb-1">Prevencionistas</span>
+                        <span className="text-3xl font-bold text-emerald-400">{kpis.prevencionistas}</span>
+                        <span className="text-[10px] text-emerald-300 mt-2 font-semibold">Filtrar →</span>
+                      </div>
+
+                      <div onClick={() => handleCardClick('ADMINISTRATIVOS')} className={`bg-slate-800/90 p-4 rounded-2xl shadow-sm border ${activeFilter === 'ADMINISTRATIVOS' ? 'border-amber-500 ring-2 ring-amber-500/30' : 'border-slate-700'} flex flex-col cursor-pointer hover:bg-slate-800 transition-all`}>
+                        <span className="text-slate-400 text-xs font-medium mb-1">Administrativos</span>
+                        <span className="text-3xl font-bold text-purple-400">{kpis.administrativos}</span>
+                        <span className="text-[10px] text-purple-300 mt-2 font-semibold">Filtrar →</span>
+                      </div>
+
+                      <div onClick={() => handleCardClick('GRUAS')} className={`bg-slate-800/90 p-4 rounded-2xl shadow-sm border ${activeFilter === 'GRUAS' ? 'border-amber-500 ring-2 ring-amber-500/30' : 'border-slate-700'} flex flex-col cursor-pointer hover:bg-slate-800 transition-all`}>
+                        <span className="text-slate-400 text-xs font-medium mb-1">Operadores Grúa</span>
+                        <span className="text-3xl font-bold text-blue-400">{kpis.gruas}</span>
+                        <span className="text-[10px] text-blue-300 mt-2 font-semibold">Filtrar →</span>
+                      </div>
+
+                      <div onClick={() => handleCardClick('CARGADORES')} className={`bg-slate-800/90 p-4 rounded-2xl shadow-sm border ${activeFilter === 'CARGADORES' ? 'border-amber-500 ring-2 ring-amber-500/30' : 'border-slate-700'} flex flex-col cursor-pointer hover:bg-slate-800 transition-all`}>
+                        <span className="text-slate-400 text-xs font-medium mb-1">Cargador Frontal</span>
+                        <span className="text-3xl font-bold text-amber-500">{kpis.cargadores}</span>
+                        <span className="text-[10px] text-amber-300 mt-2 font-semibold">Filtrar →</span>
+                      </div>
+
+                      <div onClick={() => handleCardClick('MECANICOS')} className={`bg-slate-800/90 p-4 rounded-2xl shadow-sm border ${activeFilter === 'MECANICOS' ? 'border-amber-500 ring-2 ring-amber-500/30' : 'border-slate-700'} flex flex-col cursor-pointer hover:bg-slate-800 transition-all`}>
+                        <span className="text-slate-400 text-xs font-medium mb-1">Mecánicos</span>
+                        <span className="text-3xl font-bold text-slate-300">{kpis.mecanicos}</span>
+                        <span className="text-[10px] text-slate-300 mt-2 font-semibold">Filtrar →</span>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
                       <div className="bg-slate-800/90 p-6 rounded-2xl shadow-md border border-slate-700">
-                        <h3 className="text-lg font-bold text-white mb-4">Distribución Logística por Ciudad</h3>
+                        <h3 className="text-lg font-bold text-white mb-2">Distribución Logística por Ciudad</h3>
+                        <p className="text-xs text-slate-400 mb-4">Haz clic en una ciudad para ver el personal asignado.</p>
                         <div className="space-y-4">
-                          {kpis.ciudadesOrdenadas.map(([ciudad, count], index) => (
-                            <div key={index} className="flex items-center">
-                              <span className="w-32 text-sm font-medium text-slate-300 truncate">{ciudad}</span>
-                              <div className="flex-1 mx-4 bg-slate-700 h-3 rounded-full overflow-hidden">
-                                <div className="bg-amber-500 h-full rounded-full" style={{ width: `${kpis.total > 0 ? (count / kpis.total) * 100 : 0}%` }}></div>
+                          {kpis.ciudadesOrdenadas.map(([ciudad, count], index) => {
+                            const filterKey = `CIUDAD_${ciudad}`;
+                            const isSelected = activeFilter === filterKey;
+                            return (
+                              <div key={index} onClick={() => handleCardClick(filterKey)} className={`flex items-center p-2 rounded-xl cursor-pointer transition-all ${isSelected ? 'bg-amber-950/50 border border-amber-500' : 'hover:bg-slate-700/40'}`}>
+                                <span className="w-32 text-sm font-medium text-slate-300 truncate">{ciudad}</span>
+                                <div className="flex-1 mx-4 bg-slate-700 h-3 rounded-full overflow-hidden">
+                                  <div className="bg-amber-500 h-full rounded-full" style={{ width: `${kpis.total > 0 ? (count / kpis.total) * 100 : 0}%` }}></div>
+                                </div>
+                                <span className="w-8 text-right font-bold text-white">{count}</span>
                               </div>
-                              <span className="w-8 text-right font-bold text-white">{count}</span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                       <div className="bg-slate-800/90 p-6 rounded-2xl shadow-md border border-slate-700">
                         <h3 className="text-lg font-bold text-white mb-4 flex items-center"><i data-lucide="shield-alert" className="w-5 h-5 text-amber-400 mr-2"></i> Alertas de Cumplimiento BRAMAQ</h3>
                         <div className="space-y-3">
                           {kpis.incompletos > 0 ? (
-                            <div className="p-3 bg-red-950/40 text-red-300 rounded-xl text-sm border border-red-900/60 flex items-start">
+                            <div onClick={() => handleCardClick('INCOMPLETOS')} className="p-3 bg-red-950/40 text-red-300 rounded-xl text-sm border border-red-900/60 flex items-start cursor-pointer hover:bg-red-950/60 transition-all">
                               <i data-lucide="alert-circle" className="w-5 h-5 mr-2 shrink-0 text-red-400 mt-0.5"></i>
                               <div>
-                                <strong>Atención Requerida:</strong> Hay {kpis.incompletos} registros en el directorio con información faltante. Revisa el directorio para regularizar.
+                                <strong>Atención Requerida:</strong> Hay {kpis.incompletos} registros con información faltante. Haz clic aquí para verlos y regularizar.
                               </div>
                             </div>
                           ) : (
@@ -802,7 +863,13 @@
                         <i data-lucide="search" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400"></i>
                         <input type="text" className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 text-white rounded-xl shadow-sm text-sm outline-none focus:ring-2 focus:ring-amber-500" placeholder="Buscar por operador, ciudad o cargo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                       </div>
-                      <div className="w-full md:w-auto flex flex-wrap gap-2">
+                      
+                      <div className="flex items-center gap-2 w-full md:w-auto flex-wrap">
+                        {activeFilter !== 'TODOS' && (
+                          <button onClick={() => setActiveFilter('TODOS')} className="bg-amber-600/20 border border-amber-500 text-amber-300 px-3 py-2 rounded-xl text-xs font-bold flex items-center">
+                            Filtro activo: {activeFilter.replace('CIUDAD_', 'Ciudad: ')} ✕
+                          </button>
+                        )}
                         <button onClick={() => setIsGlobalExportModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm flex items-center"><i data-lucide="file-text" className="w-4 h-4 mr-2"></i> Hoja de Vida Global</button>
                         <button onClick={handleDownloadExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm flex items-center"><i data-lucide="download" className="w-4 h-4 mr-2"></i> Descargar Excel</button>
                         <label className="cursor-pointer bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm flex items-center">
@@ -828,72 +895,78 @@
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-700/50">
-                            {filteredEmployees.map((emp) => {
-                              const missing = getMissingFields(emp);
-                              const hasMissing = Object.keys(missing).length > 0;
-                              const logCount = (emp.historial || []).length;
+                            {filteredEmployees.length === 0 ? (
+                              <tr>
+                                <td colSpan="6" className="p-8 text-center text-slate-400 italic">No se encontraron registros con el filtro seleccionado.</td>
+                              </tr>
+                            ) : (
+                              filteredEmployees.map((emp) => {
+                                const missing = getMissingFields(emp);
+                                const hasMissing = Object.keys(missing).length > 0;
+                                const logCount = (emp.historial || []).length;
 
-                              return (
-                                <tr key={emp.rut || emp.id} className="hover:bg-slate-700/30">
-                                  <td className="p-4">
-                                    <div className="font-bold text-white">{emp.nombre}</div>
-                                    <div className="text-xs text-slate-400 font-mono">{emp.rut}</div>
-                                    {hasMissing && (
-                                      <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-950 text-red-400 border border-red-900">
-                                        <i data-lucide="alert-circle" className="w-3 h-3 mr-1"></i> Datos incompletos
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="p-4">
-                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-950 text-amber-300 border border-amber-900">{emp.cargo}</span>
-                                    <div className="text-xs text-slate-400 mt-1 flex items-center"><i data-lucide="map-pin" className="w-3 h-3 mr-1 text-slate-500"></i>{emp.ciudad}</div>
-                                  </td>
-                                  
-                                  <td className="p-4 text-sm">
-                                    {emp.telefono ? (
-                                      <div className="flex flex-col gap-1">
-                                        <span className="font-semibold text-slate-200">{emp.telefono}</span>
-                                        <div className="flex gap-1.5 text-xs">
-                                          <a href={`tel:${emp.telefono}`} className="text-blue-400 bg-blue-950/60 px-2 py-0.5 rounded border border-blue-900 hover:bg-blue-900 font-medium">📞 Llamar</a>
-                                          <a href={`https://wa.me/${emp.telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-900 hover:bg-emerald-900 font-medium">💬 WhatsApp</a>
-                                          <a href={`sms:${emp.telefono}`} className="text-purple-400 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-900 hover:bg-purple-900 font-medium">✉️ SMS</a>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <span className="text-red-400 text-xs italic">Sin teléfono</span>
-                                    )}
-                                    <div className="text-xs text-slate-400 mt-1">{emp.correo}</div>
-                                  </td>
-
-                                  <td className="p-4 text-sm">
-                                    <div className="font-medium text-slate-200">{emp.emergenciaNombre || <span className="text-red-400 text-xs italic">Sin contacto</span>}</div>
-                                    {emp.emergenciaFono ? (
-                                      <div className="flex flex-col gap-1 mt-1">
-                                        <span className="text-xs text-slate-400">{emp.emergenciaFono}</span>
-                                        <div className="flex gap-1.5 text-xs">
-                                          <a href={`tel:${emp.emergenciaFono}`} className="text-blue-400 bg-blue-950/60 px-2 py-0.5 rounded border border-blue-900 hover:bg-blue-900 font-medium">📞 Llamar</a>
-                                          <a href={`https://wa.me/${emp.emergenciaFono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-900 hover:bg-emerald-900 font-medium">💬 WhatsApp</a>
-                                          <a href={`sms:${emp.emergenciaFono}`} className="text-purple-400 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-900 hover:bg-purple-900 font-medium">✉️ SMS</a>
-                                        </div>
-                                      </div>
-                                    ) : null}
-                                  </td>
-
-                                  <td className="p-4 text-center">
-                                    <button onClick={() => openHistoryModal(emp)} className="relative inline-flex items-center px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-bold transition-colors">
-                                      <i data-lucide="file-text" className="w-3.5 h-3.5 mr-1.5 text-amber-400"></i> Historial
-                                      {logCount > 0 && (
-                                        <span className="absolute -top-1.5 -right-1.5 bg-amber-600 text-white rounded-full px-1.5 py-0.2 text-[10px] font-bold">{logCount}</span>
+                                return (
+                                  <tr key={emp.rut || emp.id} className="hover:bg-slate-700/30">
+                                    <td className="p-4">
+                                      <div className="font-bold text-white">{emp.nombre}</div>
+                                      <div className="text-xs text-slate-400 font-mono">{emp.rut}</div>
+                                      {hasMissing && (
+                                        <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-950 text-red-400 border border-red-900">
+                                          <i data-lucide="alert-circle" className="w-3 h-3 mr-1"></i> Datos incompletos
+                                        </span>
                                       )}
-                                    </button>
-                                  </td>
-                                  <td className="p-4 text-right">
-                                    <button onClick={() => openModal(emp)} className="text-slate-400 hover:text-amber-400 p-2" title="Editar"><i data-lucide="edit-2" className="w-4 h-4"></i></button>
-                                    <button onClick={() => handleDelete(emp.rut)} className="text-slate-400 hover:text-red-400 p-2" title="Eliminar"><i data-lucide="trash-2" className="w-4 h-4"></i></button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                                    </td>
+                                    <td className="p-4">
+                                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-950 text-amber-300 border border-amber-900">{emp.cargo}</span>
+                                      <div className="text-xs text-slate-400 mt-1 flex items-center"><i data-lucide="map-pin" className="w-3 h-3 mr-1 text-slate-500"></i>{emp.ciudad}</div>
+                                    </td>
+                                    
+                                    <td className="p-4 text-sm">
+                                      {emp.telefono ? (
+                                        <div className="flex flex-col gap-1">
+                                          <span className="font-semibold text-slate-200">{emp.telefono}</span>
+                                          <div className="flex gap-1.5 text-xs">
+                                            <a href={`tel:${emp.telefono}`} className="text-blue-400 bg-blue-950/60 px-2 py-0.5 rounded border border-blue-900 hover:bg-blue-900 font-medium">📞 Llamar</a>
+                                            <a href={`https://wa.me/${emp.telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-900 hover:bg-emerald-900 font-medium">💬 WhatsApp</a>
+                                            <a href={`sms:${emp.telefono}`} className="text-purple-400 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-900 hover:bg-purple-900 font-medium">✉️ SMS</a>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <span className="text-red-400 text-xs italic">Sin teléfono</span>
+                                      )}
+                                      <div className="text-xs text-slate-400 mt-1">{emp.correo}</div>
+                                    </td>
+
+                                    <td className="p-4 text-sm">
+                                      <div className="font-medium text-slate-200">{emp.emergenciaNombre || <span className="text-red-400 text-xs italic">Sin contacto</span>}</div>
+                                      {emp.emergenciaFono ? (
+                                        <div className="flex flex-col gap-1 mt-1">
+                                          <span className="text-xs text-slate-400">{emp.emergenciaFono}</span>
+                                          <div className="flex gap-1.5 text-xs">
+                                            <a href={`tel:${emp.emergenciaFono}`} className="text-blue-400 bg-blue-950/60 px-2 py-0.5 rounded border border-blue-900 hover:bg-blue-900 font-medium">📞 Llamar</a>
+                                            <a href={`https://wa.me/${emp.emergenciaFono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-900 hover:bg-emerald-900 font-medium">💬 WhatsApp</a>
+                                            <a href={`sms:${emp.emergenciaFono}`} className="text-purple-400 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-900 hover:bg-purple-900 font-medium">✉️ SMS</a>
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                    </td>
+
+                                    <td className="p-4 text-center">
+                                      <button onClick={() => openHistoryModal(emp)} className="relative inline-flex items-center px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-bold transition-colors">
+                                        <i data-lucide="file-text" className="w-3.5 h-3.5 mr-1.5 text-amber-400"></i> Historial
+                                        {logCount > 0 && (
+                                          <span className="absolute -top-1.5 -right-1.5 bg-amber-600 text-white rounded-full px-1.5 py-0.2 text-[10px] font-bold">{logCount}</span>
+                                        )}
+                                      </button>
+                                    </td>
+                                    <td className="p-4 text-right">
+                                      <button onClick={() => openModal(emp)} className="text-slate-400 hover:text-amber-400 p-2" title="Editar"><i data-lucide="edit-2" className="w-4 h-4"></i></button>
+                                      <button onClick={() => handleDelete(emp.rut)} className="text-slate-400 hover:text-red-400 p-2" title="Eliminar"><i data-lucide="trash-2" className="w-4 h-4"></i></button>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
                           </tbody>
                         </table>
                       </div>
