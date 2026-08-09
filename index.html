@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor de Dotación Estable</title>
+    <title>BRAMAQ - Gestor de Dotación y Hoja de Vida</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y ReactDOM -->
@@ -44,18 +44,37 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const localSaved = localStorage.getItem('bramaq_stable_v28');
-              if (localSaved) {
-                const parsed = JSON.parse(localSaved);
+              // Verificamos múltiples llaves de respaldo para recuperar información previa si existe
+              const saved1 = localStorage.getItem('bramaq_permanent_db_v30');
+              const saved2 = localStorage.getItem('bramaq_stable_v28');
+              const saved3 = localStorage.getItem('bramaq_offline_v24');
+              
+              if (saved1) {
+                const parsed = JSON.parse(saved1);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+              }
+              if (saved2) {
+                const parsed = JSON.parse(saved2);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+              }
+              if (saved3) {
+                const parsed = JSON.parse(saved3);
                 if (Array.isArray(parsed) && parsed.length > 0) return parsed;
               }
             } catch (e) {}
             return defaultData;
           });
 
+          // Guardado automático inmediato y en múltiples llaves simultáneas para evitar pérdida
           useEffect(() => {
             try {
-              localStorage.setItem('bramaq_stable_v28', JSON.stringify(employees));
+              const dataString = JSON.stringify(employees);
+              localStorage.setItem('bramaq_permanent_db_v30', dataString);
+              localStorage.setItem('bramaq_stable_v28', dataString);
+              // Solicitamos persistencia al navegador si está soportada
+              if (navigator.storage && navigator.storage.persist) {
+                navigator.storage.persist();
+              }
             } catch (e) {}
           }, [employees]);
 
@@ -638,7 +657,7 @@
                       <div>
                         <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación BRAMAQ</span>
                         <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-widest flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Almacenamiento Local Estable
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Almacenamiento Permanente Activo
                         </span>
                       </div>
                     </div>
