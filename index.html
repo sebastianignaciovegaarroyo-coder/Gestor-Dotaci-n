@@ -23,7 +23,7 @@
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           const swScript = `
-            const CACHE_NAME = 'bramaq-cache-v42';
+            const CACHE_NAME = 'bramaq-cache-v43';
             self.addEventListener('install', e => { self.skipWaiting(); });
             self.addEventListener('activate', e => {
               e.waitUntil(
@@ -47,6 +47,19 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
         
+        const normalizarCiudad = (ciudadStr) => {
+          if (!ciudadStr) return 'Valdivia';
+          const c = ciudadStr.toString().trim().toLowerCase();
+          if (c.includes('mariquina') || c.includes('san jose') || c.includes('san josé')) {
+            return 'San José de la Mariquina';
+          }
+          if (c.includes('loncoche')) return 'Loncoche';
+          if (c.includes('lanco')) return 'Lanco';
+          if (c.includes('valdivia')) return 'Valdivia';
+          // Si escriben una ciudad nueva personalizada, mantenemos el texto con la primera letra en mayúscula
+          return ciudadStr.trim().charAt(0).toUpperCase() + ciudadStr.trim().slice(1);
+        };
+
         const initialSeedData = [
           { 
             id: 1, nombre: "Aliante Espinoza Lisandro Alberto", rut: "011.917.388-4", direccion: "Venezuela 903 Las Americas", ciudad: "Loncoche", fechaNacimiento: "30/08/1970", cargo: "OPERADOR CARGADOR FRONTAL", telefono: "+56 9 8641 5392", correo: "lisandromys@gmail.com", emergenciaNombre: "Lisandro Aliante", emergenciaFono: "+56989776166",
@@ -55,7 +68,7 @@
             ]
           },
           { 
-            id: 2, nombre: "Barrera Manuel", rut: "13.456.789-2", direccion: "Los Pinos 123", ciudad: "Valdivia", fechaNacimiento: "10/05/1978", cargo: "ADMINISTRADOR DE CONTRATO", telefono: "+56 9 7788 9900", correo: "manuel.barrera@mail.com", emergenciaNombre: "Rosa Soto", emergenciaFono: "+56911223344",
+            id: 2, nombre: "Barrera Manuel", rut: "13.456.789-2", direccion: "Los Pinos 123", ciudad: "San José de la Mariquina", fechaNacimiento: "10/05/1978", cargo: "ADMINISTRADOR DE CONTRATO", telefono: "+56 9 7788 9900", correo: "manuel.barrera@mail.com", emergenciaNombre: "Rosa Soto", emergenciaFono: "+56911223344",
             historial: []
           }
         ];
@@ -69,12 +82,12 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const saved = localStorage.getItem('bramaq_ultimate_v42');
+              const saved = localStorage.getItem('bramaq_ultimate_v43');
               if (saved) {
                 const parsed = JSON.parse(saved);
                 if (Array.isArray(parsed) && parsed.length > 0) return parsed;
               }
-              const backup = localStorage.getItem('bramaq_ultimate_v41');
+              const backup = localStorage.getItem('bramaq_ultimate_v42');
               if (backup) {
                 const parsedBackup = JSON.parse(backup);
                 if (Array.isArray(parsedBackup) && parsedBackup.length > 0) return parsedBackup;
@@ -130,8 +143,8 @@
             try {
               if (employees && employees.length > 0) {
                 const dataString = JSON.stringify(employees);
+                localStorage.setItem('bramaq_ultimate_v43', dataString);
                 localStorage.setItem('bramaq_ultimate_v42', dataString);
-                localStorage.setItem('bramaq_ultimate_v41', dataString);
               }
             } catch (e) {}
           }, [employees]);
@@ -143,7 +156,7 @@
           });
 
           const [formData, setFormData] = useState({
-            nombre: '', rut: '', direccion: '', ciudad: '', fechaNacimiento: '', 
+            nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', fechaNacimiento: '', 
             cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''
           });
 
@@ -337,7 +350,11 @@
 
           const handleInputChange = (e) => {
             const { name, value } = e.target;
-            setFormData(prev => ({ ...prev, [name]: value }));
+            if (name === 'ciudad') {
+              setFormData(prev => ({ ...prev, [name]: normalizarCiudad(value) }));
+            } else {
+              setFormData(prev => ({ ...prev, [name]: value }));
+            }
           };
 
           const openModal = (employee = null) => {
@@ -347,7 +364,7 @@
               setFormData(employee);
             } else {
               setCurrentEmployee(null);
-              setFormData({nombre: '', rut: '', direccion: '', ciudad: '', fechaNacimiento: '', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''});
+              setFormData({nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', fechaNacimiento: '', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''});
             }
             setIsModalOpen(true);
           };
@@ -357,7 +374,7 @@
             setFormError('');
 
             if (!formData.nombre || !formData.rut) {
-              setFormError("El Nombre y el RUT są obligatorios.");
+              setFormError("El Nombre y el RUT son obligatorios.");
               return;
             }
 
@@ -389,6 +406,7 @@
             const finalData = {
               ...formData,
               nombre: formatNombreApellidosPrimero(formData.nombre),
+              ciudad: normalizarCiudad(formData.ciudad),
               telefono: formattedPhone,
               emergenciaFono: formattedEmergencyPhone
             };
@@ -651,7 +669,7 @@
 
                 let empObj = {
                   id: Date.now() + i,
-                  nombre: '', rut: '', direccion: '', ciudad: '', fechaNacimiento: '',
+                  nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', fechaNacimiento: '',
                   cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '',
                   historial: [], columnasExtra: {}
                 };
@@ -663,7 +681,7 @@
                   if (header.includes('nombre') && !header.includes('emergencia')) empObj.nombre = formatNombreApellidosPrimero(val);
                   else if (header.includes('rut')) empObj.rut = val;
                   else if (header.includes('direccion')) empObj.direccion = val;
-                  else if (header.includes('ciudad')) empObj.ciudad = val;
+                  else if (header.includes('ciudad')) empObj.ciudad = normalizarCiudad(val);
                   else if (header.includes('cargo') || header.includes('puesto')) empObj.cargo = val;
                   else if (header.includes('telefon') || header.includes('fono')) {
                     if (!empObj.telefono) empObj.telefono = formatAndValidatePhone(val) || val;
@@ -677,6 +695,7 @@
 
                 if (!empObj.nombre && cols[0]) empObj.nombre = formatNombreApellidosPrimero(cols[0].toString().trim());
                 if (!empObj.rut && cols[1]) empObj.rut = cols[1].toString().trim();
+                if (cols[3]) empObj.ciudad = normalizarCiudad(cols[3].toString().trim());
 
                 if (empObj.nombre && empObj.rut) newEmployees.push(empObj);
               }
@@ -691,7 +710,7 @@
                 });
                 const updatedList = Array.from(uniqueMap.values());
                 setEmployees(updatedList);
-                alert(`¡Dotación cargada con éxito! Se procesaron ${newEmployees.length} registros.`);
+                alert(`¡Dotación cargada con éxito! Se procesaron ${newEmployees.length} registros y se unificaron las ciudades automáticamente.`);
               }
             };
             reader.readAsArrayBuffer(file);
@@ -832,7 +851,7 @@
                             const isSelected = activeFilter === filterKey;
                             return (
                               <div key={index} onClick={() => handleCardClick(filterKey)} className={`flex items-center p-2 rounded-xl cursor-pointer transition-all ${isSelected ? 'bg-amber-950/50 border border-amber-500' : 'hover:bg-slate-700/40'}`}>
-                                <span className="w-32 text-sm font-medium text-slate-300 truncate">{ciudad}</span>
+                                <span className="w-48 text-sm font-medium text-slate-300 truncate">{ciudad}</span>
                                 <div className="flex-1 mx-4 bg-slate-700 h-3 rounded-full overflow-hidden">
                                   <div className="bg-amber-500 h-full rounded-full" style={{ width: `${kpis.total > 0 ? (count / kpis.total) * 100 : 0}%` }}></div>
                                 </div>
@@ -1146,13 +1165,22 @@
                         </select>
                       </div>
                       <div>
-                        <label className="text-xs font-bold text-slate-300">Ciudad</label>
-                        <select name="ciudad" value={formData.ciudad} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm">
-                          <option value="">Seleccione...</option>
-                          <option value="Valdivia">Valdivia</option>
-                          <option value="Loncoche">Loncoche</option>
-                          <option value="Lanco">Lanco</option>
-                        </select>
+                        <label className="text-xs font-bold text-slate-300">Ciudad (Escribe o selecciona)</label>
+                        <input 
+                          type="text" 
+                          name="ciudad" 
+                          list="ciudadesList" 
+                          value={formData.ciudad} 
+                          onChange={handleInputChange} 
+                          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" 
+                          placeholder="Ej. Valdivia, Lanco..." 
+                        />
+                        <datalist id="ciudadesList">
+                          <option value="Valdivia" />
+                          <option value="Lanco" />
+                          <option value="Loncoche" />
+                          <option value="San José de la Mariquina" />
+                        </datalist>
                       </div>
                       <div><label className="text-xs font-bold text-slate-300">Teléfono Principal (8 dígitos)</label><input type="text" name="telefono" value={formData.telefono} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="Ej. 30803392" /></div>
                       <div><label className="text-xs font-bold text-slate-300">Correo Electrónico</label><input type="email" name="correo" value={formData.correo} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="correo@dominio.com" /></div>
