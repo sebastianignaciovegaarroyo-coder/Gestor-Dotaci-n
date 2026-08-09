@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor de Dotación Offline Inteligente</title>
+    <title>BRAMAQ - Gestor de Dotación Maestro Sincronizado</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y ReactDOM -->
@@ -23,9 +23,9 @@
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
       import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-      import { getFirestore, doc, setDoc, onSnapshot, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+      import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-      window.firebaseModules = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, setDoc, onSnapshot, enableIndexedDbPersistence };
+      window.firebaseModules = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, setDoc, onSnapshot };
     </script>
 
     <script type="text/babel">
@@ -53,7 +53,7 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const localSaved = localStorage.getItem('bramaq_master_sync_v25');
+              const localSaved = localStorage.getItem('bramaq_master_sync_v26');
               return localSaved ? JSON.parse(localSaved) : defaultData;
             } catch (e) {
               return defaultData;
@@ -73,23 +73,18 @@
             };
           }, []);
 
-          // Sincronización invisible en la nube y persistencia offline
+          // Sincronización robusta con Firestore sin sobreescribir datos locales vacíos
           useEffect(() => {
             const initSmartSync = async () => {
               if (!window.firebaseModules) return;
               try {
-                const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, onSnapshot, setDoc, enableIndexedDbPersistence } = window.firebaseModules;
+                const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, onSnapshot } = window.firebaseModules;
                 
                 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "AIzaSyDummy", projectId: "bramaq-smart" };
                 const app = initializeApp(firebaseConfig);
                 const auth = getAuth(app);
                 const db = getFirestore(app);
                 
-                // Activar caché offline nativo de Firestore
-                try {
-                  await enableIndexedDbPersistence(db);
-                } catch (err) {}
-
                 const appId = "bramaq-maestro-central-2026";
                 await signInAnonymously(auth);
 
@@ -102,14 +97,12 @@
                       const cloudData = docSnap.data().employees;
                       if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
                         setEmployees(cloudData);
-                        localStorage.setItem('bramaq_master_sync_v25', JSON.stringify(cloudData));
+                        localStorage.setItem('bramaq_master_sync_v26', JSON.stringify(cloudData));
                         setIsCloudSynced(true);
                       }
-                    } else {
-                      setDoc(docRef, { employees: employees });
                     }
                   }, (error) => {
-                    console.log("Modo sin señal activo: usando datos locales almacenados.");
+                    console.log("Modo sin señal activo: usando datos locales.");
                   });
                 });
               } catch (err) {
@@ -122,7 +115,7 @@
           const updateCentralCloud = (newList) => {
             setEmployees(newList);
             try {
-              localStorage.setItem('bramaq_master_sync_v25', JSON.stringify(newList));
+              localStorage.setItem('bramaq_master_sync_v26', JSON.stringify(newList));
             } catch (e) {}
 
             if (window.firebaseModules) {
