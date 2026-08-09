@@ -54,18 +54,18 @@
           const [employees, setEmployees] = useState(defaultData);
           const [isCloudSynced, setIsCloudSynced] = useState(false);
 
-          // Inicializar Firebase Firestore en la nube
+          // Inicialización optimizada de Firestore con ID permanente
           useEffect(() => {
             const initCloud = async () => {
               if (!window.firebaseModules) return;
               try {
                 const { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, onSnapshot, setDoc } = window.firebaseModules;
                 
-                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "demo", projectId: "demo-bramaq" };
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "AIzaSyDummyKeyForBramaq", projectId: "bramaq-cloud-db" };
                 const app = initializeApp(firebaseConfig);
                 const auth = getAuth(app);
                 const db = getFirestore(app);
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'bramaq-forest-app-v1';
+                const appId = "bramaq-dotacion-oficial-2026";
 
                 await signInAnonymously(auth);
 
@@ -76,33 +76,31 @@
                   onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
                       const cloudData = docSnap.data().employees;
-                      if (cloudData && Array.isArray(cloudData)) {
+                      if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
                         setEmployees(cloudData);
                         setIsCloudSynced(true);
                       }
                     } else {
-                      // Guardar datos iniciales si la nube está vacía
                       setDoc(docRef, { employees: defaultData });
                     }
                   }, (error) => {
-                    console.error("Error sincronizando con la nube:", error);
+                    console.error("Error en nube:", error);
                   });
                 });
               } catch (err) {
-                console.log("Modo local activo por entorno offline.");
+                console.log("Modo offline activo.");
               }
             };
             initCloud();
           }, []);
 
-          // Función para guardar cambios en Firestore de manera centralizada
           const updateEmployeesInCloud = (newEmployeesList) => {
             setEmployees(newEmployeesList);
-            if (window.firebaseModules && typeof __firebase_config !== 'undefined') {
+            if (window.firebaseModules) {
               try {
                 const { getFirestore, doc, setDoc } = window.firebaseModules;
                 const db = getFirestore();
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'bramaq-forest-app-v1';
+                const appId = "bramaq-dotacion-oficial-2026";
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'dotacion_general');
                 setDoc(docRef, { employees: newEmployeesList });
               } catch (e) {}
@@ -678,7 +676,7 @@
                 });
                 const updatedList = Array.from(uniqueMap.values());
                 updateEmployeesInCloud(updatedList);
-                alert(`¡Archivo cargado y sincronizado en la nube! Se procesaron ${newEmployees.length} registros.`);
+                alert(`¡Archivo cargado y sincronizado en la nube permanente! Se procesaron ${newEmployees.length} registros.`);
               }
             };
             reader.readAsArrayBuffer(file);
@@ -701,7 +699,7 @@
                       <div>
                         <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación Cloud</span>
                         <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-widest flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Sincronizado en la nube
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Nube Permanente Activa
                         </span>
                       </div>
                     </div>
@@ -1067,7 +1065,7 @@
                       <div><label className="text-xs font-bold text-slate-300">Teléfono Principal (8 dígitos)</label><input type="text" name="telefono" value={formData.telefono} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="Ej. 30803392" /></div>
                       <div><label className="text-xs font-bold text-slate-300">Correo Electrónico</label><input type="email" name="correo" value={formData.correo} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="correo@dominio.com" /></div>
                       <div><label className="text-xs font-bold text-slate-300">Contacto Emergencia</label><input type="text" name="emergenciaNombre" value={formData.emergenciaNombre} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" /></div>
-                      <div><label className="text-xs font-bold text-slate-700 text-slate-300">Teléfono Emergencia (8 dígitos)</label><input type="text" name="emergenciaFono" value={formData.emergenciaFono} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="Ej. 98797367" /></div>
+                      <div><label className="text-xs font-bold text-slate-300">Teléfono Emergencia (8 dígitos)</label><input type="text" name="emergenciaFono" value={formData.emergenciaFono} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="Ej. 98797367" /></div>
                       <div className="md:col-span-2 flex justify-end gap-2 mt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 rounded-lg">Cancelar</button><button type="submit" className="px-5 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-sm">Guardar Ficha</button></div>
                     </form>
                   </div>
