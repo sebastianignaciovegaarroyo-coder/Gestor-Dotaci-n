@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor de Dotación Global</title>
+    <title>BRAMAQ - Gestor de Dotación</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y ReactDOM -->
@@ -34,6 +34,7 @@
           return ciudadStr.trim().charAt(0).toUpperCase() + ciudadStr.trim().slice(1);
         };
 
+        // BASE DE DATOS MAESTRA OFICIAL DE BRAMAQ (Modifica o añade aquí tus trabajadores si lo deseas)
         const initialSeedData = [
           { 
             id: 1, nombre: "Aliante Espinoza Lisandro Alberto", rut: "011.917.388-4", direccion: "Venezuela 903 Las Americas", ciudad: "Loncoche", fechaNacimiento: "30/08/1970", cargo: "OPERADOR CARGADOR FRONTAL", telefono: "+56 9 8641 5392", correo: "lisandromys@gmail.com", emergenciaNombre: "Lisandro Aliante", emergenciaFono: "+56989776166",
@@ -54,9 +55,18 @@
         };
 
         function App() {
-          const [employees, setEmployees] = useState(initialSeedData);
+          const [employees, setEmployees] = useState(() => {
+            try {
+              const saved = localStorage.getItem('bramaq_master_oficial_v400');
+              if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+              }
+            } catch (e) {}
+            return initialSeedData;
+          });
+
           const [isOnline, setIsOnline] = useState(navigator.onLine);
-          const [isSyncing, setIsSyncing] = useState(false);
           const [searchTerm, setSearchTerm] = useState('');
           const [activeFilter, setActiveFilter] = useState('TODOS');
           const [activeTab, setActiveTab] = useState('dashboard');
@@ -88,63 +98,22 @@
 
           const [editingLogId, setEditingLogId] = useState(null);
 
-          const CLOUD_URL = "https://api.npoint.io/c8872b3a1a45b34208a3";
-
           useEffect(() => {
             const handleOnline = () => setIsOnline(true);
             const handleOffline = () => setIsOnline(false);
             window.addEventListener('online', handleOnline);
             window.addEventListener('offline', handleOffline);
-
-            sincronizarDesdeNube();
-
             return () => {
               window.removeEventListener('online', handleOnline);
               window.removeEventListener('offline', handleOffline);
             };
           }, []);
 
-          const sincronizarDesdeNube = async () => {
-            setIsSyncing(true);
-            try {
-              const res = await fetch(CLOUD_URL + "?t=" + new Date().getTime());
-              if (res.ok) {
-                const data = await res.json();
-                if (data && Array.isArray(data.employees) && data.employees.length > 0) {
-                  setEmployees(data.employees);
-                  localStorage.setItem('bramaq_cloud_sync_v300', JSON.stringify(data.employees));
-                }
-              }
-            } catch (e) {
-              const local = localStorage.getItem('bramaq_cloud_sync_v300');
-              if (local) {
-                try {
-                  const parsed = JSON.parse(local);
-                  if (Array.isArray(parsed) && parsed.length > 0) setEmployees(parsed);
-                } catch(err) {}
-              }
-            } finally {
-              setIsSyncing(false);
-            }
-          };
-
-          const guardarEnNube = async (nuevaLista) => {
+          const guardarLocal = (nuevaLista) => {
             setEmployees(nuevaLista);
-            localStorage.setItem('bramaq_cloud_sync_v300', JSON.stringify(nuevaLista));
-
-            setIsSyncing(true);
             try {
-              await fetch(CLOUD_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ employees: nuevaLista })
-              });
-              alert("¡Cambios guardados y sincronizados en la nube para todos los dispositivos!");
-            } catch (e) {
-              alert("⚠️ Guardado localmente. Se sincronizará en la nube al recuperar conexión.");
-            } finally {
-              setIsSyncing(false);
-            }
+              localStorage.setItem('bramaq_master_oficial_v400', JSON.stringify(nuevaLista));
+            } catch (e) {}
           };
 
           useEffect(() => {
@@ -425,7 +394,7 @@
               const newId = Date.now();
               updatedList = [...employees, { ...finalData, id: newId, historial: [] }];
             }
-            guardarEnNube(updatedList);
+            guardarLocal(updatedList);
             setIsModalOpen(false);
           };
 
@@ -531,7 +500,7 @@
               return emp;
             });
 
-            guardarEnNube(updatedList);
+            guardarLocal(updatedList);
             setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
 
             setNewLog({ 
@@ -549,7 +518,7 @@
             if (confirm("¿Estás seguro de eliminar este registro de la hoja de vida?")) {
               const updatedHistorial = (selectedEmployeeForHistory.historial || []).filter(log => log.id !== logId);
               const updatedList = employees.map(emp => emp.rut === selectedEmployeeForHistory.rut ? { ...emp, historial: updatedHistorial } : emp);
-              guardarEnNube(updatedList);
+              guardarLocal(updatedList);
               setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
             }
           };
@@ -642,7 +611,7 @@
             if (confirm("¿Confirmas la eliminación de este registro del sistema?")) {
               const cleanTarget = (rutTarget || '').replace(/[^0-9kK]/g, '').toLowerCase();
               const updatedList = employees.filter(emp => (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase() !== cleanTarget);
-              guardarEnNube(updatedList);
+              guardarLocal(updatedList);
             }
           };
 
@@ -720,7 +689,8 @@
                   else if (!cleanRut) uniqueMap.set(emp.id, emp);
                 });
                 const updatedList = Array.from(uniqueMap.values());
-                guardarEnNube(updatedList);
+                guardarLocal(updatedList);
+                alert(`¡Excel integrado! Se cargaron ${newEmployees.length} registros nuevos en el sistema.`);
               }
             };
             reader.readAsArrayBuffer(file);
@@ -744,22 +714,14 @@
                         <div>
                           <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación BRAMAQ</span>
                           <span className="text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 text-emerald-400">
-                            <span className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-500 animate-ping' : 'bg-emerald-500 animate-pulse'}`}></span>
-                            {isSyncing ? 'Sincronizando...' : 'Nube Global Activa'}
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Sistema Oficial Operativo
                           </span>
                         </div>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-2 flex-wrap justify-center w-full md:w-auto">
-                      <button 
-                        onClick={sincronizarDesdeNube}
-                        className="bg-sky-600 hover:bg-sky-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow flex items-center gap-1.5"
-                        title="Actualizar datos de la nube"
-                      >
-                        <i data-lucide="cloud-download" className="w-4 h-4"></i> Actualizar desde Nube
-                      </button>
-
                       <div className="flex items-center gap-2 bg-slate-700/60 px-3 py-1.5 rounded-xl border border-slate-600 text-xs">
                         <span className="font-bold text-slate-300">Perfil:</span>
                         <select 
