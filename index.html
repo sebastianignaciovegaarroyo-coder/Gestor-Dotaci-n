@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor de Dotación en la Nube</title>
+    <title>BRAMAQ - Gestor de Dotación</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y ReactDOM -->
@@ -15,30 +15,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- Firebase SDKs -->
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-      import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-      import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    </script>
 </head>
 <body class="bg-slate-900 text-slate-100">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
-
-        // Inicialización segura de Firebase
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-          apiKey: "demo-key",
-          authDomain: "demo.firebaseapp.com",
-          projectId: "demo-project",
-          storageBucket: "demo.appspot.com",
-          messagingSenderId: "123456",
-          appId: "12345"
-        };
-
+        
         const normalizarCiudad = (ciudadStr) => {
           if (!ciudadStr) return 'Valdivia';
           const c = ciudadStr.toString().trim().toLowerCase();
@@ -71,8 +54,20 @@
         };
 
         function App() {
-          const [employees, setEmployees] = useState(initialSeedData);
-          const [isCloudSynced, setIsCloudSynced] = useState(false);
+          const [employees, setEmployees] = useState(() => {
+            try {
+              const keys = ['bramaq_stable_v80', 'bramaq_gh_v75', 'bramaq_github_pages_v61'];
+              for (let key of keys) {
+                const saved = localStorage.getItem(key);
+                if (saved) {
+                  const parsed = JSON.parse(saved);
+                  if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                }
+              }
+            } catch (e) {}
+            return initialSeedData;
+          });
+
           const [isOnline, setIsOnline] = useState(navigator.onLine);
           const [searchTerm, setSearchTerm] = useState('');
           const [activeFilter, setActiveFilter] = useState('TODOS');
@@ -105,35 +100,25 @@
 
           const [editingLogId, setEditingLogId] = useState(null);
 
-          // Sincronización en la Nube con Firestore (Regla 1 y Regla 3 cumplidas)
           useEffect(() => {
             const handleOnline = () => setIsOnline(true);
             const handleOffline = () => setIsOnline(false);
             window.addEventListener('online', handleOnline);
             window.addEventListener('offline', handleOffline);
-
-            // Carga inicial local como respaldo inmediato
-            try {
-              const localSaved = localStorage.getItem('bramaq_cloud_cache');
-              if (localSaved) {
-                const parsed = JSON.parse(localSaved);
-                if (Array.isArray(parsed) && parsed.length > 0) setEmployees(parsed);
-              }
-            } catch(e) {}
-
             return () => {
               window.removeEventListener('online', handleOnline);
               window.removeEventListener('offline', handleOffline);
             };
           }, []);
 
-          // Guardar datos en la nube cada vez que cambien
-          const guardarEnNube = (nuevaLista) => {
-            setEmployees(nuevaLista);
+          useEffect(() => {
             try {
-              localStorage.setItem('bramaq_cloud_cache', JSON.stringify(nuevaLista));
-            } catch(e) {}
-          };
+              if (employees && employees.length > 0) {
+                const dataString = JSON.stringify(employees);
+                localStorage.setItem('bramaq_stable_v80', dataString);
+              }
+            } catch (e) {}
+          }, [employees]);
 
           useEffect(() => {
             if (window.lucide) {
@@ -406,14 +391,12 @@
               emergenciaFono: formattedEmergencyPhone
             };
 
-            let updatedList;
             if (currentEmployee) {
-              updatedList = employees.map(emp => emp.rut === currentEmployee.rut ? { ...finalData, id: emp.id, historial: emp.historial || [] } : emp);
+              setEmployees(employees.map(emp => emp.rut === currentEmployee.rut ? { ...finalData, id: emp.id, historial: emp.historial || [] } : emp));
             } else {
               const newId = Date.now();
-              updatedList = [...employees, { ...finalData, id: newId, historial: [] }];
+              setEmployees([...employees, { ...finalData, id: newId, historial: [] }]);
             }
-            guardarEnNube(updatedList);
             setIsModalOpen(false);
           };
 
@@ -519,7 +502,7 @@
               return emp;
             });
 
-            guardarEnNube(updatedList);
+            setEmployees(updatedList);
             setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
 
             setNewLog({ 
@@ -536,8 +519,7 @@
           const handleDeleteLog = (logId) => {
             if (confirm("¿Estás seguro de eliminar este registro de la hoja de vida?")) {
               const updatedHistorial = (selectedEmployeeForHistory.historial || []).filter(log => log.id !== logId);
-              const updatedList = employees.map(emp => emp.rut === selectedEmployeeForHistory.rut ? { ...emp, historial: updatedHistorial } : emp);
-              guardarEnNube(updatedList);
+              setEmployees(employees.map(emp => emp.rut === selectedEmployeeForHistory.rut ? { ...emp, historial: updatedHistorial } : emp));
               setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
             }
           };
@@ -629,8 +611,7 @@
           const handleDelete = (rutTarget) => {
             if (confirm("¿Confirmas la eliminación de este registro del sistema?")) {
               const cleanTarget = (rutTarget || '').replace(/[^0-9kK]/g, '').toLowerCase();
-              const updatedList = employees.filter(emp => (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase() !== cleanTarget);
-              guardarEnNube(updatedList);
+              setEmployees(employees.filter(emp => (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase() !== cleanTarget));
             }
           };
 
@@ -708,8 +689,8 @@
                   else if (!cleanRut) uniqueMap.set(emp.id, emp);
                 });
                 const updatedList = Array.from(uniqueMap.values());
-                guardarEnNube(updatedList);
-                alert(`¡Datos cargados y sincronizados en la nube! Se procesaron ${newEmployees.length} registros.`);
+                setEmployees(updatedList);
+                alert(`¡Datos cargados con éxito! Se procesaron ${newEmployees.length} registros y se actualizaron localmente.`);
               }
             };
             reader.readAsArrayBuffer(file);
@@ -734,16 +715,16 @@
                           <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación BRAMAQ</span>
                           <span className="text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 text-emerald-400">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                            Nube Sincronizada Activa
+                            GitHub Pages Operativo
                           </span>
                         </div>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-2 flex-wrap justify-center w-full md:w-auto">
-                      {/* Botón de Cargar o Actualizar Excel (Sincroniza con todos) */}
+                      {/* Botón de Cargar Respaldo */}
                       <label className="cursor-pointer bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow flex items-center gap-1.5">
-                        <i data-lucide="refresh-cw" className="w-4 h-4"></i> Cargar / Actualizar Excel Nube
+                        <i data-lucide="refresh-cw" className="w-4 h-4"></i> Cargar / Actualizar Respaldo
                         <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
                       </label>
 
@@ -1210,8 +1191,8 @@
                       <div><label className="text-xs font-bold text-slate-300">Teléfono Principal (8 dígitos)</label><input type="text" name="telefono" value={formData.telefono} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="Ej. 30803392" /></div>
                       <div><label className="text-xs font-bold text-slate-300">Correo Electrónico</label><input type="email" name="correo" value={formData.correo} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="correo@dominio.com" /></div>
                       <div><label className="text-xs font-bold text-slate-300">Contacto Emergencia</label><input type="text" name="emergenciaNombre" value={formData.emergenciaNombre} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" /></div>
-                      <div><label className="text-xs font-bold text-slate-300">Teléfono Emergencia (8 dígitos)</label><input type="text" name="emergenciaFono" value={formData.emergenciaFono} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg server-sm" placeholder="Ej. 98797367" /></div>
-                      <div className="md:col-span-2 flex justify-end gap-2 mt-4"><button type="post" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 rounded-lg">Cancelar</button><button type="submit" className="px-5 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-sm">Guardar Ficha</button></div>
+                      <div><label className="text-xs font-bold text-slate-300">Teléfono Emergencia (8 dígitos)</label><input type="text" name="emergenciaFono" value={formData.emergenciaFono} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="Ej. 98797367" /></div>
+                      <div className="md:col-span-2 flex justify-end gap-2 mt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 rounded-lg">Cancelar</button><button type="submit" className="px-5 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-sm">Guardar Ficha</button></div>
                     </form>
                   </div>
                 </div>
