@@ -82,7 +82,7 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const keys = ['bramaq_github_pages_v60', 'bramaq_master_permanent_v50', 'bramaq_master_permanent_v48'];
+              const keys = ['bramaq_github_pages_v61', 'bramaq_github_pages_v60', 'bramaq_master_permanent_v50'];
               for (let key of keys) {
                 const saved = localStorage.getItem(key);
                 if (saved) {
@@ -97,6 +97,7 @@
           const [isOnline, setIsOnline] = useState(navigator.onLine);
           const [isInstalled, setIsInstalled] = useState(false);
           const [deferredPrompt, setDeferredPrompt] = useState(null);
+          const [showInstallModal, setShowInstallModal] = useState(false);
 
           const [searchTerm, setSearchTerm] = useState('');
           const [activeFilter, setActiveFilter] = useState('TODOS');
@@ -171,7 +172,7 @@
                 setDeferredPrompt(null);
               });
             } else {
-              alert("Para instalar la aplicación, toca el menú de tu navegador y selecciona 'Agregar a la pantalla de inicio'.");
+              setShowInstallModal(true);
             }
           };
 
@@ -179,7 +180,7 @@
             try {
               if (employees && employees.length > 0) {
                 const dataString = JSON.stringify(employees);
-                localStorage.setItem('bramaq_github_pages_v60', dataString);
+                localStorage.setItem('bramaq_github_pages_v61', dataString);
               }
             } catch (e) {}
           }, [employees]);
@@ -771,33 +772,34 @@
 
               <nav className="bg-slate-800/90 backdrop-blur-md border-b border-slate-700 sticky top-0 z-20 shadow-lg">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                  <div className="flex flex-col sm:flex-row justify-between items-center h-auto sm:h-16 py-3 sm:py-0 gap-2">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-amber-600 p-2.5 rounded-xl text-white font-black tracking-wider shadow-inner text-sm">🏗️ BRAMAQ</div>
-                      <div>
-                        <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación BRAMAQ</span>
-                        <span className={`text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 ${isOnline ? 'text-emerald-400' : 'text-amber-400'}`}>
-                          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
-                          {isOnline ? 'Conectado a GitHub Pages' : 'Sin Señal (Memoria Local)'}
-                        </span>
+                  <div className="flex flex-col md:flex-row justify-between items-center py-3 gap-3">
+                    <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-amber-600 p-2.5 rounded-xl text-white font-black tracking-wider shadow-inner text-sm">🏗️ BRAMAQ</div>
+                        <div>
+                          <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación BRAMAQ</span>
+                          <span className={`text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 ${isOnline ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                            {isOnline ? 'Conectado a GitHub Pages' : 'Sin Señal (Memoria Local)'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-3">
-                      {/* Botón de instalación inteligente */}
+                    <div className="flex items-center gap-2 flex-wrap justify-center w-full md:w-auto">
+                      {/* Botón de instalación limpio y sin cortes */}
                       {!isInstalled && (
                         <button 
                           onClick={handleInstallClick}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow flex items-center gap-1 animate-bounce"
-                          title="Instalar como app nativa"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow flex items-center gap-1.5 animate-bounce"
                         >
-                          <i data-lucide="download" className="w-3.5 h-3.5"></i> Instalar App
+                          <i data-lucide="download" className="w-4 h-4"></i> Instalar App
                         </button>
                       )}
 
-                      {/* Botón de Emergencia / Actualización de Respaldo Excel */}
-                      <label className="cursor-pointer bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow flex items-center gap-1">
-                        <i data-lucide="refresh-cw" className="w-3.5 h-3.5"></i> 🔄 Actualizar / Cargar Respaldo
+                      {/* Botón de Actualizar / Cargar Respaldo */}
+                      <label className="cursor-pointer bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow flex items-center gap-1.5">
+                        <i data-lucide="refresh-cw" className="w-4 h-4"></i> Actualizar Respaldo
                         <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
                       </label>
 
@@ -819,7 +821,7 @@
                       </div>
                     </div>
 
-                    <div className="flex gap-1 sm:gap-2 bg-slate-700/50 p-1 rounded-xl border border-slate-600">
+                    <div className="flex gap-1 bg-slate-700/50 p-1 rounded-xl border border-slate-600 w-full md:w-auto justify-center">
                       <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'dashboard' ? 'bg-amber-600 shadow text-white font-bold' : 'text-slate-300 hover:text-white'}`}>Panel Gerencial</button>
                       <button onClick={() => setActiveTab('directorio')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'directorio' ? 'bg-amber-600 shadow text-white font-bold' : 'text-slate-300 hover:text-white'}`}>Directorio y Bitácora</button>
                     </div>
@@ -1034,7 +1036,7 @@
                                           <span className="text-xs text-slate-400">{emp.emergenciaFono}</span>
                                           <div className="flex gap-1.5 text-xs">
                                             <a href={`tel:${emp.emergenciaFono}`} className="text-blue-400 bg-blue-950/60 px-2 py-0.5 rounded border border-blue-900 hover:bg-blue-900 font-medium">📞 Llamar</a>
-                                            <a href={`https://wa.me/${emp.emergenciaFono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-900 hover:bg-emerald-900 font-medium">💬 WhatsApp</a>
+                                            <a href={`https://wa.me/${emp.emergenciaFono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-blue-900 hover:bg-blue-900 font-medium">💬 WhatsApp</a>
                                             <a href={`sms:${emp.emergenciaFono}`} className="text-purple-400 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-900 hover:bg-purple-900 font-medium">✉️ SMS</a>
                                           </div>
                                         </div>
@@ -1064,6 +1066,30 @@
                   </div>
                 )}
               </div>
+
+              {/* Modal de Instrucciones de Instalación si el navegador móvil no lo hace automático */}
+              {showInstallModal && (
+                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                  <div className="bg-slate-800 rounded-2xl shadow-xl w-full max-w-md border border-slate-700 p-6 space-y-4">
+                    <div className="flex justify-between items-center pb-3 border-b border-slate-700">
+                      <h3 className="text-lg font-bold text-white flex items-center">
+                        <i data-lucide="smartphone" className="w-5 h-5 mr-2 text-amber-400"></i> Instalar BRAMAQ en tu Celular
+                      </h3>
+                      <button onClick={() => setShowInstallModal(false)} className="text-slate-400 hover:text-white"><i data-lucide="x" className="w-5 h-5"></i></button>
+                    </div>
+                    <div className="text-sm text-slate-300 space-y-3">
+                      <p>Para tener la aplicación en tu pantalla de inicio y usarla sin señal:</p>
+                      <div className="bg-slate-900 p-3 rounded-xl border border-slate-700 space-y-2 text-xs">
+                        <p>🍏 <strong>En iPhone (Safari):</strong> Toca el botón <strong>Compartir</strong> (cuadrado con flecha ↑) abajo en la barra y selecciona <strong>"Agregar a Inicio"</strong>.</p>
+                        <p>🤖 <strong>En Android (Chrome):</strong> Toca los <strong>tres puntos</strong> arriba a la derecha y selecciona <strong>"Instalar aplicación"</strong> o <strong>"Agregar a la pantalla principal"</strong>.</p>
+                      </div>
+                    </div>
+                    <div className="pt-2 flex justify-end">
+                      <button onClick={() => setShowInstallModal(false)} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-sm">Entendido</button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {isGlobalExportModalOpen && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -1265,7 +1291,7 @@
                       <div><label className="text-xs font-bold text-slate-300">Correo Electrónico</label><input type="email" name="correo" value={formData.correo} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="correo@dominio.com" /></div>
                       <div><label className="text-xs font-bold text-slate-300">Contacto Emergencia</label><input type="text" name="emergenciaNombre" value={formData.emergenciaNombre} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" /></div>
                       <div><label className="text-xs font-bold text-slate-300">Teléfono Emergencia (8 dígitos)</label><input type="text" name="emergenciaFono" value={formData.emergenciaFono} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 text-white rounded-lg text-sm" placeholder="Ej. 98797367" /></div>
-                      <div className="md:col-span-2 flex justify-end gap-2 mt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 rounded-lg">Cancelar</button><button type="submit" className="px-5 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-sm">Guardar Ficha</button></div>
+                      <div className="md:col-span-2 flex justify-end gap-2 mt-4"><button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 rounded-lg">Cancelar]></button><button type="submit" className="px-5 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-sm">Guardar Ficha</button></div>
                     </form>
                   </div>
                 </div>
