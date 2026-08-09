@@ -16,7 +16,7 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
-    <!-- PWA Manifest incrustado para instalación nativa -->
+    <!-- PWA Manifest incrustado -->
     <script>
       const manifestData = {
         "name": "BRAMAQ Dotación",
@@ -41,11 +41,10 @@
       link.href = manifestURL;
       document.head.appendChild(link);
 
-      // Service Worker para funcionamiento offline total y soporte de instalación
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           const swScript = `
-            const CACHE_NAME = 'bramaq-cache-v45';
+            const CACHE_NAME = 'bramaq-cache-v46';
             self.addEventListener('install', e => { self.skipWaiting(); });
             self.addEventListener('activate', e => {
               e.waitUntil(
@@ -106,15 +105,14 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const saved = localStorage.getItem('bramaq_ultimate_v45');
-              if (saved) {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-              }
-              const backup = localStorage.getItem('bramaq_ultimate_v44');
-              if (backup) {
-                const parsedBackup = JSON.parse(backup);
-                if (Array.isArray(parsedBackup) && parsedBackup.length > 0) return parsedBackup;
+              // Verificamos todas las versiones anteriores posibles para recuperar la info sin perder nada
+              const keys = ['bramaq_master_permanent_v46', 'bramaq_ultimate_v45', 'bramaq_ultimate_v44', 'bramaq_ultimate_v42', 'bramaq_permanent_db_v30'];
+              for (let key of keys) {
+                const saved = localStorage.getItem(key);
+                if (saved) {
+                  const parsed = JSON.parse(saved);
+                  if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                }
               }
             } catch (e) {}
             return initialSeedData;
@@ -163,12 +161,13 @@
             };
           }, []);
 
+          // Guardado permanente instantáneo sincronizado en múltiples llaves
           useEffect(() => {
             try {
               if (employees && employees.length > 0) {
                 const dataString = JSON.stringify(employees);
+                localStorage.setItem('bramaq_master_permanent_v46', dataString);
                 localStorage.setItem('bramaq_ultimate_v45', dataString);
-                localStorage.setItem('bramaq_ultimate_v44', dataString);
               }
             } catch (e) {}
           }, [employees]);
