@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor de Dotación Cloud Pro</title>
+    <title>BRAMAQ - Gestor de Dotación Master Pro</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y ReactDOM -->
@@ -16,23 +16,27 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen">
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
 
+        const normalizarCiudad = (ciudadStr) => {
+          if (!ciudadStr) return 'Valdivia';
+          const c = ciudadStr.toString().trim().toLowerCase();
+          if (c.includes('mariquina') || c.includes('san jose') || c.includes('san josé')) return 'San José de la Mariquina';
+          if (c.includes('loncoche')) return 'Loncoche';
+          if (c.includes('lanco')) return 'Lanco';
+          if (c.includes('valdivia')) return 'Valdivia';
+          return ciudadStr.trim().charAt(0).toUpperCase() + ciudadStr.trim().slice(1);
+        };
+
         const initialSeedData = [
-          { 
-            id: 1, nombre: "Aliante Espinoza Lisandro Alberto", rut: "011.917.388-4", direccion: "Venezuela 903 Las Americas", ciudad: "Loncoche", fechaNacimiento: "30/08/1970", cargo: "OPERADOR CARGADOR FRONTAL", telefono: "+56 9 8641 5392", correo: "lisandromys@gmail.com", emergenciaNombre: "Lisandro Aliante", emergenciaFono: "+56989776166",
-            historial: [
-              { id: 101, fecha: "2026-03-10", tipo: "Licencia Médica", autor: "Administración RRHH", rolAutor: "Administrativo", nota: "Licencia por 3 días emitida por ACHS.", fechaInicio: "2026-03-10", fechaTermino: "2026-03-12", esExtension: false, archivos: ["licencia_achs.pdf"] }
-            ]
-          },
-          { 
-            id: 2, nombre: "Barrera Manuel", rut: "13.456.789-2", direccion: "Los Pinos 123", ciudad: "San José de la Mariquina", fechaNacimiento: "10/05/1978", cargo: "ADMINISTRADOR DE CONTRATO", telefono: "+56 9 7788 9900", correo: "manuel.barrera@mail.com", emergenciaNombre: "Rosa Soto", emergenciaFono: "+56911223344",
-            historial: []
-          }
+          { id: 1, nombre: "Aliante Espinoza Lisandro Alberto", rut: "011.917.388-4", direccion: "Venezuela 903 Las Americas", ciudad: "Loncoche", fechaNacimiento: "30/08/1970", cargo: "OPERADOR CARGADOR FRONTAL", telefono: "+56 9 8641 5392", correo: "lisandromys@gmail.com", emergenciaNombre: "Lisandro Aliante", emergenciaFono: "+56989776166", historial: [] },
+          { id: 2, nombre: "Barrera Manuel", rut: "13.456.789-2", direccion: "Los Pinos 123", ciudad: "San José de la Mariquina", fechaNacimiento: "10/05/1978", cargo: "ADMINISTRADOR DE CONTRATO", telefono: "+56 9 7788 9900", correo: "manuel.barrera@mail.com", emergenciaNombre: "Rosa Soto", emergenciaFono: "+56911223344", historial: [] },
+          { id: 3, nombre: "Vera Soto Juan Carlos", rut: "12.333.444-5", direccion: "Calle 21 de Mayo 45", ciudad: "Valdivia", fechaNacimiento: "15/03/1982", cargo: "SUPERVISOR FLOTA", telefono: "+56 9 4433 2211", correo: "juan.vera@bramaq.cl", emergenciaNombre: "Ana Soto", emergenciaFono: "+56988776655", historial: [] },
+          { id: 4, nombre: "González Pérez María Elena", rut: "14.555.666-7", direccion: "Avenida Picarte 890", ciudad: "Valdivia", fechaNacimiento: "22/11/1985", cargo: "PREVENCIONISTA", telefono: "+56 9 5544 3322", correo: "maria.gonzalez@bramaq.cl", emergenciaNombre: "Pedro Pérez", emergenciaFono: "+56999887766", historial: [] }
         ];
 
         const MESES_NOMBRES = {
@@ -44,7 +48,7 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              const saved = localStorage.getItem('bramaq_pro_cloud_v1');
+              const saved = localStorage.getItem('bramaq_master_pro_v2026');
               if (saved) {
                 const parsed = JSON.parse(saved);
                 if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -85,7 +89,7 @@
           const persistir = (nuevaLista) => {
             setEmployees(nuevaLista);
             try {
-              localStorage.setItem('bramaq_pro_cloud_v1', JSON.stringify(nuevaLista));
+              localStorage.setItem('bramaq_master_pro_v2026', JSON.stringify(nuevaLista));
             } catch(e) {}
           };
 
@@ -313,7 +317,7 @@
                   <div className="flex items-center gap-3">
                     <div className="bg-amber-600 p-2.5 rounded-xl text-white font-black tracking-wider text-sm shadow">🏗️ BRAMAQ PRO</div>
                     <div>
-                      <span className="font-bold text-lg text-white block leading-tight">Gestor de Dotación Cloud</span>
+                      <span className="font-bold text-lg text-white block leading-tight">Gestor de Dotación Master</span>
                       <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-widest flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Sistema Estable Operativo
                       </span>
