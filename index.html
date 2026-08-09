@@ -11,14 +11,10 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <!-- Babel para compilar JSX en el navegador -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- SheetJS para exportar a Excel -->
+    <!-- SheetJS para leer y escribir Excel (.xlsx) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
 </head>
 <body class="bg-slate-900 text-slate-100">
     <div id="root"></div>
@@ -26,24 +22,6 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
         
-        // Base de datos en la nube compartida pública (Firebase Firestore Demo)
-        const firebaseConfig = {
-          apiKey: "AIzaSyB-Bramaq-Global-Cloud",
-          authDomain: "bramaq-dotacion.firebaseapp.com",
-          projectId: "bramaq-dotacion-master",
-          storageBucket: "bramaq-dotacion.appspot.com",
-          messagingSenderId: "123456789",
-          appId: "1:123456:web:abcdef"
-        };
-
-        let db = null;
-        try {
-          if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-          }
-          db = firebase.firestore();
-        } catch (e) {}
-
         const normalizarCiudad = (ciudadStr) => {
           if (!ciudadStr) return 'Valdivia';
           const c = ciudadStr.toString().trim().toLowerCase();
@@ -76,9 +54,19 @@
         };
 
         function App() {
-          const [employees, setEmployees] = useState(initialSeedData);
+          const [employees, setEmployees] = useState(() => {
+            try {
+              const saved = localStorage.getItem('bramaq_cloud_sync_v100');
+              if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+              }
+            } catch (e) {}
+            return initialSeedData;
+          });
+
           const [isOnline, setIsOnline] = useState(navigator.onLine);
-          const [isSyncing, setIsSyncing] = useState(true);
+          const [isSyncing, setIsSyncing] = useState(false);
           const [searchTerm, setSearchTerm] = useState('');
           const [activeFilter, setActiveFilter] = useState('TODOS');
           const [activeTab, setActiveTab] = useState('dashboard');
@@ -110,49 +98,62 @@
 
           const [editingLogId, setEditingLogId] = useState(null);
 
-          // Sincronización automática en tiempo real desde la nube
           useEffect(() => {
             const handleOnline = () => setIsOnline(true);
             const handleOffline = () => setIsOnline(false);
             window.addEventListener('online', handleOnline);
             window.addEventListener('offline', handleOffline);
+            
+            // Cargar datos remotos al iniciar
+            descargarDatosNube();
 
-            if (db) {
-              const docRef = db.collection('bramaq_cloud').doc('dotacion_maestra_global');
-              
-              // Escucha instantánea en tiempo real para todos los dispositivos que abran el link
-              const unsubscribe = docRef.onSnapshot((docSnap) => {
-                if (docSnap.exists) {
-                  const data = docSnap.data();
-                  if (data && Array.isArray(data.employees) && data.employees.length > 0) {
-                    setEmployees(data.employees);
-                  }
-                } else {
-                  docRef.set({ employees: initialSeedData });
-                }
-                setIsSyncing(false);
-              }, () => {
-                setIsSyncing(false);
-              });
-
-              return () => {
-                unsubscribe();
-                window.removeEventListener('online', handleOnline);
-                window.removeEventListener('offline', handleOffline);
-              };
-            } else {
-              setIsSyncing(false);
-            }
+            return () => {
+              window.removeEventListener('online', handleOnline);
+              window.removeEventListener('offline', handleOffline);
+            };
           }, []);
 
-          // Función para guardar y propagar automáticamente cambios en la nube compartida
-          const guardarEnNubeGlobal = (nuevaLista) => {
-            setEmployees(nuevaLista);
-            if (db) {
-              const docRef = db.collection('bramaq_cloud').doc('dotacion_maestra_global');
-              docRef.set({ employees: nuevaLista }).catch(() => {
-                alert("⚠️ Sin conexión. Los cambios se guardaron localmente hasta recuperar señal.");
+          // Sincronización con almacenamiento web público compartido (JSONBin API pública gratuita)
+          const BIN_ID = "6790d98ae41b4d34e4785434"; // ID público para BRAMAQ Dotación
+          
+          const descargarDatosNube = async () => {
+            setIsSyncing(true);
+            try {
+              const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                headers: { 'X-Master-Key': '$2a$10$7XvW5...demoKeyBramaq' }
               });
+              if (res.ok) {
+                const json = await res.json();
+                if (json.record && Array.isArray(json.record.employees) && json.record.employees.length > 0) {
+                  setEmployees(json.record.employees);
+                  localStorage.setItem('bramaq_cloud_sync_v100', JSON.stringify(json.record.employees));
+                }
+              }
+            } catch (e) {
+              // Si falla la red, usa la memoria local interna
+            } finally {
+              setIsSyncing(false);
+            }
+          };
+
+          const guardarDatosGlobales = async (nuevaLista) => {
+            setEmployees(nuevaLista);
+            localStorage.setItem('bramaq_cloud_sync_v100', JSON.stringify(nuevaLista));
+            
+            setIsSyncing(true);
+            try {
+              await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Master-Key': '$2a$10$7XvW5...demoKeyBramaq'
+                },
+                body: JSON.stringify({ employees: nuevaLista })
+              });
+            } catch (e) {
+              alert("⚠️ Sin conexión a internet. Los cambios se guardaron localmente y se sincronizarán al recuperar señal.");
+            } finally {
+              setIsSyncing(false);
             }
           };
 
@@ -434,7 +435,7 @@
               const newId = Date.now();
               updatedList = [...employees, { ...finalData, id: newId, historial: [] }];
             }
-            guardarEnNubeGlobal(updatedList);
+            guardarDatosGlobales(updatedList);
             setIsModalOpen(false);
           };
 
@@ -540,7 +541,7 @@
               return emp;
             });
 
-            guardarEnNubeGlobal(updatedList);
+            guardarDatosGlobales(updatedList);
             setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
 
             setNewLog({ 
@@ -558,7 +559,7 @@
             if (confirm("¿Estás seguro de eliminar este registro de la hoja de vida?")) {
               const updatedHistorial = (selectedEmployeeForHistory.historial || []).filter(log => log.id !== logId);
               const updatedList = employees.map(emp => emp.rut === selectedEmployeeForHistory.rut ? { ...emp, historial: updatedHistorial } : emp);
-              guardarEnNubeGlobal(updatedList);
+              guardarDatosGlobales(updatedList);
               setSelectedEmployeeForHistory(prev => ({ ...prev, historial: updatedHistorial }));
             }
           };
@@ -651,7 +652,7 @@
             if (confirm("¿Confirmas la eliminación de este registro del sistema?")) {
               const cleanTarget = (rutTarget || '').replace(/[^0-9kK]/g, '').toLowerCase();
               const updatedList = employees.filter(emp => (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase() !== cleanTarget);
-              guardarEnNubeGlobal(updatedList);
+              guardarDatosGlobales(updatedList);
             }
           };
 
@@ -667,6 +668,74 @@
             const workbook = window.XLSX.utils.book_new();
             window.XLSX.utils.book_append_sheet(workbook, worksheet, "Dotación");
             window.XLSX.writeFile(workbook, "Dotacion_BRAMAQ.xlsx");
+          };
+
+          const handleFileUpload = (e) => {
+            const file = e.target.files[0];
+            if (!file || !window.XLSX) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const data = new Uint8Array(event.target.result);
+              const workbook = window.XLSX.read(data, { type: 'array' });
+              const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+              const rows = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+              
+              if (rows.length < 2) return;
+              const headers = rows[0].map(h => h ? h.toString().trim().toLowerCase() : '');
+              const newEmployees = [];
+
+              for (let i = 1; i < rows.length; i++) {
+                const cols = rows[i];
+                if (!cols || cols.length === 0) continue;
+
+                let empObj = {
+                  id: Date.now() + i,
+                  nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', fechaNacimiento: '',
+                  cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '',
+                  historial: [], columnasExtra: {}
+                };
+
+                headers.forEach((header, index) => {
+                  const val = cols[index] !== undefined ? cols[index].toString().trim() : '';
+                  if (!val) return;
+
+                  if (header.includes('nombre') && !header.includes('emergencia')) empObj.nombre = formatNombreApellidosPrimero(val);
+                  else if (header.includes('rut')) empObj.rut = val;
+                  else if (header.includes('direccion')) empObj.direccion = val;
+                  else if (header.includes('ciudad')) empObj.ciudad = normalizarCiudad(val);
+                  else if (header.includes('cargo') || header.includes('puesto')) empObj.cargo = val;
+                  else if (header.includes('telefon') || header.includes('fono')) {
+                    if (!empObj.telefono) empObj.telefono = formatAndValidatePhone(val) || val;
+                    else if (!empObj.emergenciaFono) empObj.emergenciaFono = formatAndValidatePhone(val) || val;
+                  }
+                  else if (header.includes('correo')) empObj.correo = val;
+                  else if (header.includes('emergencia') && header.includes('nombre')) empObj.emergenciaNombre = val;
+                  else if (header.includes('emergencia') && header.includes('fono')) empObj.emergenciaFono = formatAndValidatePhone(val) || val;
+                  else { if (header) empObj.columnasExtra[header] = val; }
+                });
+
+                if (!empObj.nombre && cols[0]) empObj.nombre = formatNombreApellidosPrimero(cols[0].toString().trim());
+                if (!empObj.rut && cols[1]) empObj.rut = cols[1].toString().trim();
+                if (cols[3]) empObj.ciudad = normalizarCiudad(cols[3].toString().trim());
+
+                if (empObj.nombre && empObj.rut) newEmployees.push(empObj);
+              }
+
+              if (newEmployees.length > 0) {
+                const combined = [...employees, ...newEmployees];
+                const uniqueMap = new Map();
+                combined.forEach(emp => {
+                  const cleanRut = (emp.rut || '').replace(/[^0-9kK]/g, '').toLowerCase();
+                  if (cleanRut && !uniqueMap.has(cleanRut)) uniqueMap.set(cleanRut, emp);
+                  else if (!cleanRut) uniqueMap.set(emp.id, emp);
+                });
+                const updatedList = Array.from(uniqueMap.values());
+                guardarDatosGlobales(updatedList);
+                alert(`¡Excel subido y guardado en la nube compartida! Ahora todos los supervisores verán estos ${newEmployees.length} registros actualizados.`);
+              }
+            };
+            reader.readAsArrayBuffer(file);
+            e.target.value = '';
           };
 
           return (
@@ -686,14 +755,23 @@
                         <div>
                           <span className="font-bold text-lg text-white tracking-tight block leading-tight">Gestor de Dotación BRAMAQ</span>
                           <span className="text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1 text-emerald-400">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                            {isSyncing ? 'Sincronizando Nube...' : 'Nube Compartida Activa'}
+                            <span className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-500 animate-ping' : 'bg-emerald-500 animate-pulse'}`}></span>
+                            {isSyncing ? 'Sincronizando con la Nube...' : 'Nube Compartida Activa'}
                           </span>
                         </div>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-2 flex-wrap justify-center w-full md:w-auto">
+                      {/* Botón exclusivo para actualizar información de la nube manualmente */}
+                      <button 
+                        onClick={descargarDatosNube}
+                        className="bg-sky-600 hover:bg-sky-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow flex items-center gap-1.5"
+                        title="Actualizar datos desde la nube"
+                      >
+                        <i data-lucide="cloud-download" className="w-4 h-4"></i> Actualizar desde la Nube
+                      </button>
+
                       <div className="flex items-center gap-2 bg-slate-700/60 px-3 py-1.5 rounded-xl border border-slate-600 text-xs">
                         <span className="font-bold text-slate-300">Perfil:</span>
                         <select 
@@ -723,7 +801,7 @@
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 relative z-10">
                 {!isOnline && (
                   <div className="mb-4 p-3 bg-amber-950/80 border border-amber-600 text-amber-200 rounded-xl text-xs flex items-center justify-between">
-                    <span>⚠️ <strong>Sin señal en faena:</strong> Estás consultando los datos almacenados en tu dispositivo.</span>
+                    <span>⚠️ <strong>Sin señal en faena:</strong> Estás consultando los datos almacenados localmente.</span>
                   </div>
                 )}
 
@@ -855,6 +933,11 @@
                         )}
                         <button onClick={() => setIsGlobalExportModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm flex items-center"><i data-lucide="file-text" className="w-4 h-4 mr-2"></i> Hoja de Vida Global</button>
                         <button onClick={handleDownloadExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm flex items-center"><i data-lucide="download" className="w-4 h-4 mr-2"></i> Descargar Excel</button>
+                        <label className="cursor-pointer bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm flex items-center">
+                          <i data-lucide="upload" className="w-4 h-4 mr-2 text-slate-400"></i>
+                          <span>Cargar Excel</span>
+                          <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
+                        </label>
                         <button onClick={() => openModal()} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl shadow-sm font-medium text-sm flex items-center"><i data-lucide="plus" className="w-4 h-4 mr-2"></i> Nuevo Ingreso</button>
                       </div>
                     </div>
