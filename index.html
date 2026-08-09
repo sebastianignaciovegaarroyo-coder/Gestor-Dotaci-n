@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor de Dotación y Hoja de Vida</title>
+    <title>BRAMAQ - Gestor de Dotación</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React y ReactDOM -->
@@ -22,7 +22,7 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
         
-        const defaultData = [
+        const initialSeedData = [
           { 
             id: 1, nombre: "Aliante Espinoza Lisandro Alberto", rut: "011.917.388-4", direccion: "Venezuela 903 Las Americas", ciudad: "Loncoche", fechaNacimiento: "30/08/1970", cargo: "OPERADOR CARGADOR FRONTAL", telefono: "+56 9 8641 5392", correo: "lisandromys@gmail.com", emergenciaNombre: "Lisandro Aliante", emergenciaFono: "+56989776166",
             historial: [
@@ -44,36 +44,28 @@
         function App() {
           const [employees, setEmployees] = useState(() => {
             try {
-              // Verificamos múltiples llaves de respaldo para recuperar información previa si existe
-              const saved1 = localStorage.getItem('bramaq_permanent_db_v30');
-              const saved2 = localStorage.getItem('bramaq_stable_v28');
-              const saved3 = localStorage.getItem('bramaq_offline_v24');
-              
-              if (saved1) {
-                const parsed = JSON.parse(saved1);
+              const saved = localStorage.getItem('bramaq_master_permanent_v35');
+              if (saved) {
+                const parsed = JSON.parse(saved);
                 if (Array.isArray(parsed) && parsed.length > 0) return parsed;
               }
-              if (saved2) {
-                const parsed = JSON.parse(saved2);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-              }
-              if (saved3) {
-                const parsed = JSON.parse(saved3);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+              // Si no existe, buscamos en respaldos secundarios
+              const secondary = localStorage.getItem('bramaq_permanent_db_v30') || localStorage.getItem('bramaq_stable_v28');
+              if (secondary) {
+                const parsedSec = JSON.parse(secondary);
+                if (Array.isArray(parsedSec) && parsedSec.length > 0) return parsedSec;
               }
             } catch (e) {}
-            return defaultData;
+            return initialSeedData;
           });
 
-          // Guardado automático inmediato y en múltiples llaves simultáneas para evitar pérdida
+          // Escritura fija e inmediata en la memoria del dispositivo
           useEffect(() => {
             try {
-              const dataString = JSON.stringify(employees);
-              localStorage.setItem('bramaq_permanent_db_v30', dataString);
-              localStorage.setItem('bramaq_stable_v28', dataString);
-              // Solicitamos persistencia al navegador si está soportada
-              if (navigator.storage && navigator.storage.persist) {
-                navigator.storage.persist();
+              if (employees && employees.length > 0) {
+                const dataString = JSON.stringify(employees);
+                localStorage.setItem('bramaq_master_permanent_v35', dataString);
+                localStorage.setItem('bramaq_permanent_db_v30', dataString);
               }
             } catch (e) {}
           }, [employees]);
