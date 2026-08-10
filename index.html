@@ -4,18 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/Gestor-Dotaci-n/">
-    
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#020617">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="BRAMAQ">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3200/3200424.png">
-    
     <title>Gestor de Dotación BRAMAQ - Enterprise</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -36,7 +28,12 @@
     </style>
 </head>
 <body class="antialiased selection:bg-amber-500/30 selection:text-amber-200" translate="no">
-    <div id="root"></div>
+    <div id="root">
+        <div style="display:flex; justify-content:center; align-items:center; height:100vh; flex-direction:column; color:#f59e0b; font-weight:bold; background:#020617; font-family:sans-serif;">
+            Iniciando BRAMAQ Enterprise...
+        </div>
+    </div>
+    
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
         
@@ -56,11 +53,6 @@
         } catch (e) { console.error("Error iniciando Firebase:", e); }
 
         function App() {
-          const [deferredPrompt, setDeferredPrompt] = useState(null);
-          const [isInstallable, setIsInstallable] = useState(false);
-          const [isIOS, setIsIOS] = useState(false);
-          const [isStandalone, setIsStandalone] = useState(false);
-
           const [hasEntered, setHasEntered] = useState(false);
           const [gateProfile, setGateProfile] = useState('');
           const [userSession, setUserSession] = useState({ rol: "" });
@@ -101,38 +93,6 @@
             customTipo: '', nota: '', archivos: [], 
             autorBitacora: '', rolBitacora: ''
           });
-
-          useEffect(() => {
-            const userAgent = window.navigator.userAgent.toLowerCase();
-            const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
-            setIsIOS(isIosDevice);
-
-            const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-            setIsStandalone(isDisplayStandalone);
-
-            const handleBeforeInstallPrompt = (e) => {
-              e.preventDefault();
-              setDeferredPrompt(e);
-              setIsInstallable(true);
-            };
-
-            window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-            window.addEventListener('appinstalled', () => {
-              setIsInstallable(false);
-              setDeferredPrompt(null);
-            });
-
-            return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-          }, []);
-
-          const handleInstallClick = async () => {
-            if (deferredPrompt) {
-              deferredPrompt.prompt();
-              const { outcome } = await deferredPrompt.userChoice;
-              if (outcome === 'accepted') setIsInstallable(false);
-              setDeferredPrompt(null);
-            }
-          };
 
           const syncProfileLogic = (rolActivo) => {
             if (rolActivo === 'Administrativo') {
@@ -562,18 +522,6 @@
                     >
                       INGRESAR <i data-lucide="arrow-right" className="w-4 h-4"></i>
                     </button>
-                    
-                    {isInstallable && (
-                      <button onClick={handleInstallClick} className="w-full py-3 rounded-xl font-semibold text-xs text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10 transition-colors flex items-center justify-center gap-2">
-                        <i data-lucide="download-cloud" className="w-4 h-4"></i> Instalar Aplicación BRAMAQ
-                      </button>
-                    )}
-                    {isIOS && !isStandalone && (
-                      <div className="w-full py-3 rounded-xl font-medium text-xs text-slate-400 border border-slate-800 bg-slate-900/50 flex flex-col items-center justify-center gap-1.5 text-center px-4">
-                        <span>Para instalar en iOS, toque Compartir <i data-lucide="share" className="w-3 h-3 inline text-slate-300 mx-0.5"></i></span>
-                        <span>y luego seleccione <strong>"Agregar a inicio"</strong></span>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -1407,9 +1355,6 @@
         }
 
         window.addEventListener('load', () => {
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW:', err));
-            }
             const container = document.getElementById('root');
             if (container) {
                 try {
