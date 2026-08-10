@@ -71,7 +71,7 @@
             nota: '',
             archivoNombre: '',
             archivoUrl: '',
-            autorBitacora: '',
+            autorBitacora: 'Briones Victor',
             rolBitacora: 'Supervisor'
           });
 
@@ -92,14 +92,15 @@
 
           useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
 
-          // Lista dinámica de supervisores extraídos de los empleados actuales
+          // Lista estricta de supervisores extraídos de la dotación
           const supervisorsList = useMemo(() => {
-            return employees
+            const list = employees
               .filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR'))
               .map(e => e.nombre);
+            // Si por alguna razón la base está vacía al inicio, proveemos los nombres por defecto
+            return list.length > 0 ? list : ['Briones Victor', 'Nahuelpan Nahuelpan Reinaldo Patricio', 'Rubilar Rubilar Daniel Joel'];
           }, [employees]);
 
-          // Establecer un supervisor por defecto si hay disponibles
           useEffect(() => {
             if (supervisorsList.length > 0 && (!logForm.autorBitacora || !supervisorsList.includes(logForm.autorBitacora))) {
               setLogForm(prev => ({ ...prev, autorBitacora: supervisorsList[0] }));
@@ -286,7 +287,7 @@
               nota: String(logForm.nota || ''),
               archivoNombre: String(logForm.archivoNombre || ''),
               archivoUrl: String(logForm.archivoUrl || ''),
-              autor: String(logForm.autorBitacora || (supervisorsList[0] || 'Supervisor')),
+              autor: String(logForm.autorBitacora || supervisorsList[0] || 'Supervisor'),
               rolAutor: "Supervisor",
               createdAt: new Date().toISOString()
             };
@@ -902,7 +903,7 @@
                     <form onSubmit={handleAddLog} className="space-y-2.5 text-xs pt-3 border-t border-slate-800">
                       <div className="text-[11px] font-bold text-amber-400">Agregar Evento a la Hoja de Vida:</div>
                       
-                      {/* DESPLEGABLE CON NOMBRES REALES DE SUPERVISORES */}
+                      {/* DESPLEGABLE CON NOMBRES REALES Y EXCLUSIVOS DE SUPERVISORES DE LA DOTACIÓN */}
                       <div>
                         <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Supervisor)</label>
                         <select 
@@ -910,13 +911,9 @@
                           onChange={e => setLogForm({...logForm, autorBitacora: e.target.value, rolBitacora: 'Supervisor'})} 
                           className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold text-xs"
                         >
-                          {supervisorsList.length > 0 ? (
-                            supervisorsList.map(sup => (
-                              <option key={sup} value={sup}>{sup} (Supervisor)</option>
-                            ))
-                          ) : (
-                            <option value="Supervisor de Faena">Supervisor de Faena</option>
-                          )}
+                          {supervisorsList.map(sup => (
+                            <option key={sup} value={sup}>{sup} (Supervisor)</option>
+                          ))}
                         </select>
                       </div>
 
