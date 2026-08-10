@@ -71,7 +71,7 @@
             nota: '',
             archivoNombre: '',
             archivoUrl: '',
-            autorBitacora: 'Briones Victor',
+            autorBitacora: '',
             rolBitacora: 'Supervisor'
           });
 
@@ -91,6 +91,20 @@
           }, []);
 
           useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+          // Lista dinámica de supervisores extraídos de los empleados actuales
+          const supervisorsList = useMemo(() => {
+            return employees
+              .filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR'))
+              .map(e => e.nombre);
+          }, [employees]);
+
+          // Establecer un supervisor por defecto si hay disponibles
+          useEffect(() => {
+            if (supervisorsList.length > 0 && (!logForm.autorBitacora || !supervisorsList.includes(logForm.autorBitacora))) {
+              setLogForm(prev => ({ ...prev, autorBitacora: supervisorsList[0] }));
+            }
+          }, [supervisorsList]);
 
           const handleDownloadExcel = () => {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(employees, null, 2));
@@ -272,8 +286,8 @@
               nota: String(logForm.nota || ''),
               archivoNombre: String(logForm.archivoNombre || ''),
               archivoUrl: String(logForm.archivoUrl || ''),
-              autor: String(logForm.autorBitacora || 'Briones Victor'),
-              rolAutor: String(logForm.rolBitacora || 'Supervisor'),
+              autor: String(logForm.autorBitacora || (supervisorsList[0] || 'Supervisor')),
+              rolAutor: "Supervisor",
               createdAt: new Date().toISOString()
             };
 
@@ -294,7 +308,7 @@
                 nota: '',
                 archivoNombre: '',
                 archivoUrl: '',
-                autorBitacora: 'Briones Victor',
+                autorBitacora: supervisorsList[0] || '',
                 rolBitacora: 'Supervisor'
               });
               alert("Bitácora registrada con éxito.");
@@ -428,8 +442,8 @@
                     onChange={e => {
                       const rol = e.target.value;
                       let nombre = "Administrador / RRHH";
-                      if(rol === "Supervisor") nombre = "Briones Victor";
-                      if(rol === "Prevencionista") nombre = "Carlos Ruiz";
+                      if(rol === "Supervisor") nombre = supervisorsList[0] || "Supervisor";
+                      if(rol === "Prevencionista") nombre = "Prevención";
                       setUserSession({ nombre, rol });
                     }} 
                     className="bg-slate-950 text-amber-400 font-bold px-2 py-1 rounded-xl border border-slate-700 outline-none w-full"
@@ -831,7 +845,7 @@
                 </div>
               )}
 
-              {/* MODAL BITÁCORA / HOJA DE VIDA CON NOMBRES DE SUPERVISORES Y OPCIÓN DE ELIMINAR OBSERVACIONES */}
+              {/* MODAL BITÁCORA / HOJA DE VIDA CON LISTA EXCLUSIVA DE SUPERVISORES REALES Y ELIMINACIÓN DE OBSERVACIONES */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-lg border border-slate-800 space-y-3 my-auto max-h-[90vh] overflow-y-auto">
@@ -888,25 +902,21 @@
                     <form onSubmit={handleAddLog} className="space-y-2.5 text-xs pt-3 border-t border-slate-800">
                       <div className="text-[11px] font-bold text-amber-400">Agregar Evento a la Hoja de Vida:</div>
                       
-                      {/* DESPLEGABLE CON NOMBRES EXACTOS DE SUPERVISORES DE LA DOTACIÓN */}
+                      {/* DESPLEGABLE CON NOMBRES REALES DE SUPERVISORES */}
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Supervisor / Responsable)</label>
+                        <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Supervisor)</label>
                         <select 
                           value={logForm.autorBitacora} 
-                          onChange={e => {
-                            const val = e.target.value;
-                            let rol = "Supervisor";
-                            if (val.includes("Administrativo")) rol = "Administrativo";
-                            if (val.includes("Prevención")) rol = "Prevencionista";
-                            setLogForm({...logForm, autorBitacora: val, rolBitacora: rol});
-                          }} 
+                          onChange={e => setLogForm({...logForm, autorBitacora: e.target.value, rolBitacora: 'Supervisor'})} 
                           className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold text-xs"
                         >
-                          <option value="Briones Victor">Briones Victor (Supervisor)</option>
-                          <option value="Nahuelpan Nahuelpan Reinaldo Patricio">Nahuelpan Nahuelpan Reinaldo Patricio (Supervisor)</option>
-                          <option value="Rubilar Rubilar Daniel Joel">Rubilar Rubilar Daniel Joel (Supervisor)</option>
-                          <option value="María Gómez (Administrativo / RRHH)">María Gómez (Administrativo / RRHH)</option>
-                          <option value="Carlos Ruiz (Prevención de Riesgos)">Carlos Ruiz (Prevención de Riesgos)</option>
+                          {supervisorsList.length > 0 ? (
+                            supervisorsList.map(sup => (
+                              <option key={sup} value={sup}>{sup} (Supervisor)</option>
+                            ))
+                          ) : (
+                            <option value="Supervisor de Faena">Supervisor de Faena</option>
+                          )}
                         </select>
                       </div>
 
@@ -1012,7 +1022,7 @@
                 </div>
               )}
 
-              {/* MODAL HOJA DE VIDA GLOBAL CON BOTÓN DE DESCARGA */}
+              {/* MODAL HOJA DE VIDA GLOBAL */}
               {isGlobalHistoryOpen && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-2xl border border-slate-800 space-y-3 my-auto">
