@@ -125,7 +125,7 @@
             }
           };
 
-          // CARGA INTELIGENTE CON DETECCIÓN EXACTA DE COLUMNAS DE EMERGENCIA Y FILTRO DE DUPLICADOS POR RUT
+          // CARGA INTELIGENTE CON DETECCIÓN DE DUPLICADOS POR RUT Y EXTRACCIÓN DE EMERGENCIA
           const handleUploadExcel = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -144,7 +144,7 @@
                   let duplicateCount = 0;
                   let existingRuts = new Set(employees.map(emp => (emp.rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '')));
 
-                  if (confirm(`Se leyeron ${jsonSheet.length} filas del archivo. ¿Deseas importar omitiendo duplicados?`)) {
+                  if (confirm(`Se leyeron ${jsonSheet.length} filas del archivo. ¿Deseas importar omitiendo duplicados por RUT?`)) {
                     for (let row of jsonSheet) {
                       const keys = Object.keys(row);
                       const findVal = (terms) => {
@@ -189,7 +189,7 @@
                         }
                       }
                     }
-                    alert(`¡Importación completada!\n- Nuevos agregados: ${addedCount}\n- Duplicados omitidos: ${duplicateCount}`);
+                    alert(`¡Importación completada!\n- Nuevos trabajadores únicos agregados: ${addedCount}\n- Duplicados detectados y eliminados/omitidos: ${duplicateCount}`);
                   }
                 }
               } catch (err) {
@@ -289,9 +289,24 @@
             return missing;
           };
 
-          // ORDENAMIENTO ALFABÉTICO ESTRICTO DE LA A A LA Z
+          // ORDENAMIENTO ALFABÉTICO ESTRICTO DE LA A A LA Z Y ELIMINACIÓN INTERNA DE DUPLICADOS
           const filtered = useMemo(() => {
-            const list = employees.filter(emp => {
+            // Filtrar duplicados internamente por RUT limpio
+            const seenRuts = new Set();
+            const uniqueEmployees = [];
+            for (const emp of employees) {
+              const cleanR = (emp.rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '');
+              if (cleanR) {
+                if (!seenRuts.has(cleanR)) {
+                  seenRuts.add(cleanR);
+                  uniqueEmployees.push(emp);
+                }
+              } else {
+                uniqueEmployees.push(emp);
+              }
+            }
+
+            const list = uniqueEmployees.filter(emp => {
               const s = searchTerm.toLowerCase();
               const matchSearch = (emp.nombre||'').toLowerCase().includes(s) || 
                                     (emp.rut||'').toLowerCase().includes(s) || 
@@ -323,7 +338,7 @@
           }, [employees, searchTerm, activeFilter, citiesList]);
 
           const kpis = useMemo(() => {
-            const total = employees.length;
+            const total = filtered.length;
             const supervisores = employees.filter(e => (e.cargo||'').toUpperCase().includes('SUPERVISOR')).length;
             const prevencionistas = employees.filter(e => (e.cargo||'').toUpperCase().includes('PREVENCION')).length;
             const administrativos = employees.filter(e => (e.cargo||'').toUpperCase().includes('ADMINISTRATIVO') && !(e.cargo||'').toUpperCase().includes('CONTRATO')).length;
@@ -339,8 +354,8 @@
               porCiudad[c] = employees.filter(e => (e.ciudad||'').toLowerCase() === c.toLowerCase()).length;
             });
 
-            return { total, supervisores, prevencionistas, administrativos, adminContrato, operadoresGrua, cargadorFrontal, mecanicos, incompletos, porCiudad };
-          }, [employees, citiesList]);
+            return { total: employees.length, supervisores, prevencionistas, administrativos, adminContrato, operadoresGrua, cargadorFrontal, mecanicos, incompletos, porCiudad };
+          }, [employees, citiesList, filtered]);
 
           const allGlobalLogs = useMemo(() => {
             let logs = [];
@@ -513,7 +528,7 @@
                       </div>
                     )}
 
-                    {/* DIRECTORIO Y BITÁCORA ORDENADO DE A A LA Z */}
+                    {/* DIRECTORIO Y BITÁCORA ORDENADO DE A A LA Z SIN DUPLICADOS */}
                     {activeTab === 'directorio' && (
                       <div className="space-y-3">
                         <div className="relative">
@@ -567,7 +582,7 @@
                           </button>
                         </div>
 
-                        {/* BOTÓN DE BORRADO MASIVO VISIBLE PARA ADMINISTRADOR */}
+                        {/* BOTÓN DE BORRADO MASIVO */}
                         {userSession.rol === 'Administrativo' && (
                           <div className="pt-1">
                             <button 
