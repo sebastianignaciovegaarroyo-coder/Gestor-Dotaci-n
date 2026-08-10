@@ -226,7 +226,6 @@
             if (confirm("¿Eliminar trabajador?")) await db.collection('employees').doc(id).delete();
           };
 
-          // Función para eliminar un registro individual de la bitácora
           const handleDeleteLog = async (logId) => {
             if (!selectedEmpForHistory) return;
             if (confirm("¿Estás seguro de eliminar esta observación de la hoja de vida?")) {
@@ -273,8 +272,8 @@
               nota: String(logForm.nota || ''),
               archivoNombre: String(logForm.archivoNombre || ''),
               archivoUrl: String(logForm.archivoUrl || ''),
-              autor: String(logForm.autorBitacora || ''),
-              rolAutor: String(logForm.rolBitacora || ''),
+              autor: String(logForm.autorBitacora || 'Briones Victor'),
+              rolAutor: String(logForm.rolBitacora || 'Supervisor'),
               createdAt: new Date().toISOString()
             };
 
@@ -346,7 +345,10 @@
               if (activeFilter === 'INCOMPLETOS') {
                 return getMissingDataList(emp).length > 0;
               }
-              if (activeFilter === 'ADMIN_CONTRATO') return (emp.cargo||'').toUpperCase().includes('ADMINISTRADOR DE CONTRATO') || (emp.cargo||'').toUpperCase().includes('ADMIN. CONTRATO');
+              if (activeFilter === 'ADMIN_CONTRATO') {
+                const c = (emp.cargo || '').toUpperCase();
+                return c.includes('ADMINISTRADOR DE CONTRATO') || c.includes('ADMIN. CONTRATO') || c.includes('ADMINISTRADOR');
+              }
               if (activeFilter === 'SUPERVISORES') return (emp.cargo||'').toUpperCase().includes('SUPERVISOR');
               if (activeFilter === 'PREVENCIONISTAS') return (emp.cargo||'').toUpperCase().includes('PREVENCION');
               if (activeFilter === 'ADMINISTRATIVOS') return (emp.cargo||'').toUpperCase().includes('ADMINISTRATIVO') && !(emp.cargo||'').toUpperCase().includes('CONTRATO');
@@ -369,7 +371,10 @@
             const supervisores = employees.filter(e => (e.cargo||'').toUpperCase().includes('SUPERVISOR')).length;
             const prevencionistas = employees.filter(e => (e.cargo||'').toUpperCase().includes('PREVENCION')).length;
             const administrativos = employees.filter(e => (e.cargo||'').toUpperCase().includes('ADMINISTRATIVO') && !(e.cargo||'').toUpperCase().includes('CONTRATO')).length;
-            const adminContrato = employees.filter(e => (e.cargo||'').toUpperCase().includes('ADMIN. CONTRATO') || (e.cargo||'').toUpperCase().includes('ADMINISTRADOR DE CONTRATO')).length;
+            const adminContrato = employees.filter(e => {
+              const c = (e.cargo || '').toUpperCase();
+              return c.includes('ADMINISTRADOR DE CONTRATO') || c.includes('ADMIN. CONTRATO') || c.includes('ADMINISTRADOR');
+            }).length;
             const operadoresGrua = employees.filter(e => (e.cargo||'').toUpperCase().includes('GRUA')).length;
             const cargadorFrontal = employees.filter(e => (e.cargo||'').toUpperCase().includes('CARGADOR FRONTAL')).length;
             const mecanicos = employees.filter(e => (e.cargo||'').toUpperCase().includes('MECANICO')).length;
@@ -826,7 +831,7 @@
                 </div>
               )}
 
-              {/* MODAL BITÁCORA / HOJA DE VIDA CON SELECTOR DE SUPERVISORES Y OPCIÓN DE ELIMINAR OBSERVACIONES */}
+              {/* MODAL BITÁCORA / HOJA DE VIDA CON NOMBRES DE SUPERVISORES Y OPCIÓN DE ELIMINAR OBSERVACIONES */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-lg border border-slate-800 space-y-3 my-auto max-h-[90vh] overflow-y-auto">
@@ -850,7 +855,6 @@
                                 <span className="text-[10px] text-slate-400 font-mono">
                                   {h.modoFechas === 'unica' ? `Día: ${h.fechaInicio}` : `Del ${h.fechaInicio} al ${h.fechaTermino}`}
                                 </span>
-                                {/* Botón para eliminar observación individual de la bitácora */}
                                 <button 
                                   onClick={() => handleDeleteLog(h.id)} 
                                   className="text-red-400 hover:text-red-300 p-1 rounded bg-slate-900 border border-slate-800" 
@@ -884,7 +888,7 @@
                     <form onSubmit={handleAddLog} className="space-y-2.5 text-xs pt-3 border-t border-slate-800">
                       <div className="text-[11px] font-bold text-amber-400">Agregar Evento a la Hoja de Vida:</div>
                       
-                      {/* DESPLEGABLE CON NOMBRES EXACTOS DE SUPERVISORES Y OTROS RESPONSABLES */}
+                      {/* DESPLEGABLE CON NOMBRES EXACTOS DE SUPERVISORES DE LA DOTACIÓN */}
                       <div>
                         <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Supervisor / Responsable)</label>
                         <select 
