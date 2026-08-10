@@ -9,6 +9,8 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SheetJS para lectura de Excel .xlsx -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
@@ -77,6 +79,7 @@
 
           useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
 
+          // 📥 DESCARGAR EXCEL / JSON
           const handleDownloadExcel = () => {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(employees, null, 2));
             const downloadAnchor = document.createElement('a');
@@ -87,15 +90,56 @@
             downloadAnchor.remove();
           };
 
+          // 📤 CARGAR EXCEL (.xlsx, .xls) O JSON MASIVO
           const handleUploadExcel = (e) => {
-            const fileReader = new FileReader();
-            if (e.target.files[0]) {
-              fileReader.readAsText(e.target.files[0], "UTF-8");
-              fileReader.onload = async (event) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            const fileName = file.name.toLowerCase();
+
+            if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+              reader.readAsArrayBuffer(file);
+              reader.onload = async (event) => {
+                try {
+                  const data = new Uint8Array(event.target.result);
+                  const workbook = XLSX.read(data, { type: 'array' });
+                  const sheetName = workbook.SheetNames[0];
+                  const worksheet = workbook.Sheets[sheetName];
+                  const jsonSheet = XLSX.utils.sheet_to_json(worksheet);
+
+                  if (jsonSheet.length > 0) {
+                    if (confirm(`¿Deseas importar ${jsonSheet.length} registros desde el Excel a la nube?`)) {
+                      for (let row of jsonSheet) {
+                        await db.collection('employees').add({
+                          nombre: row.nombre || row.Nombre || row.PERSONAL || 'Sin Nombre',
+                          rut: row.rut || row.RUT || row.Rut || 'Sin RUT',
+                          cargo: row.cargo || row.Cargo || row.ROL || 'OPERADOR',
+                          ciudad: row.ciudad || row.Ciudad || 'Valdivia',
+                          telefono: String(row.telefono || row.Telefono || row.CONTACTO || ''),
+                          correo: row.correo || row.Correo || '',
+                          emergenciaNombre: row.emergenciaNombre || '',
+                          emergenciaFono: row.emergenciaFono || '',
+                          historial: []
+                        });
+                      }
+                      alert("¡Carga masiva de Excel completada con éxito!");
+                    }
+                  } else {
+                    alert("El archivo Excel está vacío.");
+                  }
+                } catch (err) {
+                  alert("Error al procesar el archivo Excel: " + err.message);
+                }
+              };
+            } else {
+              // Formato JSON tradicional
+              reader.readAsText(file, "UTF-8");
+              reader.onload = async (event) => {
                 try {
                   const importedData = JSON.parse(event.target.result);
                   if (Array.isArray(importedData)) {
-                    if (confirm(`¿Deseas importar ${importedData.length} registros a la base de datos en la nube?`)) {
+                    if (confirm(`¿Deseas importar ${importedData.length} registros a la base de datos?`)) {
                       for (let item of importedData) {
                         const { id, ...itemData } = item;
                         await db.collection('employees').add(itemData);
@@ -271,7 +315,7 @@
                             <i data-lucide="download" className="w-4 h-4"></i> Descargar Excel
                           </button>
                           
-                          <input type="file" ref={fileInputRef} onChange={handleUploadExcel} accept=".json,.csv" className="hidden" />
+                          <input type="file" ref={fileInputRef} onChange={handleUploadExcel} accept=".xlsx, .xls, .json, .csv" className="hidden" />
                           <button 
                             onClick={() => fileInputRef.current.click()} 
                             className="bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 py-3 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all"
@@ -290,7 +334,6 @@
                           </button>
                         </div>
 
-                        {/* LISTADO DE TRABAJADORES EXACTO A LA IMAGEN */}
                         <div className="space-y-3 mt-3">
                           {filtered.length === 0 ? (
                             <div className="p-8 text-center text-slate-500 text-xs bg-slate-900 rounded-2xl border border-slate-800">No se encontraron registros.</div>
