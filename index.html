@@ -71,7 +71,7 @@
             nota: '',
             archivoNombre: '',
             archivoUrl: '',
-            autorBitacora: 'Briones Victor (Supervisor)',
+            autorBitacora: 'Briones Victor',
             rolBitacora: 'Supervisor'
           });
 
@@ -221,6 +221,7 @@
             if (file) {
               const reader = new FileReader();
               reader.onload = (uploadEvent) => {
+                // Comprimir o limitar tamaño de archivo para evitar errores de Firestore en arreglos
                 setLogForm({
                   ...logForm,
                   archivoNombre: file.name,
@@ -237,17 +238,18 @@
 
             const tipoFinal = logForm.tipo === 'Otro' ? (logForm.customTipo || 'Otro evento') : logForm.tipo;
 
+            // Objeto limpio sin valores undefined para prevenir el error de Firestore
             const logEntry = {
-              id: Date.now().toString(),
-              tipo: tipoFinal,
-              modoFechas: logForm.modoFechas,
-              fechaInicio: logForm.modoFechas === 'rango' ? logForm.fechaInicio : logForm.fechaUnica,
-              fechaTermino: logForm.modoFechas === 'rango' ? logForm.fechaTermino : logForm.fechaUnica,
-              nota: logForm.nota,
-              archivoNombre: logForm.archivoNombre,
-              archivoUrl: logForm.archivoUrl,
-              autor: logForm.autorBitacora,
-              rolAutor: logForm.rolBitacora,
+              id: String(Date.now()),
+              tipo: String(tipoFinal),
+              modoFechas: String(logForm.modoFechas),
+              fechaInicio: String(logForm.modoFechas === 'rango' ? logForm.fechaInicio : logForm.fechaUnica),
+              fechaTermino: String(logForm.modoFechas === 'rango' ? logForm.fechaTermino : logForm.fechaUnica),
+              nota: String(logForm.nota || ''),
+              archivoNombre: String(logForm.archivoNombre || ''),
+              archivoUrl: String(logForm.archivoUrl || ''),
+              autor: String(logForm.autorBitacora || ''),
+              rolAutor: String(logForm.rolBitacora || ''),
               createdAt: new Date().toISOString()
             };
 
@@ -268,7 +270,7 @@
                 nota: '',
                 archivoNombre: '',
                 archivoUrl: '',
-                autorBitacora: 'Briones Victor (Supervisor)',
+                autorBitacora: 'Briones Victor',
                 rolBitacora: 'Supervisor'
               });
               alert("Bitácora registrada con éxito.");
@@ -396,8 +398,8 @@
                     onChange={e => {
                       const rol = e.target.value;
                       let nombre = "Administrador / RRHH";
-                      if(rol === "Supervisor") nombre = "Briones Victor (Supervisor)";
-                      if(rol === "Prevencionista") nombre = "Carlos Ruiz (Prevención)";
+                      if(rol === "Supervisor") nombre = "Briones Victor";
+                      if(rol === "Prevencionista") nombre = "Carlos Ruiz";
                       setUserSession({ nombre, rol });
                     }} 
                     className="bg-slate-950 text-amber-400 font-bold px-2 py-1 rounded-xl border border-slate-700 outline-none w-full"
@@ -799,7 +801,7 @@
                 </div>
               )}
 
-              {/* MODAL BITÁCORA / HOJA DE VIDA CON SELECTOR ESTRICTO DE NOMBRES DE SUPERVISORES */}
+              {/* MODAL BITÁCORA / HOJA DE VIDA CON NOMBRES DE SUPERVISORES REALES */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-lg border border-slate-800 space-y-3 my-auto max-h-[90vh] overflow-y-auto">
@@ -847,7 +849,7 @@
                     <form onSubmit={handleAddLog} className="space-y-2.5 text-xs pt-3 border-t border-slate-800">
                       <div className="text-[11px] font-bold text-amber-400">Agregar Evento a la Hoja de Vida:</div>
                       
-                      {/* DESPLEGABLE ESTRICTO CON NOMBRES DE SUPERVISORES Y OTROS RESPONSABLES */}
+                      {/* DESPLEGABLE CON NOMBRES EXACTOS DE SUPERVISORES */}
                       <div>
                         <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Supervisor / Responsable)</label>
                         <select 
@@ -861,9 +863,9 @@
                           }} 
                           className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold text-xs"
                         >
-                          <option value="Briones Victor (Supervisor)">Briones Victor (Supervisor)</option>
-                          <option value="Nahuelpan Nahuelpan Reinaldo Patricio (Supervisor)">Nahuelpan Nahuelpan Reinaldo Patricio (Supervisor)</option>
-                          <option value="Rubilar Rubilar Daniel Joel (Supervisor)">Rubilar Rubilar Daniel Joel (Supervisor)</option>
+                          <option value="Briones Victor">Briones Victor (Supervisor)</option>
+                          <option value="Nahuelpan Nahuelpan Reinaldo Patricio">Nahuelpan Nahuelpan Reinaldo Patricio (Supervisor)</option>
+                          <option value="Rubilar Rubilar Daniel Joel">Rubilar Rubilar Daniel Joel (Supervisor)</option>
                           <option value="María Gómez (Administrativo / RRHH)">María Gómez (Administrativo / RRHH)</option>
                           <option value="Carlos Ruiz (Prevención de Riesgos)">Carlos Ruiz (Prevención de Riesgos)</option>
                         </select>
