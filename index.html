@@ -100,7 +100,32 @@
             downloadAnchor.remove();
           };
 
-          // CARGA INTELIGENTE ADAPTADA A TU ARCHIVO EXCEL (DETECTA EMERGENCIA Y EVITA DUPLICADOS POR RUT)
+          // ELIMINACIÓN MASIVA DE TODA LA BASE DE DATOS (PARA RECARGAR DESDE CERO)
+          const handleDeleteAllData = async () => {
+            if (userSession.rol !== 'Administrativo') {
+              alert("Solo el Administrador puede realizar un borrado masivo.");
+              return;
+            }
+            if (confirm("⚠️ ADVERTENCIA: ¿Estás seguro de eliminar TODOS los registros de la base de datos de la nube para volver a cargar información desde cero? Esta acción no se puede deshacer.")) {
+              try {
+                const batchSize = 400;
+                let snapshot = await db.collection('employees').limit(batchSize).get();
+                while (!snapshot.empty) {
+                  const batch = db.batch();
+                  snapshot.docs.forEach((doc) => {
+                    batch.delete(doc.ref);
+                  });
+                  await batch.commit();
+                  snapshot = await db.collection('employees').limit(batchSize).get();
+                }
+                alert("¡Base de datos limpiada correctamente! Ya puedes cargar tu nuevo archivo Excel.");
+              } catch (err) {
+                alert("Error al vaciar la base de datos: " + err.message);
+              }
+            }
+          };
+
+          // CARGA INTELIGENTE ANTIDUPLICADOS CON DETECCIÓN EXACTA DE TUS COLUMNAS EXCEL
           const handleUploadExcel = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -112,14 +137,14 @@
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
-                // Tu archivo tiene los encabezados en la fila 2 (index 1) o podemos usar {defval: ""}
                 const jsonSheet = XLSX.utils.sheet_to_json(worksheet, { defval: "", range: 1 });
 
                 if (jsonSheet.length > 0) {
                   let addedCount = 0;
+                  // Normalizamos los RUTs existentes eliminando puntos, guiones y espacios
                   let existingRuts = new Set(employees.map(emp => (emp.rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '')));
 
-                  if (confirm(`Se leyeron ${jsonSheet.length} filas del archivo. ¿Deseas sincronizar y agregar solo los registros faltantes sin duplicar?`)) {
+                  if (confirm(`Se leyeron ${jsonSheet.length} filas del archivo. ¿Deseas importar y agregar solo los registros faltantes sin duplicar?`)) {
                     for (let row of jsonSheet) {
                       const keys = Object.keys(row);
                       const findVal = (terms) => {
@@ -160,7 +185,7 @@
                         addedCount++;
                       }
                     }
-                    alert(`¡Sincronización completada! Se añadieron ${addedCount} registros nuevos. Se omitieron los duplicados.`);
+                    alert(`¡Importación completada! Se agregaron ${addedCount} nuevos trabajadores (se omitieron los duplicados).`);
                   }
                 }
               } catch (err) {
@@ -260,7 +285,7 @@
             return missing;
           };
 
-          // ORDENAMIENTO ALFABÉTICO ESTRICTO DE LA A A LA Z (IGNORANDO MAYÚSCULAS/ACENTOS)
+          // ORDENAMIENTO ALFABÉTICO ESTRICTO DE LA A A LA Z (IGNORANDO ACENTOS Y MAYÚSCULAS)
           const filtered = useMemo(() => {
             const list = employees.filter(emp => {
               const s = searchTerm.toLowerCase();
@@ -537,6 +562,18 @@
                             <i data-lucide="user-plus" className="w-4 h-4"></i> Nuevo Ingreso
                           </button>
                         </div>
+
+                        {/* BOTÓN DE ELIMINACIÓN MASIVA (PARA RECARGAR DESDE CERO SIN DUPLICADOS) */}
+                        {userSession.rol === 'Administrativo' && (
+                          <div className="pt-1">
+                            <button 
+                              onClick={handleDeleteAllData} 
+                              className="w-full bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-900 py-2.5 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 shadow transition-all"
+                            >
+                              <i data-lucide="trash-2" className="w-4 h-4"></i> Eliminar Todo / Vaciar Base de Datos (Para Recargar)
+                            </button>
+                          </div>
+                        )}
 
                         {/* LISTADO DE TRABAJADORES ORDENADOS ALFABÉTICAMENTE A-Z */}
                         <div className="space-y-3 mt-3">
