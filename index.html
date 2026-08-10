@@ -51,8 +51,8 @@
 
           const [selectedPhone, setSelectedPhone] = useState(null);
           
+          // Sesión del usuario actual en la cabecera
           const [userSession, setUserSession] = useState({
-            nombre: "Administrador / RRHH",
             rol: "Administrativo"
           });
 
@@ -60,6 +60,14 @@
             nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '',
             documentos: { contrato: true, induccion: true, examenes: true, epp: true }
           });
+
+          // Lista de supervisores extraídos de los empleados
+          const supervisorsList = useMemo(() => {
+            const list = employees
+              .filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR'))
+              .map(e => e.nombre);
+            return list.length > 0 ? list : ['Briones Victor', 'Nahuelpan Nahuelpan Reinaldo Patricio', 'Rubilar Rubilar Daniel Joel'];
+          }, [employees]);
 
           const [logForm, setLogForm] = useState({
             tipo: 'Licencia Médica',
@@ -71,9 +79,23 @@
             nota: '',
             archivoNombre: '',
             archivoUrl: '',
-            autorBitacora: 'Briones Victor',
-            rolBitacora: 'Supervisor'
+            autorBitacora: 'Administrativo / RRHH',
+            rolBitacora: 'Administrativo'
           });
+
+          // Sincronizar automáticamente el autor de la bitácora según el rol de la sesión de manera aislada
+          useEffect(() => {
+            if (userSession.rol === 'Administrativo') {
+              setLogForm(prev => ({ ...prev, autorBitacora: 'Administrativo / RRHH', rolBitacora: 'Administrativo' }));
+            } else if (userSession.rol === 'AdminContrato') {
+              setLogForm(prev => ({ ...prev, autorBitacora: 'Administrador de Contrato', rolBitacora: 'AdminContrato' }));
+            } else if (userSession.rol === 'Prevencionista') {
+              setLogForm(prev => ({ ...prev, autorBitacora: 'Prevencionista de Riesgos', rolBitacora: 'Prevencionista' }));
+            } else if (userSession.rol === 'Supervisor') {
+              const defaultSup = supervisorsList[0] || 'Briones Victor';
+              setLogForm(prev => ({ ...prev, autorBitacora: defaultSup, rolBitacora: 'Supervisor' }));
+            }
+          }, [userSession.rol, supervisorsList]);
 
           const fileInputRef = useRef(null);
           const logFileRef = useRef(null);
@@ -91,21 +113,6 @@
           }, []);
 
           useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
-
-          // Lista estricta de supervisores extraídos de la dotación
-          const supervisorsList = useMemo(() => {
-            const list = employees
-              .filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR'))
-              .map(e => e.nombre);
-            // Si por alguna razón la base está vacía al inicio, proveemos los nombres por defecto
-            return list.length > 0 ? list : ['Briones Victor', 'Nahuelpan Nahuelpan Reinaldo Patricio', 'Rubilar Rubilar Daniel Joel'];
-          }, [employees]);
-
-          useEffect(() => {
-            if (supervisorsList.length > 0 && (!logForm.autorBitacora || !supervisorsList.includes(logForm.autorBitacora))) {
-              setLogForm(prev => ({ ...prev, autorBitacora: supervisorsList[0] }));
-            }
-          }, [supervisorsList]);
 
           const handleDownloadExcel = () => {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(employees, null, 2));
@@ -128,8 +135,8 @@
           };
 
           const handleDeleteAllData = async () => {
-            if (userSession.rol !== 'Administrativo') {
-              alert("Solo el Administrador puede realizar un borrado masivo.");
+            if (userSession.rol !== 'Administrativo' && userSession.rol !== 'AdminContrato') {
+              alert("Sin permisos suficientes para realizar borrado masivo.");
               return;
             }
             if (confirm("⚠️ ATENCIÓN: ¿Estás seguro de eliminar TODOS los registros de la base de datos de la nube para vaciar y volver a cargar desde cero?")) {
@@ -237,7 +244,7 @@
           };
 
           const handleDelete = async (id) => {
-            if (userSession.rol !== 'Administrativo') { alert("Sin permisos de Administrador."); return; }
+            if (userSession.rol !== 'Administrativo' && userSession.rol !== 'AdminContrato') { alert("Sin permisos suficientes."); return; }
             if (confirm("¿Eliminar trabajador?")) await db.collection('employees').doc(id).delete();
           };
 
@@ -287,8 +294,8 @@
               nota: String(logForm.nota || ''),
               archivoNombre: String(logForm.archivoNombre || ''),
               archivoUrl: String(logForm.archivoUrl || ''),
-              autor: String(logForm.autorBitacora || supervisorsList[0] || 'Supervisor'),
-              rolAutor: "Supervisor",
+              autor: String(logForm.autorBitacora),
+              rolAutor: String(logForm.rolBitacora),
               createdAt: new Date().toISOString()
             };
 
@@ -309,8 +316,8 @@
                 nota: '',
                 archivoNombre: '',
                 archivoUrl: '',
-                autorBitacora: supervisorsList[0] || '',
-                rolBitacora: 'Supervisor'
+                autorBitacora: userSession.rol === 'Supervisor' ? (supervisorsList[0] || '') : logForm.autorBitacora,
+                rolBitacora: userSession.rol
               });
               alert("Bitácora registrada con éxito.");
             } catch (error) {
@@ -442,14 +449,12 @@
                     value={userSession.rol} 
                     onChange={e => {
                       const rol = e.target.value;
-                      let nombre = "Administrador / RRHH";
-                      if(rol === "Supervisor") nombre = supervisorsList[0] || "Supervisor";
-                      if(rol === "Prevencionista") nombre = "Prevención";
-                      setUserSession({ nombre, rol });
+                      setUserSession({ rol });
                     }} 
                     className="bg-slate-950 text-amber-400 font-bold px-2 py-1 rounded-xl border border-slate-700 outline-none w-full"
                   >
                     <option value="Administrativo">Administrativo / RRHH</option>
+                    <option value="AdminContrato">Administrador de Contrato</option>
                     <option value="Supervisor">Supervisor de Faena</option>
                     <option value="Prevencionista">Prevencionista</option>
                   </select>
@@ -498,7 +503,7 @@
                           </div>
 
                           <div onClick={() => { setActiveFilter('ADMIN_CONTRATO'); setActiveTab('directorio'); }} className="bg-slate-900 p-4 rounded-2xl border border-slate-800 cursor-pointer shadow-lg hover:border-slate-700 transition-all">
-                            <span className="text-slate-400 text-xs font-medium block">Admin. Contrato</span>
+                            <span className="text-slate-400 text-xs font-medium block">Administrador de Contrato</span>
                             <span className="text-3xl font-bold text-amber-400 mt-1 block">{kpis.adminContrato}</span>
                             <span className="text-[10px] text-amber-400 mt-2 block font-semibold">Filtrar →</span>
                           </div>
@@ -630,7 +635,7 @@
                         </div>
 
                         {/* BOTÓN DE BORRADO MASIVO */}
-                        {userSession.rol === 'Administrativo' && (
+                        {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
                           <div className="pt-1">
                             <button 
                               onClick={handleDeleteAllData} 
@@ -706,7 +711,7 @@
                                         📝 Bitácora ({emp.historial ? emp.historial.length : 0})
                                       </button>
                                       <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="text-[11px] text-slate-300 hover:text-amber-400 font-semibold bg-slate-800 px-2.5 py-1 rounded-xl">Editar</button>
-                                      {userSession.rol === 'Administrativo' && (
+                                      {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
                                         <button onClick={() => handleDelete(emp.id)} className="text-[11px] text-red-400 font-semibold bg-slate-800 px-2 py-1 rounded-xl">Eliminar</button>
                                       )}
                                     </div>
@@ -846,7 +851,7 @@
                 </div>
               )}
 
-              {/* MODAL BITÁCORA / HOJA DE VIDA CON LISTA EXCLUSIVA DE SUPERVISORES REALES Y ELIMINACIÓN DE OBSERVACIONES */}
+              {/* MODAL BITÁCORA / HOJA DE VIDA CON AISLAMIENTO ESTRICTO DE PERFILES (CADA PERFIL INGRESA SOLO CON SU OPCIÓN) */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-lg border border-slate-800 space-y-3 my-auto max-h-[90vh] overflow-y-auto">
@@ -870,13 +875,15 @@
                                 <span className="text-[10px] text-slate-400 font-mono">
                                   {h.modoFechas === 'unica' ? `Día: ${h.fechaInicio}` : `Del ${h.fechaInicio} al ${h.fechaTermino}`}
                                 </span>
-                                <button 
-                                  onClick={() => handleDeleteLog(h.id)} 
-                                  className="text-red-400 hover:text-red-300 p-1 rounded bg-slate-900 border border-slate-800" 
-                                  title="Eliminar observación"
-                                >
-                                  <i data-lucide="trash-2" className="w-3.5 h-3.5"></i>
-                                </button>
+                                {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
+                                  <button 
+                                    onClick={() => handleDeleteLog(h.id)} 
+                                    className="text-red-400 hover:text-red-300 p-1 rounded bg-slate-900 border border-slate-800" 
+                                    title="Eliminar observación"
+                                  >
+                                    <i data-lucide="trash-2" className="w-3.5 h-3.5"></i>
+                                  </button>
+                                )}
                               </div>
                             </div>
                             {h.nota && <p className="text-slate-300 text-xs">{h.nota}</p>}
@@ -903,18 +910,38 @@
                     <form onSubmit={handleAddLog} className="space-y-2.5 text-xs pt-3 border-t border-slate-800">
                       <div className="text-[11px] font-bold text-amber-400">Agregar Evento a la Hoja de Vida:</div>
                       
-                      {/* DESPLEGABLE CON NOMBRES REALES Y EXCLUSIVOS DE SUPERVISORES DE LA DOTACIÓN */}
+                      {/* AISLAMIENTO ESTRICTO DE PERFILES (CADA PERFIL APARECE DONDE CORRESPONDE SIN MEZCLARSE) */}
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Supervisor)</label>
-                        <select 
-                          value={logForm.autorBitacora} 
-                          onChange={e => setLogForm({...logForm, autorBitacora: e.target.value, rolBitacora: 'Supervisor'})} 
-                          className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold text-xs"
-                        >
-                          {supervisorsList.map(sup => (
-                            <option key={sup} value={sup}>{sup} (Supervisor)</option>
-                          ))}
-                        </select>
+                        <label className="text-[10px] text-slate-400 font-bold">Responsable que ingresa la observación (Perfil Activo)</label>
+                        {userSession.rol === 'Supervisor' ? (
+                          <select 
+                            value={logForm.autorBitacora} 
+                            onChange={e => setLogForm({...logForm, autorBitacora: e.target.value, rolBitacora: 'Supervisor'})} 
+                            className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold text-xs"
+                          >
+                            {supervisorsList.map(sup => (
+                              <option key={sup} value={sup}>{sup}</option>
+                            ))}
+                          </select>
+                        ) : userSession.rol === 'Prevencionista' ? (
+                          <input 
+                            disabled 
+                            value="Prevencionista de Riesgos" 
+                            className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-emerald-400 font-bold text-xs cursor-not-allowed" 
+                          />
+                        ) : userSession.rol === 'AdminContrato' ? (
+                          <input 
+                            disabled 
+                            value="Administrador de Contrato" 
+                            className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold text-xs cursor-not-allowed" 
+                          />
+                        ) : (
+                          <input 
+                            disabled 
+                            value="Administrativo / RRHH" 
+                            className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-indigo-400 font-bold text-xs cursor-not-allowed" 
+                          />
+                        )}
                       </div>
 
                       <div>
@@ -1011,7 +1038,7 @@
                       </div>
 
                       <div className="flex justify-end gap-2 pt-2">
-                        <button type="button" onClick={()=>setIsHistoryModalOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Cerrar</button>
+                        <button type="button" onClick={()=>setIsHistoryModalOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Cancelar</button>
                         <button type="submit" className="px-5 py-2 bg-amber-600 text-white font-bold rounded-xl shadow">Registrar en Bitácora</button>
                       </div>
                     </form>
@@ -1025,7 +1052,7 @@
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-2xl border border-slate-800 space-y-3 my-auto">
                     <div className="flex justify-between items-center pb-2 border-b border-slate-800">
                       <div>
-                        <h3 className="font-bold text-sm text-white">Hoja de Vida Global (Consolidado de Bitácoras)</h3>
+                        <h3 className="text-sm font-bold text-white">Hoja de Vida Global (Consolidado de Bitácoras)</h3>
                         <span className="text-[10px] text-amber-400 font-semibold">Registro histórico por supervisores, administrativo y prevención</span>
                       </div>
                       <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400"><i data-lucide="x" className="w-5 h-5"></i></button>
