@@ -3,6 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- ETIQUETAS PWA OBLIGATORIAS -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#020617">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BRAMAQ">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3200/3200424.png">
+    
     <title>Gestor de Dotación BRAMAQ - Enterprise</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -12,6 +21,18 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    
+    <!-- REGISTRO DEL SERVICE WORKER AISLADO -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('PWA: Service Worker Registrado correctamente.', reg.scope))
+            .catch(err => console.log('PWA: Error al registrar Service Worker. La app web seguirá funcionando.', err));
+        });
+      }
+    </script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f1f5f9; }
@@ -43,6 +64,12 @@
         } catch (e) { console.error(e); }
 
         function App() {
+          // ESTADOS DE INSTALACIÓN PWA
+          const [deferredPrompt, setDeferredPrompt] = useState(null);
+          const [isInstallable, setIsInstallable] = useState(false);
+          const [isIOS, setIsIOS] = useState(false);
+          const [isStandalone, setIsStandalone] = useState(false);
+
           // ESTADOS DE ACCESO OBLIGATORIO (GATEWAY)
           const [hasEntered, setHasEntered] = useState(false);
           const [gateProfile, setGateProfile] = useState('');
@@ -73,7 +100,6 @@
             documentos: { contrato: true, induccion: true, examenes: true, epp: true }
           });
 
-          // LISTA EXCLUSIVA DE SUPERVISORES
           const supervisorsList = useMemo(() => {
             const list = employees
               .filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR'))
@@ -81,12 +107,47 @@
             return list.length > 0 ? list : ['Briones Victor', 'Nahuelpan Nahuelpan Reinaldo Patricio', 'Rubilar Rubilar Daniel Joel'];
           }, [employees]);
 
-          // FORMULARIO BITÁCORA CON SOPORTE MULTI ARCHIVO
           const [logForm, setLogForm] = useState({
             tipo: 'Licencia Médica', modoFechas: 'rango', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
             customTipo: '', nota: '', archivos: [], 
             autorBitacora: '', rolBitacora: ''
           });
+
+          // EFECTOS DE INSTALACIÓN PWA
+          useEffect(() => {
+            // Detectar iOS
+            const userAgent = window.navigator.userAgent.toLowerCase();
+            const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
+            setIsIOS(isIosDevice);
+
+            // Detectar si ya está instalada
+            const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+            setIsStandalone(isDisplayStandalone);
+
+            // Capturar evento de instalación en Android/Chrome/Edge
+            const handleBeforeInstallPrompt = (e) => {
+              e.preventDefault();
+              setDeferredPrompt(e);
+              setIsInstallable(true);
+            };
+
+            window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+            window.addEventListener('appinstalled', () => {
+              setIsInstallable(false);
+              setDeferredPrompt(null);
+            });
+
+            return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+          }, []);
+
+          const handleInstallClick = async () => {
+            if (deferredPrompt) {
+              deferredPrompt.prompt();
+              const { outcome } = await deferredPrompt.userChoice;
+              if (outcome === 'accepted') setIsInstallable(false);
+              setDeferredPrompt(null);
+            }
+          };
 
           // SINCRONIZACIÓN DE PERFIL SIN MEZCLAR
           const syncProfileLogic = (rolActivo) => {
@@ -114,7 +175,6 @@
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
             window.addEventListener('online', on); window.addEventListener('offline', off);
             
-            // Solo carga Firestore si el usuario pasó la puerta (hasEntered = true)
             if (!hasEntered || !db) return;
             
             setLoading(true);
@@ -130,12 +190,8 @@
             return () => { unsub(); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
           }, [hasEntered]);
 
-          // LÓGICA RENDERIZACIÓN ICONOS LUCIDE
-          useEffect(() => { 
-            if (window.lucide) window.lucide.createIcons(); 
-          });
+          useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
 
-          // GATEWAY ACCESO
           const handleEnterApp = () => {
             if (!gateProfile) return;
             setUserSession({ rol: gateProfile });
@@ -143,7 +199,6 @@
             setHasEntered(true);
           };
 
-          // DESCARGA REAL XLSX: TODA LA DOTACIÓN
           const handleDownloadExcel = () => {
             try {
               if (!employees || employees.length === 0) {
@@ -178,7 +233,6 @@
             }
           };
 
-          // DESCARGA REAL XLSX: HOJA DE VIDA GLOBAL (SOLO CON OBSERVACIONES)
           const handleDownloadGlobalLogsExcel = () => {
             try {
               let logsToExport = [];
@@ -189,7 +243,7 @@
                     if (h.archivos && h.archivos.length > 0) {
                       attachmentsText = h.archivos.map(a => a.nombre).join(", ");
                     } else if (h.archivoNombre) {
-                      attachmentsText = h.archivoNombre; // Compatibilidad legacy
+                      attachmentsText = h.archivoNombre; 
                     }
                     logsToExport.push({
                       "Trabajador": emp.nombre || "Desconocido",
@@ -213,7 +267,6 @@
                 return;
               }
 
-              // Ordenar por fecha de registro (más recientes primero)
               logsToExport.sort((a, b) => new Date(b["Fecha de Registro"]) - new Date(a["Fecha de Registro"]));
 
               const ws = XLSX.utils.json_to_sheet(logsToExport);
@@ -309,7 +362,6 @@
             if (confirm("¿Eliminar este trabajador permanentemente del sistema?")) await db.collection('employees').doc(id).delete();
           };
 
-          // MANEJO DE MÚLTIPLES ARCHIVOS (PREVIO A GUARDAR)
           const handleLogFileChange = (e) => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
@@ -346,7 +398,6 @@
             }));
           };
 
-          // MANEJO DE ELIMINACIÓN INDIVIDUAL DE ARCHIVO POST-GUARDADO
           const handleDeleteSavedAttachment = async (logId, attachmentIndex, isOldFormat) => {
             if (!selectedEmpForHistory) return;
             if (confirm("¿Está seguro de eliminar este archivo adjunto? (No eliminará la observación)")) {
@@ -368,7 +419,6 @@
             }
           };
 
-          // ELIMINACIÓN DE OBSERVACIÓN COMPLETA
           const handleDeleteLog = async (logId) => {
             if (!selectedEmpForHistory) return;
             if (confirm("¿Estás seguro de eliminar completamente esta observación del historial?")) {
@@ -392,7 +442,7 @@
               fechaInicio: String(logForm.modoFechas === 'rango' ? logForm.fechaInicio : logForm.fechaUnica),
               fechaTermino: String(logForm.modoFechas === 'rango' ? logForm.fechaTermino : logForm.fechaUnica),
               nota: String(logForm.nota || ''), 
-              archivos: logForm.archivos || [], // Múltiples archivos compatibles
+              archivos: logForm.archivos || [], 
               autor: String(logForm.autorBitacora), 
               rolAutor: String(logForm.rolBitacora), 
               createdAt: new Date().toISOString()
@@ -403,7 +453,6 @@
               await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
               setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
               
-              // Reset
               setLogForm({
                 tipo: 'Licencia Médica', modoFechas: 'rango', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
                 customTipo: '', nota: '', archivos: [],
@@ -477,7 +526,6 @@
             return logs.sort((a, b) => new Date(b.createdAt || b.fechaInicio) - new Date(a.createdAt || a.fechaInicio));
           }, [employees]);
 
-          // Panel Switch 
           const RequisitoToggle = ({ label, icon, checked, onChange }) => (
             <label className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all cursor-pointer ${checked ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}>
                 <input type="checkbox" checked={checked} onChange={onChange} className="hidden" />
@@ -491,7 +539,9 @@
             </label>
           );
 
+          // -------------------------------------------------------------
           // PANTALLA INICIAL OBLIGATORIA (GATEWAY)
+          // -------------------------------------------------------------
           if (!hasEntered) {
             return (
               <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 selection:bg-amber-500/30 relative overflow-hidden">
@@ -532,19 +582,34 @@
                     >
                       INGRESAR <i data-lucide="arrow-right" className="w-4 h-4"></i>
                     </button>
+                    
+                    {/* BOTÓN INSTALACIÓN PWA (MÓVIL PRINCIPALMENTE) */}
+                    {isInstallable && (
+                      <button onClick={handleInstallClick} className="w-full py-3 rounded-xl font-semibold text-xs text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10 transition-colors flex items-center justify-center gap-2">
+                        <i data-lucide="download-cloud" className="w-4 h-4"></i> Instalar Aplicación BRAMAQ
+                      </button>
+                    )}
+                    {isIOS && !isStandalone && (
+                      <div className="w-full py-3 rounded-xl font-medium text-xs text-slate-400 border border-slate-800 bg-slate-900/50 flex flex-col items-center justify-center gap-1.5 text-center px-4">
+                        <span>Para instalar en iOS, toque Compartir <i data-lucide="share" className="w-3 h-3 inline text-slate-300 mx-0.5"></i></span>
+                        <span>y luego seleccione <strong>"Agregar a inicio"</strong></span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             );
           }
 
-          // APLICACIÓN PRINCIPAL
+          // -------------------------------------------------------------
+          // APLICACIÓN PRINCIPAL (POST-GATEWAY)
+          // -------------------------------------------------------------
           return (
             <div className="flex h-screen overflow-hidden bg-slate-950">
               
               {/* SIDEBAR DESKTOP */}
               <aside className="hidden lg:flex flex-col w-64 bg-slate-900/50 backdrop-blur border-r border-slate-800 h-full z-10">
-                <div className="h-20 flex items-center px-6 border-b border-slate-800">
+                <div className="h-20 flex items-center px-6 border-b border-slate-800 justify-between">
                   <div className="flex items-center gap-3">
                     <div className="bg-gradient-to-br from-amber-400 to-amber-600 p-2.5 rounded-xl text-slate-950 shadow-lg shadow-amber-500/20">
                       <i data-lucide="hard-hat" className="w-5 h-5"></i>
@@ -581,7 +646,7 @@
                             className="w-full appearance-none bg-slate-900 border border-slate-700 text-amber-400 font-bold text-xs py-2.5 pl-3 pr-8 rounded-lg outline-none focus:border-amber-500 transition-colors cursor-pointer shadow-inner"
                           >
                             <option value="Administrativo">Administrativo / RRHH</option>
-                            <option value="AdminContrato">Administrador de Contrato</option>
+                            <option value="AdminContrato">Admin. de Contrato</option>
                             <option value="Supervisor">Supervisor de Faena</option>
                             <option value="Prevencionista">Prevencionista</option>
                           </select>
@@ -593,10 +658,8 @@
                 </div>
               </aside>
 
-              {/* CONTENIDO DERECHO */}
+              {/* HEADER MÓVIL */}
               <div className="flex-1 flex flex-col h-screen relative">
-                
-                {/* HEADER MÓVIL */}
                 <header className="lg:hidden h-16 flex items-center justify-between px-4 sm:px-6 bg-slate-900/80 backdrop-blur border-b border-slate-800 z-30 sticky top-0">
                   <div className="flex items-center gap-2">
                     <div className="bg-gradient-to-br from-amber-400 to-amber-600 p-1.5 rounded-lg text-slate-950">
@@ -740,9 +803,9 @@
                                   <i data-lucide="clipboard-x" className="w-7 h-7"></i>
                                 </div>
                                 <h4 className="text-red-400 font-extrabold text-xl mb-2">{kpis.incompletos} Pendientes</h4>
-                                <div className="mt-4 text-[11px] text-red-400 font-bold uppercase tracking-widest flex items-center justify-center gap-1">
-                                  Regularizar Fichas <i data-lucide="arrow-right" className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform"></i>
-                                </div>
+                                <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
+                                  Registros con faltantes en documentación, contactos de emergencia o teléfonos requeridos.
+                                </p>
                               </div>
                             </div>
                           </div>
@@ -772,7 +835,7 @@
                                 <i data-lucide="file-clock" className="w-4 h-4"></i> <span className="hidden sm:inline">Reporte Global</span>
                               </button>
                               <button onClick={handleDownloadExcel} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-colors" title="Exportar Dotación Completa">
-                                <i data-lucide="download" className="w-4 h-4"></i> <span className="hidden sm:inline">Exportar Excel</span>
+                                <i data-lucide="download" className="w-4 h-4"></i> <span className="hidden sm:inline">Exportar Base (XLSX)</span>
                               </button>
                               <input type="file" ref={fileInputRef} onChange={handleUploadExcel} accept=".xlsx, .xls, .csv" className="hidden" />
                               <button onClick={() => fileInputRef.current.click()} className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-colors">
@@ -784,7 +847,6 @@
                             </div>
                           </div>
 
-                          {/* ACTION BAR INFERIOR (BORRADO MASIVO) */}
                           {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
                             <div className="flex justify-end">
                               <button onClick={handleDeleteAllData} className="text-xs text-red-500 hover:text-red-400 font-bold flex items-center gap-2 px-4 py-2 bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 rounded-xl transition-colors">
@@ -903,7 +965,7 @@
                 </nav>
               </div>
 
-              {/* MODAL TELÉFONO PROFESIONAL */}
+              {/* MODAL TELÉFONO */}
               {selectedPhone && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-8 shadow-2xl flex flex-col items-center text-center">
@@ -932,7 +994,7 @@
                 </div>
               )}
 
-              {/* MODAL NUEVO / EDITAR FICHA - FORMULARIO MODULAR */}
+              {/* MODAL NUEVO / EDITAR FICHA */}
               {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-md fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
@@ -951,7 +1013,6 @@
                       {formError && <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-center gap-2.5 font-medium"><i data-lucide="alert-octagon" className="w-5 h-5"></i>{formError}</div>}
                       
                       <form id="employeeForm" onSubmit={handleSave} className="space-y-8">
-                        
                         <section className="space-y-5 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
                           <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest flex items-center gap-2"><i data-lucide="user" className="w-4 h-4"></i> Información Personal y Laboral</h4>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -1186,15 +1247,14 @@
                         )}
                       </div>
 
-                      {/* FORMULARIO NUEVA OBSERVACION */}
+                      {/* FORMULARIO NUEVA OBSERVACION (AISLAMIENTO ESTRICTO DE PERFIL) */}
                       <div className="w-full lg:w-[380px] xl:w-[420px] p-6 bg-slate-900 flex flex-col">
                         <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-6 flex items-center gap-2"><i data-lucide="file-plus-2" className="w-4 h-4"></i> Registrar Evento</h4>
                         
                         <form onSubmit={handleAddLog} className="space-y-5 flex-1 flex flex-col">
                           
-                          {/* LÓGICA ESTRICTA DE AUTORÍA */}
                           <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Perfil de Autoría</label>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Perfil de Autoría (Sesión)</label>
                             {userSession.rol === 'Supervisor' ? (
                               <div className="relative">
                                 <select 
@@ -1241,7 +1301,7 @@
                           {logForm.tipo === 'Otro' && (
                             <div className="animate-fadeIn">
                               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Especificar *</label>
-                              <input required type="text" placeholder="Ej: Felicitación, Asistencia técnica..." value={logForm.customTipo} onChange={e => setLogForm({...logForm, customTipo: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 transition-shadow shadow-inner" />
+                              <input required type="text" placeholder="Ej: Capacitación interna..." value={logForm.customTipo} onChange={e => setLogForm({...logForm, customTipo: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 transition-shadow shadow-inner" />
                             </div>
                           )}
 
@@ -1275,21 +1335,20 @@
                           </div>
 
                           <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Detalles u Observaciones (Opcional)</label>
-                            <textarea placeholder="Redacte los acuerdos, motivos o comentarios del registro..." value={logForm.nota} onChange={e=>setLogForm({...logForm, nota:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 transition-shadow resize-none shadow-inner" rows="4"></textarea>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Detalles u Observaciones</label>
+                            <textarea placeholder="Redacte los acuerdos o motivos del registro..." value={logForm.nota} onChange={e=>setLogForm({...logForm, nota:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 transition-shadow resize-none shadow-inner" rows="4"></textarea>
                           </div>
 
-                          {/* SUBIDA DE MULTIPLES ARCHIVOS */}
+                          {/* CARGA MÚLTIPLE DE ARCHIVOS ANTES DE GUARDAR */}
                           <div className="space-y-2">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Evidencia / Adjuntos Físicos</label>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Evidencia / Adjuntos Múltiples</label>
                             
-                            {/* Previsualización antes de guardar */}
                             {logForm.archivos && logForm.archivos.length > 0 && (
                               <div className="space-y-2 mb-3 max-h-32 overflow-y-auto pr-1">
                                 {logForm.archivos.map((file, idx) => (
                                   <div key={idx} className="flex justify-between items-center bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 text-xs shadow-sm">
-                                    <span className="truncate text-slate-300 font-medium max-w-[200px]"><i data-lucide="check" className="w-3 h-3 inline text-emerald-500 mr-1.5"></i>{file.nombre}</span>
-                                    <button type="button" onClick={() => handleRemovePendingFile(idx)} className="text-slate-500 hover:text-red-400 p-1.5 bg-slate-900 rounded border border-slate-800"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
+                                    <span className="truncate text-slate-300 font-medium max-w-[180px] sm:max-w-[200px]"><i data-lucide="check" className="w-3 h-3 inline text-emerald-500 mr-1.5"></i>{file.nombre}</span>
+                                    <button type="button" onClick={() => handleRemovePendingFile(idx)} className="text-slate-500 hover:text-red-400 p-1.5 bg-slate-900 rounded border border-slate-800 transition-colors" title="Quitar archivo"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
                                   </div>
                                 ))}
                               </div>
@@ -1302,14 +1361,14 @@
                                     <i data-lucide="upload-cloud" className="w-5 h-5"></i>
                                   </div>
                                   <span className="text-xs font-bold text-slate-300">Añadir Documentos o Fotos</span>
-                                  <span className="text-[10px] text-slate-500 mt-1">Permite JPG, PNG, PDF, DOC, XLS (Puedes elegir varios)</span>
+                                  <span className="text-[10px] text-slate-500 mt-1">Permite JPG, PNG, PDF, DOC, XLS</span>
                                 </div>
                             </div>
                           </div>
 
                           <div className="pt-4 mt-auto">
                             <button type="submit" className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-sm uppercase tracking-wider rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-colors flex justify-center items-center gap-2">
-                              <i data-lucide="save" className="w-4 h-4"></i> Generar Registro
+                              <i data-lucide="save" className="w-4 h-4"></i> Guardar Evento
                             </button>
                           </div>
                         </form>
@@ -1373,7 +1432,7 @@
 
                     <div className="px-6 py-5 border-t border-slate-800 bg-slate-900/80 flex flex-col sm:flex-row justify-between items-center gap-4">
                       <button onClick={handleDownloadGlobalLogsExcel} className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all">
-                        <i data-lucide="file-spreadsheet" className="w-4 h-4"></i> Exportar Auditoría Oficial (Excel)
+                        <i data-lucide="file-spreadsheet" className="w-4 h-4"></i> Exportar a Excel (XLSX)
                       </button>
                       <button onClick={() => setIsGlobalHistoryOpen(false)} className="w-full sm:w-auto px-8 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-sm transition-colors">Cerrar</button>
                     </div>
