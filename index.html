@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/Gestor-Dotaci-n/">
     
-    <!-- PWA & Mobile Optimization -->
+    <!-- ETIQUETAS PWA OBLIGATORIAS -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#020617">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,18 +13,29 @@
     <meta name="apple-mobile-web-app-title" content="BRAMAQ">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3200/3200424.png">
     
-    <title>Gestor de Dotación BRAMAQ - Enterprise Cloud</title>
+    <title>Gestor de Dotación BRAMAQ - Enterprise</title>
     
-    <!-- CDNs Empresariales -->
+    <!-- LIBRERÍAS EXTERNAS DE PRODUCCIÓN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     
+    <!-- REGISTRO DEL SERVICE WORKER SEGURO Y NO BLOQUEANTE -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('PWA: Service Worker Registrado correctamente.', reg.scope))
+            .catch(err => console.log('PWA: Error al registrar Service Worker. La app web seguirá funcionando.', err));
+        });
+      }
+    </script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f1f5f9; margin: 0; }
@@ -43,14 +54,14 @@
     <div id="root">
         <div class="app-loader">
             <div style="font-size: 24px; margin-bottom: 10px;">BRAMAQ Enterprise</div>
-            <div style="font-size: 14px; color: #94a3b8; font-weight: normal;">Cargando núcleo de sincronización en tiempo real...</div>
+            <div style="font-size: 14px; color: #94a3b8; font-weight: normal;">Cargando sistema de gestión...</div>
         </div>
     </div>
     
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
         
-        // Credenciales de conexión centralizada en la nube
+        // CREDENCIALES REALES DE FIREBASE
         const firebaseConfig = {
           apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9Vr69wJz2vA...",
           authDomain: "bramaqcloud.firebaseapp.com",
@@ -64,25 +75,36 @@
         try {
           if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();
-        } catch (e) { console.error("Error crítico conectando a la nube:", e); }
+        } catch (e) { console.error("Error iniciando Firebase:", e); }
 
         function App() {
+          const [deferredPrompt, setDeferredPrompt] = useState(null);
+          const [isInstallable, setIsInstallable] = useState(false);
+          const [isIOS, setIsIOS] = useState(false);
+          const [isStandalone, setIsStandalone] = useState(false);
+          const [showInstallHelp, setShowInstallHelp] = useState(false);
+
           const [hasEntered, setHasEntered] = useState(false);
           const [gateProfile, setGateProfile] = useState('');
           const [userSession, setUserSession] = useState({ rol: "" });
+
           const [employees, setEmployees] = useState([]);
           const [loading, setLoading] = useState(true);
           const [onlineStatus, setOnlineStatus] = useState(navigator.onLine);
           const [searchTerm, setSearchTerm] = useState('');
           const [activeTab, setActiveTab] = useState('dashboard');
           const [activeFilter, setActiveFilter] = useState('TODOS');
-          const [citiesList] = useState(['Loncoche', 'Lanco', 'Valdivia', 'San José de la Mariquina', 'Los Lagos', 'Malalhue', 'Ciruelos', 'Panguipulli', 'Mariquina']);
+          const [citiesList, setCitiesList] = useState(['Loncoche', 'Lanco', 'Valdivia', 'San José de la Mariquina', 'Los Lagos', 'Malalhue', 'Ciruelos', 'Panguipulli', 'Mariquina']);
+          const [newCityInput, setNewCityInput] = useState('');
           
           const [isModalOpen, setIsModalOpen] = useState(false);
           const [currentEmployee, setCurrentEmployee] = useState(null);
           const [formError, setFormError] = useState('');
+          
           const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
           const [selectedEmpForHistory, setSelectedEmpForHistory] = useState(null);
+          const [isGlobalHistoryOpen, setIsGlobalHistoryOpen] = useState(false);
+
           const [selectedPhone, setSelectedPhone] = useState(null);
 
           const [formData, setFormData] = useState({
@@ -90,7 +112,76 @@
             documentos: { contrato: true, induccion: true, examenes: true, epp: true }
           });
 
-          // Sincronización en Tiempo Real Multiusuario vía Cloud Firestore
+          const supervisorsList = useMemo(() => {
+            const list = employees
+              .filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR'))
+              .map(e => e.nombre);
+            return list.length > 0 ? list : ['Briones Victor', 'Nahuelpan Nahuelpan Reinaldo Patricio', 'Rubilar Rubilar Daniel Joel'];
+          }, [employees]);
+
+          const [logForm, setLogForm] = useState({
+            tipo: 'Licencia Médica', modoFechas: 'rango', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
+            customTipo: '', nota: '', archivos: [], 
+            autorBitacora: '', rolBitacora: ''
+          });
+
+          useEffect(() => {
+            const userAgent = window.navigator.userAgent.toLowerCase();
+            const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
+            setIsIOS(isIosDevice);
+
+            const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+            setIsStandalone(isDisplayStandalone);
+
+            const handleBeforeInstallPrompt = (e) => {
+              e.preventDefault();
+              setDeferredPrompt(e);
+              setIsInstallable(true);
+            };
+
+            window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+            window.addEventListener('appinstalled', () => {
+              setIsInstallable(false);
+              setDeferredPrompt(null);
+              setShowInstallHelp(false);
+            });
+
+            return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+          }, []);
+
+          const handleInstallClick = async () => {
+            if (deferredPrompt) {
+              deferredPrompt.prompt();
+              const { outcome } = await deferredPrompt.userChoice;
+              if (outcome === 'accepted') {
+                setIsInstallable(false);
+              }
+              setDeferredPrompt(null);
+            } else {
+              setShowInstallHelp(true);
+            }
+          };
+
+          const syncProfileLogic = (rolActivo) => {
+            if (rolActivo === 'Administrativo') {
+              setLogForm(prev => ({ ...prev, autorBitacora: 'Administrativo / RRHH', rolBitacora: 'Administrativo' }));
+            } else if (rolActivo === 'AdminContrato') {
+              setLogForm(prev => ({ ...prev, autorBitacora: 'Administrador de Contrato', rolBitacora: 'AdminContrato' }));
+            } else if (rolActivo === 'Prevencionista') {
+              setLogForm(prev => ({ ...prev, autorBitacora: 'Prevencionista de Riesgos', rolBitacora: 'Prevencionista' }));
+            } else if (rolActivo === 'Supervisor') {
+              const defaultSup = supervisorsList[0] || 'Briones Victor';
+              setLogForm(prev => ({ ...prev, autorBitacora: defaultSup, rolBitacora: 'Supervisor' }));
+            }
+          };
+
+          useEffect(() => {
+            if (hasEntered) syncProfileLogic(userSession.rol);
+          }, [userSession.rol, supervisorsList, hasEntered]);
+
+          const fileInputRef = useRef(null);
+          const logFileRef = useRef(null);
+
           useEffect(() => {
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
             window.addEventListener('online', on); window.addEventListener('offline', off);
@@ -104,7 +195,7 @@
               setEmployees(items); 
               setLoading(false);
             }, (error) => {
-              console.error("Error en sincronización en tiempo real:", error);
+              console.error("Error cargando base de datos:", error);
               setLoading(false);
             });
             return () => { unsub(); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
@@ -115,7 +206,153 @@
           const handleEnterApp = () => {
             if (!gateProfile) return;
             setUserSession({ rol: gateProfile });
+            syncProfileLogic(gateProfile);
             setHasEntered(true);
+          };
+
+          const handleDownloadExcel = () => {
+            try {
+              if (!employees || employees.length === 0) {
+                alert("No hay trabajadores registrados en la base de datos para exportar.");
+                return;
+              }
+              const exportData = employees.map(emp => ({
+                "Nombre": emp.nombre || "",
+                "RUT": emp.rut || "",
+                "Cargo": emp.cargo || "",
+                "Ciudad": emp.ciudad || "",
+                "Dirección": emp.direccion || "",
+                "Teléfono": emp.telefono || "",
+                "Correo": emp.correo || "",
+                "Contacto de Emergencia": emp.emergenciaNombre || "",
+                "Teléfono Emergencia": emp.emergenciaFono || "",
+                "Contrato": emp.documentos?.contrato ? "Completo" : "Pendiente",
+                "Inducción S.S.O.": emp.documentos?.induccion ? "Completo" : "Pendiente",
+                "Exámenes Ocupacionales": emp.documentos?.examenes ? "Completo" : "Pendiente",
+                "EPP": emp.documentos?.epp ? "Completo" : "Pendiente"
+              }));
+
+              const ws = XLSX.utils.json_to_sheet(exportData);
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, "Dotacion Completa");
+              const dateStr = new Date().toISOString().split('T')[0];
+              XLSX.writeFile(wb, `BRAMAQ_Dotacion_Completa_${dateStr}.xlsx`);
+              alert("Descarga realizada correctamente.");
+            } catch (error) {
+              alert("Error al generar la descarga: " + error.message);
+              console.error(error);
+            }
+          };
+
+          const handleDownloadGlobalLogsExcel = () => {
+            try {
+              let logsToExport = [];
+              employees.forEach(emp => {
+                if (emp.historial && emp.historial.length > 0) {
+                  emp.historial.forEach(h => {
+                    let attachmentsText = "Ninguno";
+                    if (h.archivos && h.archivos.length > 0) {
+                      attachmentsText = h.archivos.map(a => a.nombre).join(", ");
+                    } else if (h.archivoNombre) {
+                      attachmentsText = h.archivoNombre; 
+                    }
+                    logsToExport.push({
+                      "Trabajador": emp.nombre || "Desconocido",
+                      "RUT": emp.rut || "",
+                      "Cargo": emp.cargo || "",
+                      "Tipo de Evento": h.tipo || "",
+                      "Fecha Inicio": h.fechaInicio || "",
+                      "Fecha Término": h.fechaTermino || "",
+                      "Observación": h.nota || "",
+                      "Autor": h.autor || "",
+                      "Perfil del Autor": h.rolAutor || "",
+                      "Fecha de Registro": new Date(h.createdAt || h.fechaInicio).toLocaleString('es-CL'),
+                      "Archivo Adjunto": attachmentsText
+                    });
+                  });
+                }
+              });
+
+              if (logsToExport.length === 0) {
+                alert("No hay registros ni observaciones en la bitácora para descargar.");
+                return;
+              }
+
+              logsToExport.sort((a, b) => new Date(b["Fecha de Registro"]) - new Date(a["Fecha de Registro"]));
+
+              const ws = XLSX.utils.json_to_sheet(logsToExport);
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, "Hoja de Vida Global");
+              const dateStr = new Date().toISOString().split('T')[0];
+              XLSX.writeFile(wb, `BRAMAQ_Hoja_de_Vida_Global_${dateStr}.xlsx`);
+              alert("Descarga realizada correctamente.");
+            } catch (error) {
+              alert("Error al generar la descarga: " + error.message);
+              console.error(error);
+            }
+          };
+
+          const handleDeleteAllData = async () => {
+            if (userSession.rol !== 'Administrativo' && userSession.rol !== 'AdminContrato') {
+              alert("Sin permisos suficientes para realizar borrado masivo."); return;
+            }
+            if (confirm("⚠️ ACCIÓN CRÍTICA: ¿Estás seguro de vaciar toda la base de datos para cargar desde cero?")) {
+              try {
+                const batchSize = 400;
+                let snapshot = await db.collection('employees').limit(batchSize).get();
+                while (!snapshot.empty) {
+                  const batch = db.batch();
+                  snapshot.docs.forEach(doc => batch.delete(doc.ref));
+                  await batch.commit();
+                  snapshot = await db.collection('employees').limit(batchSize).get();
+                }
+                alert("Base de datos vaciada con éxito.");
+              } catch (err) { alert("Error: " + err.message); }
+            }
+          };
+
+          const handleUploadExcel = (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader(); reader.readAsArrayBuffer(file);
+            reader.onload = async (event) => {
+              try {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonSheet = XLSX.utils.sheet_to_json(worksheet, { defval: "", range: 1 });
+
+                if (jsonSheet.length > 0) {
+                  let addedCount = 0; let duplicateCount = 0;
+                  let existingRuts = new Set(employees.map(emp => (emp.rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '')));
+
+                  if (confirm(`Se leyeron ${jsonSheet.length} registros. ¿Importar omitiendo duplicados por RUT?`)) {
+                    for (let row of jsonSheet) {
+                      const keys = Object.keys(row);
+                      const findVal = (terms) => {
+                        for (let t of terms) {
+                          const foundKey = keys.find(k => k.toLowerCase().includes(t));
+                          if (foundKey && row[foundKey] !== undefined) return String(row[foundKey]).trim();
+                        } return '';
+                      };
+                      const nombre = findVal(['nombre']); const rut = findVal(['rut']); const direccion = findVal(['direccion']); const ciudad = findVal(['ciudad']) || 'Valdivia'; const cargo = findVal(['cargo']); const telefono = findVal(['n telefonico', 'telefono', 'fono', 'celular']); const correo = findVal(['correo', 'email']); const emergenciaNombre = findVal(['nombre emergencia', 'emergencia', 'contacto emergencia']); const emergenciaFono = findVal(['fono emergencia', 'telefono emergencia', 'emergencia fono']);
+                      const cleanRut = (rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '');
+
+                      if ((nombre || rut) && cleanRut) {
+                        if (!existingRuts.has(cleanRut)) {
+                          await db.collection('employees').add({
+                            nombre: nombre || 'Sin Nombre', rut: rut || 'Sin RUT', direccion: direccion || '', ciudad: ciudad, cargo: cargo || 'OPERADOR GRUA HORQUILLA', telefono: telefono, correo: correo, emergenciaNombre: emergenciaNombre, emergenciaFono: emergenciaFono,
+                            documentos: { contrato: true, induccion: true, examenes: true, epp: true }, historial: []
+                          });
+                          existingRuts.add(cleanRut); addedCount++;
+                        } else { duplicateCount++; }
+                      }
+                    }
+                    alert(`¡Importación completada!\n- Agregados: ${addedCount}\n- Duplicados omitidos: ${duplicateCount}`);
+                  }
+                }
+              } catch (err) { alert("Error: " + err.message); }
+            };
           };
 
           const handleSave = async (e) => {
@@ -128,59 +365,254 @@
                 await db.collection('employees').add({ ...formData, historial: [] });
               }
               setIsModalOpen(false); setCurrentEmployee(null);
-            } catch (err) { setFormError("Error al guardar en la nube: " + err.message); }
+            } catch (err) { setFormError("Error: " + err.message); }
           };
 
           const handleDelete = async (id) => {
-            if (userSession.rol !== 'Administrativo' && userSession.rol !== 'AdminContrato') {
-              alert("Sin permisos suficientes para realizar esta acción."); 
-              return;
-            }
-            if (confirm("¿Estás seguro de eliminar este registro permanentemente de la base de datos central?")) {
-              await db.collection('employees').doc(id).delete();
+            if (userSession.rol !== 'Administrativo' && userSession.rol !== 'AdminContrato') { alert("Sin permisos suficientes."); return; }
+            if (confirm("¿Eliminar este trabajador permanentemente del sistema?")) await db.collection('employees').doc(id).delete();
+          };
+
+          const handleLogFileChange = (e) => {
+            const files = Array.from(e.target.files);
+            if (!files.length) return;
+
+            const newArchivos = [];
+            let processed = 0;
+
+            files.forEach(file => {
+              const reader = new FileReader();
+              reader.onload = (uploadEvent) => {
+                newArchivos.push({
+                  nombre: file.name,
+                  tipo: file.type,
+                  url: uploadEvent.target.result,
+                  fechaCarga: new Date().toISOString()
+                });
+                processed++;
+                if (processed === files.length) {
+                  setLogForm(prev => ({
+                    ...prev,
+                    archivos: [...(prev.archivos || []), ...newArchivos]
+                  }));
+                }
+              };
+              reader.readAsDataURL(file);
+            });
+            if (logFileRef.current) logFileRef.current.value = "";
+          };
+
+          const handleRemovePendingFile = (indexToRemove) => {
+            setLogForm(prev => ({
+              ...prev,
+              archivos: prev.archivos.filter((_, idx) => idx !== indexToRemove)
+            }));
+          };
+
+          const handleDeleteSavedAttachment = async (logId, attachmentIndex, isOldFormat) => {
+            if (!selectedEmpForHistory) return;
+            if (confirm("¿Está seguro de eliminar este archivo adjunto? (No eliminará la observación)")) {
+              try {
+                const updatedHistorial = selectedEmpForHistory.historial.map(h => {
+                  if (h.id === logId) {
+                    if (isOldFormat) {
+                      return { ...h, archivoUrl: '', archivoNombre: '' };
+                    } else {
+                      const newArchivos = h.archivos.filter((_, i) => i !== attachmentIndex);
+                      return { ...h, archivos: newArchivos };
+                    }
+                  }
+                  return h;
+                });
+                await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
+                setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
+              } catch (err) { alert("Error al eliminar archivo: " + err.message); }
             }
           };
 
+          const handleDeleteLog = async (logId) => {
+            if (!selectedEmpForHistory) return;
+            if (confirm("¿Estás seguro de eliminar completamente esta observación del historial?")) {
+              try {
+                const updatedHistorial = (selectedEmpForHistory.historial || []).filter(h => h.id !== logId);
+                await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
+                setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
+              } catch (err) { alert("Error al eliminar la bitácora: " + err.message); }
+            }
+          };
+
+          const handleAddLog = async (e) => {
+            e.preventDefault();
+            if (!selectedEmpForHistory) return;
+            const tipoFinal = logForm.tipo === 'Otro' ? (logForm.customTipo || 'Otro evento') : logForm.tipo;
+            
+            const logEntry = {
+              id: String(Date.now()), 
+              tipo: String(tipoFinal), 
+              modoFechas: String(logForm.modoFechas),
+              fechaInicio: String(logForm.modoFechas === 'rango' ? logForm.fechaInicio : logForm.fechaUnica),
+              fechaTermino: String(logForm.modoFechas === 'rango' ? logForm.fechaTermino : logForm.fechaUnica),
+              nota: String(logForm.nota || ''), 
+              archivos: logForm.archivos || [], 
+              autor: String(logForm.autorBitacora), 
+              rolAutor: String(logForm.rolBitacora), 
+              createdAt: new Date().toISOString()
+            };
+
+            try {
+              const updatedHistorial = [...(selectedEmpForHistory.historial || []), logEntry];
+              await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
+              setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
+              
+              setLogForm({
+                tipo: 'Licencia Médica', modoFechas: 'rango', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
+                customTipo: '', nota: '', archivos: [],
+                autorBitacora: userSession.rol === 'Supervisor' ? (supervisorsList[0] || '') : logForm.autorBitacora,
+                rolBitacora: userSession.rol
+              });
+              alert("Bitácora registrada con éxito.");
+            } catch (error) { alert("Error al registrar: " + error.message); }
+          };
+
+          const getMissingDataList = (emp) => {
+            let missing = [];
+            if (!emp.telefono) missing.push("Teléfono");
+            if (!emp.correo) missing.push("Correo");
+            if (!emp.emergenciaNombre || !emp.emergenciaFono) missing.push("Emergencia");
+            if (emp.documentos) {
+              if (!emp.documentos.contrato) missing.push("Contrato");
+              if (!emp.documentos.induccion) missing.push("Inducción");
+              if (!emp.documentos.examenes) missing.push("Exámenes");
+              if (!emp.documentos.epp) missing.push("EPP");
+            }
+            return missing;
+          };
+
           const filtered = useMemo(() => {
-            return employees.filter(emp => {
+            const seenRuts = new Set(); const uniqueEmployees = [];
+            for (const emp of employees) {
+              const cleanR = (emp.rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '');
+              if (cleanR) { if (!seenRuts.has(cleanR)) { seenRuts.add(cleanR); uniqueEmployees.push(emp); } } 
+              else { uniqueEmployees.push(emp); }
+            }
+            const list = uniqueEmployees.filter(emp => {
               const s = searchTerm.toLowerCase();
-              const matchSearch = (emp.nombre||'').toLowerCase().includes(s) || (emp.rut||'').toLowerCase().includes(s) || (emp.cargo||'').toLowerCase().includes(s);
+              const matchSearch = (emp.nombre||'').toLowerCase().includes(s) || (emp.rut||'').toLowerCase().includes(s) || (emp.cargo||'').toLowerCase().includes(s) || (emp.ciudad||'').toLowerCase().includes(s);
               if (!matchSearch) return false;
               if (activeFilter === 'TODOS') return true;
+              if (activeFilter === 'INCOMPLETOS') return getMissingDataList(emp).length > 0;
+              if (activeFilter === 'ADMIN_CONTRATO') { const c = (emp.cargo || '').toUpperCase(); return c.includes('ADMINISTRADOR DE CONTRATO') || c.includes('ADMIN. CONTRATO') || c.includes('ADMINISTRADOR'); }
+              if (activeFilter === 'SUPERVISORES') return (emp.cargo||'').toUpperCase().includes('SUPERVISOR');
+              if (activeFilter === 'PREVENCIONISTAS') return (emp.cargo||'').toUpperCase().includes('PREVENCION');
+              if (activeFilter === 'ADMINISTRATIVOS') return (emp.cargo||'').toUpperCase().includes('ADMINISTRATIVO') && !(emp.cargo||'').toUpperCase().includes('CONTRATO');
+              if (activeFilter === 'OPERADORES_GRUA') return (emp.cargo||'').toUpperCase().includes('GRUA');
+              if (activeFilter === 'CARGADOR_FRONTAL') return (emp.cargo||'').toUpperCase().includes('CARGADOR FRONTAL');
+              if (activeFilter === 'MECANICOS') return (emp.cargo||'').toUpperCase().includes('MECANICO');
+              if (citiesList.includes(activeFilter)) return (emp.ciudad||'').toLowerCase() === activeFilter.toLowerCase();
               return true;
             });
-          }, [employees, searchTerm, activeFilter]);
+            return list.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' }));
+          }, [employees, searchTerm, activeFilter, citiesList]);
+
+          const kpis = useMemo(() => {
+            const total = filtered.length;
+            const supervisores = employees.filter(e => (e.cargo||'').toUpperCase().includes('SUPERVISOR')).length;
+            const prevencionistas = employees.filter(e => (e.cargo||'').toUpperCase().includes('PREVENCION')).length;
+            const administrativos = employees.filter(e => (e.cargo||'').toUpperCase().includes('ADMINISTRATIVO') && !(e.cargo||'').toUpperCase().includes('CONTRATO')).length;
+            const adminContrato = employees.filter(e => { const c = (e.cargo || '').toUpperCase(); return c.includes('ADMINISTRADOR DE CONTRATO') || c.includes('ADMIN. CONTRATO') || c.includes('ADMINISTRADOR'); }).length;
+            const operadoresGrua = employees.filter(e => (e.cargo||'').toUpperCase().includes('GRUA')).length;
+            const cargadorFrontal = employees.filter(e => (e.cargo||'').toUpperCase().includes('CARGADOR FRONTAL')).length;
+            const mecanicos = employees.filter(e => (e.cargo||'').toUpperCase().includes('MECANICO')).length;
+            const incompletos = employees.filter(e => getMissingDataList(e).length > 0).length;
+            const porCiudad = {};
+            citiesList.forEach(c => { porCiudad[c] = employees.filter(e => (e.ciudad||'').toLowerCase() === c.toLowerCase()).length; });
+            return { total: employees.length, supervisores, prevencionistas, administrativos, adminContrato, operadoresGrua, cargadorFrontal, mecanicos, incompletos, porCiudad };
+          }, [employees, citiesList, filtered]);
+
+          const allGlobalLogs = useMemo(() => {
+            let logs = [];
+            employees.forEach(emp => {
+              if (emp.historial && emp.historial.length > 0) { emp.historial.forEach(h => { logs.push({ ...h, empleadoNombre: emp.nombre, empleadoRut: emp.rut, empleadoCargo: emp.cargo }); }); }
+            });
+            return logs.sort((a, b) => new Date(b.createdAt || b.fechaInicio) - new Date(a.createdAt || a.fechaInicio));
+          }, [employees]);
+
+          const RequisitoToggle = ({ label, icon, checked, onChange }) => (
+            <label className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all cursor-pointer ${checked ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}>
+                <input type="checkbox" checked={checked} onChange={onChange} className="hidden" />
+                <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${checked ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 border border-slate-700'}`}>
+                    {checked && <i data-lucide="check" className="w-3.5 h-3.5"></i>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <i data-lucide={icon} className={`w-4 h-4 ${checked ? 'text-emerald-400' : 'text-slate-500'}`}></i>
+                  <span className={`text-sm font-medium ${checked ? 'text-emerald-400' : 'text-slate-400'}`}>{label}</span>
+                </div>
+            </label>
+          );
 
           if (!hasEntered) {
             return (
-              <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-                <div className="bg-slate-900/90 border border-slate-800 p-8 sm:p-12 rounded-3xl w-full max-w-md shadow-2xl flex flex-col items-center fade-in z-10">
-                  <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center text-slate-950 shadow-lg mb-6">
+              <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 selection:bg-amber-500/30 relative overflow-hidden">
+                <div className="absolute top-1/4 -left-32 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800/80 p-8 sm:p-12 rounded-3xl w-full max-w-md shadow-2xl flex flex-col items-center fade-in z-10 relative">
+                  <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.2)] mb-6">
                     <i data-lucide="hard-hat" className="w-10 h-10"></i>
                   </div>
-                  <h1 className="text-2xl font-extrabold text-white mb-2">Gestor de Dotación</h1>
-                  <h2 className="text-lg font-bold text-amber-400 mb-6 uppercase tracking-widest">BRAMAQ</h2>
-                  
-                  <div className="w-full space-y-4">
-                    <select 
-                      value={gateProfile}
-                      onChange={e => setGateProfile(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-sm font-semibold text-amber-400 focus:outline-none focus:border-amber-500"
-                    >
-                      <option value="" disabled>-- Seleccione su Perfil --</option>
-                      <option value="Administrativo">Administrativo / RRHH</option>
-                      <option value="AdminContrato">Administrador de Contrato</option>
-                      <option value="Supervisor">Supervisor de Faena</option>
-                      <option value="Prevencionista">Prevencionista de Riesgos</option>
-                    </select>
+                  <h1 className="text-2xl font-extrabold text-white mb-2 tracking-tight text-center">Gestor de Dotación</h1>
+                  <h2 className="text-lg font-bold text-amber-400 mb-2 tracking-widest uppercase">BRAMAQ</h2>
+                  <p className="text-sm text-slate-400 mb-8 text-center px-4 leading-relaxed">Seleccione su perfil para ingresar al sistema de gestión.</p>
+
+                  <div className="w-full space-y-6">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2.5 block px-1">Perfil Operativo</label>
+                      <div className="relative group">
+                        <select 
+                          value={gateProfile}
+                          onChange={e => setGateProfile(e.target.value)}
+                          className="w-full appearance-none bg-slate-950/80 border border-slate-800 hover:border-slate-700 rounded-xl px-4 py-4 text-sm font-semibold text-amber-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all cursor-pointer shadow-inner"
+                        >
+                          <option value="" disabled>-- Elija un perfil --</option>
+                          <option value="Administrativo">Administrativo / RRHH</option>
+                          <option value="AdminContrato">Administrador de Contrato</option>
+                          <option value="Supervisor">Supervisor</option>
+                          <option value="Prevencionista">Prevencionista</option>
+                        </select>
+                        <i data-lucide="chevron-down" className="w-5 h-5 text-slate-500 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-amber-500 transition-colors"></i>
+                      </div>
+                    </div>
 
                     <button 
                       disabled={!gateProfile}
                       onClick={handleEnterApp}
-                      className={`w-full py-4 rounded-xl font-bold text-sm transition-all ${gateProfile ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                      className={`w-full py-4 rounded-xl font-bold text-sm transition-all flex justify-center items-center gap-2 ${gateProfile ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.3)] cursor-pointer' : 'bg-slate-800/50 text-slate-500 cursor-not-allowed border border-slate-800'}`}
                     >
-                      INGRESAR AL SISTEMA
+                      INGRESAR <i data-lucide="arrow-right" className="w-4 h-4"></i>
                     </button>
+                    
+                    {isInstallable && (
+                      <button onClick={handleInstallClick} className="w-full py-3 rounded-xl font-semibold text-xs text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10 transition-colors flex items-center justify-center gap-2">
+                        <i data-lucide="download-cloud" className="w-4 h-4"></i> Instalar Aplicación BRAMAQ
+                      </button>
+                    )}
+                    {showInstallHelp && (
+                      <div className="w-full py-3 px-4 rounded-xl font-medium text-xs text-slate-300 border border-slate-800 bg-slate-950/90 flex flex-col items-center justify-center gap-2 text-center fade-in">
+                        <div className="flex items-center gap-1.5 text-amber-400 font-bold">
+                          <i data-lucide="info" className="w-4 h-4"></i> Instrucciones de Instalación
+                        </div>
+                        {isIOS ? (
+                          <p className="text-[11px] text-slate-400 leading-relaxed">
+                            En iPhone/iPad: Toque el botón <strong>Compartir</strong> <i data-lucide="share" className="w-3 h-3 inline mx-0.5"></i> en la barra de su navegador y seleccione <strong>"Agregar a inicio"</strong>.
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 leading-relaxed">
+                            Abra el menú de opciones de su navegador (los tres puntos arriba a la derecha) y seleccione <strong>"Instalar aplicación"</strong> o <strong>"Agregar a la pantalla principal"</strong>.
+                          </p>
+                        )}
+                        <button onClick={() => setShowInstallHelp(false)} className="text-[10px] text-slate-500 hover:text-slate-300 underline mt-1">Cerrar aviso</button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -189,83 +621,516 @@
 
           return (
             <div className="flex h-screen overflow-hidden bg-slate-950">
-              <div className="flex-1 flex flex-col h-screen relative">
-                <header className="h-16 flex items-center justify-between px-6 bg-slate-900/80 backdrop-blur border-b border-slate-800">
+              
+              <aside className="hidden lg:flex flex-col w-64 bg-slate-900/50 backdrop-blur border-r border-slate-800 h-full z-10">
+                <div className="h-20 flex items-center px-6 border-b border-slate-800 justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="bg-amber-500 p-2 rounded-lg text-slate-950 font-bold"><i data-lucide="hard-hat" className="w-5 h-5"></i></div>
-                    <span className="font-bold text-white tracking-tight text-lg">BRAMAQ Enterprise</span>
+                    <div className="bg-gradient-to-br from-amber-400 to-amber-600 p-2.5 rounded-xl text-slate-950 shadow-lg shadow-amber-500/20">
+                      <i data-lucide="hard-hat" className="w-5 h-5"></i>
+                    </div>
+                    <div>
+                      <div className="font-extrabold tracking-tight text-white text-base">BRAMAQ</div>
+                      <div className="text-[9px] text-amber-500 uppercase tracking-widest font-bold">Enterprise</div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <span className={`w-2.5 h-2.5 rounded-full ${onlineStatus ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-red-500'}`} title={onlineStatus ? "Conectado a la nube" : "Sin conexión a internet"}></span>
-                    <span className="text-xs text-slate-400 font-medium">Perfil: <strong className="text-amber-400">{userSession.rol}</strong></span>
-                    <button onClick={() => setHasEntered(false)} className="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1.5 rounded-lg font-bold">Cerrar Sesión</button>
+                </div>
+                
+                <div className="p-4 space-y-2 flex-1 overflow-y-auto">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-4 px-2 mt-2">Menú Principal</div>
+                  
+                  <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm transition-all font-semibold ${activeTab === 'dashboard' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800/50 border border-transparent'}`}>
+                    <i data-lucide="layout-dashboard" className="w-4 h-4"></i> Panel Gerencial
+                  </button>
+                  <button onClick={() => setActiveTab('directorio')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm transition-all font-semibold ${activeTab === 'directorio' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800/50 border border-transparent'}`}>
+                    <i data-lucide="users" className="w-4 h-4"></i> Directorio y Bitácora
+                  </button>
+                  
+                  <div className="mt-8 pt-6 border-t border-slate-800">
+                    <div className="bg-slate-950/50 rounded-2xl p-4 border border-slate-800/80 space-y-4">
+                      <div className="flex items-center gap-2 px-1">
+                        <span className={`w-2 h-2 rounded-full ${onlineStatus ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500 animate-pulse'}`}></span>
+                        <span className="text-xs font-semibold text-slate-300">{onlineStatus ? 'Conexión Segura' : 'Sin Conexión'}</span>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Perfil Activo</label>
+                        <div className="relative">
+                          <select 
+                            value={userSession.rol} 
+                            onChange={e => setUserSession({ rol: e.target.value })} 
+                            className="w-full appearance-none bg-slate-900 border border-slate-700 text-amber-400 font-bold text-xs py-2.5 pl-3 pr-8 rounded-lg outline-none focus:border-amber-500 transition-colors cursor-pointer shadow-inner"
+                          >
+                            <option value="Administrativo">Administrativo / RRHH</option>
+                            <option value="AdminContrato">Admin. de Contrato</option>
+                            <option value="Supervisor">Supervisor de Faena</option>
+                            <option value="Prevencionista">Prevencionista</option>
+                          </select>
+                          <i data-lucide="chevron-down" className="w-4 h-4 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+
+              <div className="flex-1 flex flex-col h-screen relative">
+                <header className="lg:hidden h-16 flex items-center justify-between px-4 sm:px-6 bg-slate-900/80 backdrop-blur border-b border-slate-800 z-30 sticky top-0">
+                  <div className="flex items-center gap-2">
+                    <div className="bg-gradient-to-br from-amber-400 to-amber-600 p-1.5 rounded-lg text-slate-950">
+                      <i data-lucide="hard-hat" className="w-4 h-4"></i>
+                    </div>
+                    <span className="font-bold text-white tracking-tight">BRAMAQ</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`w-2 h-2 rounded-full ${onlineStatus ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500'}`}></span>
+                    <select 
+                      value={userSession.rol} 
+                      onChange={e => setUserSession({ rol: e.target.value })} 
+                      className="bg-slate-950 border border-slate-700 text-amber-400 font-bold text-[10px] py-1.5 px-2 rounded-md outline-none focus:border-amber-500"
+                    >
+                      <option value="Administrativo">Administrativo</option>
+                      <option value="AdminContrato">Admin. Contrato</option>
+                      <option value="Supervisor">Supervisor</option>
+                      <option value="Prevencionista">Prevención</option>
+                    </select>
                   </div>
                 </header>
 
-                <main className="flex-1 overflow-y-auto p-6 lg:p-8">
-                  <div className="max-w-7xl mx-auto space-y-6">
-                    <div className="flex justify-between items-center bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-                      <div>
-                        <h2 className="text-xl font-bold text-white">Directorio Central de Trabajadores</h2>
-                        <p className="text-xs text-slate-400 mt-0.5">Sincronización bidireccional activa con Cloud Firestore.</p>
-                      </div>
-                      <button onClick={() => { setCurrentEmployee(null); setIsModalOpen(true); }} className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl shadow-md">
-                        + Nuevo Trabajador
-                      </button>
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative scroll-smooth">
+                  {loading ? (
+                    <div className="flex flex-col items-center justify-center h-full space-y-4">
+                      <i data-lucide="loader-2" className="w-10 h-10 text-amber-500 animate-spin"></i>
+                      <p className="text-sm text-slate-400 font-medium">Sincronizando plataforma corporativa...</p>
                     </div>
-
-                    {loading ? (
-                      <div className="text-center py-20 text-slate-500">Sincronizando registros centralizados...</div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-3">
-                        {filtered.map(emp => (
-                          <div key={emp.id} className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl flex justify-between items-center hover:border-slate-700 transition-all">
+                  ) : (
+                    <div className="max-w-7xl mx-auto space-y-8 fade-in">
+                      
+                      {activeTab === 'dashboard' && (
+                        <>
+                          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                             <div>
-                              <h4 className="font-bold text-white text-sm">{emp.nombre}</h4>
-                              <p className="text-xs text-slate-400">{emp.cargo} — <span className="text-amber-400">{emp.ciudad}</span> ({emp.rut})</p>
+                              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Panel Gerencial</h1>
+                              <p className="text-sm text-slate-400 mt-1">Visión general y control estratégico de dotación.</p>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => handleDelete(emp.id)} className="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-2 rounded-lg text-xs font-bold border border-red-500/20">Eliminar</button>
+                            <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-xl border border-emerald-500/20 text-xs font-bold">
+                              <i data-lucide="shield-check" className="w-4 h-4"></i> Datos en Línea
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                            <div onClick={() => { setActiveFilter('TODOS'); setActiveTab('directorio'); }} className="glass-panel p-6 rounded-3xl hover:border-amber-500/50 cursor-pointer transition-all group">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Dotación Total</p>
+                                  <h3 className="text-4xl sm:text-5xl font-extrabold text-white mt-2">{kpis.total}</h3>
+                                </div>
+                                <div className="bg-amber-500/10 text-amber-400 p-3.5 rounded-2xl group-hover:scale-110 transition-transform">
+                                  <i data-lucide="users" className="w-7 h-7"></i>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div onClick={() => { setActiveFilter('INCOMPLETOS'); setActiveTab('directorio'); }} className="glass-panel p-6 rounded-3xl hover:border-red-500/50 cursor-pointer transition-all group relative overflow-hidden">
+                              <div className="absolute top-0 right-0 w-24 h-24 bg-red-500/5 rounded-bl-full -mr-8 -mt-8 pointer-events-none"></div>
+                              <div className="flex items-start justify-between relative z-10">
+                                <div>
+                                  <p className="text-red-400 text-xs font-bold uppercase tracking-widest">Incompletos / Alerta</p>
+                                  <h3 className="text-4xl sm:text-5xl font-extrabold text-red-400 mt-2">{kpis.incompletos}</h3>
+                                </div>
+                                <div className="bg-red-500/10 text-red-400 p-3.5 rounded-2xl group-hover:scale-110 transition-transform">
+                                  <i data-lucide="alert-triangle" className="w-7 h-7"></i>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div onClick={() => { setActiveFilter('ADMIN_CONTRATO'); setActiveTab('directorio'); }} className="glass-panel p-6 rounded-3xl hover:border-blue-500/50 cursor-pointer transition-all group">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Admin. Contrato</p>
+                                  <h3 className="text-4xl sm:text-5xl font-extrabold text-blue-400 mt-2">{kpis.adminContrato}</h3>
+                                </div>
+                                <div className="bg-blue-500/10 text-blue-400 p-3.5 rounded-2xl group-hover:scale-110 transition-transform">
+                                  <i data-lucide="briefcase" className="w-7 h-7"></i>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+                            {[
+                              { label: 'Supervisores', val: kpis.supervisores, icon: 'user-check', filter: 'SUPERVISORES', color: 'text-indigo-400' },
+                              { label: 'Prevención', val: kpis.prevencionistas, icon: 'shield-alert', filter: 'PREVENCIONISTAS', color: 'text-emerald-400' },
+                              { label: 'Administrativos', val: kpis.administrativos, icon: 'file-spreadsheet', filter: 'ADMINISTRATIVOS', color: 'text-purple-400' },
+                              { label: 'Op. Grúa', val: kpis.operadoresGrua, icon: 'truck', filter: 'OPERADORES_GRUA', color: 'text-sky-400' },
+                              { label: 'Carg. Frontal', val: kpis.cargadorFrontal, icon: 'box', filter: 'CARGADOR_FRONTAL', color: 'text-yellow-400' },
+                              { label: 'Mecánicos', val: kpis.mecanicos, icon: 'wrench', filter: 'MECANICOS', color: 'text-stone-400' }
+                            ].map(item => (
+                              <div key={item.label} onClick={() => { setActiveFilter(item.filter); setActiveTab('directorio'); }} className="glass-panel p-5 rounded-2xl hover:bg-slate-800/80 cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-3 group">
+                                <div className={`p-2.5 rounded-xl bg-slate-900 border border-slate-800 group-hover:border-slate-600 transition-colors`}>
+                                  <i data-lucide={item.icon} className={`w-5 h-5 ${item.color}`}></i>
+                                </div>
+                                <div>
+                                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{item.label}</div>
+                                  <div className={`text-2xl font-extrabold ${item.color} mt-0.5`}>{item.val}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                            <div className="xl:col-span-2 glass-panel p-6 sm:p-8 rounded-3xl">
+                              <div className="flex justify-between items-end mb-6 border-b border-slate-800 pb-4">
+                                <div>
+                                  <h3 className="font-bold text-base text-white flex items-center gap-2">
+                                    <i data-lucide="map" className="w-5 h-5 text-amber-500"></i> Distribución Logística Operativa
+                                  </h3>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
+                                {citiesList.map(city => {
+                                  const count = kpis.porCiudad[city] || 0;
+                                  const maxCount = Math.max(...Object.values(kpis.porCiudad), 1);
+                                  const percentage = Math.round((count / maxCount) * 100);
+                                  if (count === 0) return null; 
+                                  return (
+                                    <div key={city} onClick={() => { setActiveFilter(city); setActiveTab('directorio'); }} className="cursor-pointer group">
+                                      <div className="flex justify-between text-xs mb-2">
+                                        <span className="text-slate-300 font-semibold group-hover:text-amber-400 transition-colors">{city}</span>
+                                        <span className="font-bold text-slate-400 bg-slate-900 px-2 rounded">{count} Pers.</span>
+                                      </div>
+                                      <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800/50">
+                                        <div className="bg-gradient-to-r from-amber-600 to-amber-400 h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }}></div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div className="glass-panel p-6 sm:p-8 rounded-3xl flex flex-col">
+                              <h3 className="font-bold text-base text-white flex items-center gap-2 mb-6 border-b border-slate-800 pb-4">
+                                <i data-lucide="bell-ring" className="w-5 h-5 text-red-400"></i> Alertas de Cumplimiento
+                              </h3>
+                              <div onClick={() => { setActiveFilter('INCOMPLETOS'); setActiveTab('directorio'); }} className="flex-1 bg-gradient-to-b from-red-500/10 to-transparent border border-red-500/20 rounded-2xl p-6 cursor-pointer hover:border-red-500/40 transition-all flex flex-col justify-center text-center group">
+                                <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center mb-4 text-red-400 mx-auto border border-red-500/20 group-hover:scale-110 transition-transform">
+                                  <i data-lucide="clipboard-x" className="w-7 h-7"></i>
+                                </div>
+                                <h4 className="text-red-400 font-extrabold text-xl mb-2">{kpis.incompletos} Pendientes</h4>
+                                <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
+                                  Registros con faltantes en documentación, contactos de emergencia o teléfonos requeridos.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {activeTab === 'directorio' && (
+                        <>
+                          <div className="glass-panel p-4 sm:p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 sticky top-0 z-20 shadow-xl">
+                            <div className="w-full md:flex-1 space-y-3 md:space-y-0 md:flex md:items-center gap-4">
+                              <div className="relative w-full md:max-w-md">
+                                <i data-lucide="search" className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"></i>
+                                <input type="text" placeholder="Buscar por nombre, RUT, cargo o ciudad..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm font-medium rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all shadow-inner" />
+                              </div>
+                              {activeFilter !== 'TODOS' && (
+                                <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 px-3 py-2 rounded-xl text-xs font-bold w-max">
+                                  <span><i data-lucide="filter" className="w-3.5 h-3.5 inline mr-1"></i> {activeFilter}</span>
+                                  <div className="w-px h-3 bg-amber-500/30 mx-1"></div>
+                                  <button onClick={() => setActiveFilter('TODOS')} className="hover:text-white transition-colors">Limpiar</button>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-start md:justify-end">
+                              <button onClick={() => setIsGlobalHistoryOpen(true)} className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-2 border border-slate-700 transition-colors shadow-sm" title="Auditoría Global">
+                                <i data-lucide="file-clock" className="w-4 h-4"></i> <span className="hidden sm:inline">Reporte Global</span>
+                              </button>
+                              <button onClick={handleDownloadExcel} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-colors" title="Exportar Dotación Completa">
+                                <i data-lucide="download" className="w-4 h-4"></i> <span className="hidden sm:inline">Exportar Base (XLSX)</span>
+                              </button>
+                              <input type="file" ref={fileInputRef} onChange={handleUploadExcel} accept=".xlsx, .xls, .csv" className="hidden" />
+                              <button onClick={() => fileInputRef.current.click()} className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-colors">
+                                <i data-lucide="upload" className="w-4 h-4"></i> <span className="hidden sm:inline">Importar</span>
+                              </button>
+                              <button onClick={() => { setCurrentEmployee(null); setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0], cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '', documentos: { contrato: true, induccion: true, examenes: true, epp: true }}); setIsModalOpen(true); }} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                                <i data-lucide="user-plus" className="w-4 h-4"></i> <span className="hidden sm:inline">Nuevo Ficha</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
+                            <div className="flex justify-end">
+                              <button onClick={handleDeleteAllData} className="text-xs text-red-500 hover:text-red-400 font-bold flex items-center gap-2 px-4 py-2 bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 rounded-xl transition-colors">
+                                <i data-lucide="trash-2" className="w-4 h-4"></i> Vaciar Base de Datos
+                              </button>
+                            </div>
+                          )}
+
+                          {filtered.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center p-20 glass-panel rounded-3xl text-slate-500 space-y-4">
+                              <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center border border-slate-800">
+                                <i data-lucide="search-x" className="w-8 h-8 text-slate-600"></i>
+                              </div>
+                              <p className="text-sm font-medium">No se encontraron registros en el directorio actual.</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3 pb-8">
+                              <div className="hidden lg:flex items-center px-6 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-800">
+                                <div className="flex-1 min-w-[220px]">Identificación</div>
+                                <div className="flex-1 min-w-[180px]">Cargo / Faena</div>
+                                <div className="flex-1 min-w-[200px]">Contacto</div>
+                                <div className="w-48 text-center">Auditoría y Acciones</div>
+                              </div>
+
+                              {filtered.map(emp => {
+                                const missing = getMissingDataList(emp);
+                                return (
+                                  <div key={emp.id} className="glass-panel p-0 rounded-2xl overflow-hidden hover:border-slate-600 transition-colors">
+                                    <div className="flex flex-col lg:flex-row lg:items-center p-4 sm:p-5 lg:px-6 gap-4 lg:gap-6">
+                                      
+                                      <div className="flex-1 min-w-[220px]">
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-300 font-bold border border-slate-700 shrink-0 shadow-inner">
+                                            {(emp.nombre || 'S').charAt(0).toUpperCase()}
+                                          </div>
+                                          <div>
+                                            <h4 className="font-bold text-white text-sm leading-tight">{emp.nombre}</h4>
+                                            <p className="text-xs text-slate-400 font-mono mt-0.5">{emp.rut}</p>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex-1 min-w-[180px]">
+                                        <div className="text-xs font-bold text-amber-400 mb-1 line-clamp-1 flex items-center gap-1.5"><i data-lucide="briefcase" className="w-3.5 h-3.5"></i> {emp.cargo || 'SIN CARGO'}</div>
+                                        <div className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
+                                          <i data-lucide="map-pin" className="w-3.5 h-3.5"></i> {emp.ciudad}
+                                        </div>
+                                      </div>
+
+                                      <div className="flex-1 min-w-[200px] space-y-2 border-l border-slate-800 pl-4 lg:border-none lg:pl-0">
+                                        <div className="flex items-center gap-2 text-xs">
+                                          <i data-lucide="phone" className="w-3.5 h-3.5 text-slate-500 shrink-0"></i>
+                                          {emp.telefono ? (
+                                            <button onClick={() => setSelectedPhone(emp.telefono)} className="text-slate-200 hover:text-amber-400 font-mono font-semibold transition-colors truncate">{emp.telefono}</button>
+                                          ) : <span className="text-slate-500 italic">Sin teléfono personal</span>}
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs">
+                                          <i data-lucide="shield-plus" className="w-3.5 h-3.5 text-red-400 shrink-0"></i>
+                                          {emp.emergenciaFono ? (
+                                            <div className="truncate">
+                                              <span className="text-slate-400 mr-1">{emp.emergenciaNombre}:</span>
+                                              <button onClick={() => setSelectedPhone(emp.emergenciaFono)} className="text-slate-300 hover:text-red-400 font-mono font-bold transition-colors">{emp.emergenciaFono}</button>
+                                            </div>
+                                          ) : <span className="text-slate-500 italic">Sin contacto de emergencia</span>}
+                                        </div>
+                                      </div>
+
+                                      <div className="w-full lg:w-48 flex flex-row lg:flex-col items-center justify-between lg:justify-center gap-3 pt-4 lg:pt-0 border-t border-slate-800 lg:border-none shrink-0">
+                                        {missing.length > 0 ? (
+                                          <div className="flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2.5 py-1 rounded-md text-[10px] font-bold border border-red-500/20 w-full lg:justify-center">
+                                            <i data-lucide="alert-triangle" className="w-3 h-3"></i> {missing.length} Alertas doc.
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-md text-[10px] font-bold border border-emerald-500/20 w-full lg:justify-center">
+                                            <i data-lucide="check-circle" className="w-3 h-3"></i> Ficha Completa
+                                          </div>
+                                        )}
+
+                                        <div className="flex items-center gap-2 w-full lg:justify-center">
+                                          <button onClick={() => { setSelectedEmpForHistory(emp); setIsHistoryModalOpen(true); }} className="p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg transition-colors group relative border border-slate-700" title="Ver Bitácora de Observaciones">
+                                            <i data-lucide="book-open" className="w-4 h-4"></i>
+                                            {emp.historial && emp.historial.length > 0 && <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-slate-950 border border-slate-900">{emp.historial.length}</span>}
+                                          </button>
+                                          <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors border border-slate-700" title="Editar Expediente">
+                                            <i data-lucide="edit-2" className="w-4 h-4"></i>
+                                          </button>
+                                          {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
+                                            <button onClick={() => handleDelete(emp.id)} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors border border-red-500/20" title="Eliminar Registro">
+                                              <i data-lucide="trash" className="w-4 h-4"></i>
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </main>
+                
+                <nav className="lg:hidden bg-slate-900/90 backdrop-blur border-t border-slate-800 flex justify-around p-2 pb-safe z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
+                  <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 rounded-xl text-[10px] font-bold transition-all ${activeTab === 'dashboard' ? 'text-amber-500 bg-amber-500/10' : 'text-slate-500 hover:text-slate-300'}`}>
+                    <i data-lucide="layout-dashboard" className="w-5 h-5 mb-1"></i>
+                    Panel Gerencial
+                  </button>
+                  <button onClick={() => setActiveTab('directorio')} className={`flex flex-col items-center p-2 rounded-xl text-[10px] font-bold transition-all ${activeTab === 'directorio' ? 'text-amber-500 bg-amber-500/10' : 'text-slate-500 hover:text-slate-300'}`}>
+                    <i data-lucide="users" className="w-5 h-5 mb-1"></i>
+                    Personal
+                  </button>
+                </nav>
               </div>
 
-              {/* MODAL GESTIÓN DE TRABAJADOR */}
-              {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-                  <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
-                    <h3 className="font-bold text-lg text-white mb-4">Registrar / Editar Trabajador</h3>
-                    <form onSubmit={handleSave} className="space-y-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-400 mb-1">Nombre Completo</label>
-                        <input required value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-400 mb-1">RUT</label>
-                        <input required value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-400 mb-1">Cargo</label>
-                        <input value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white" />
-                      </div>
-                      <div className="flex justify-end gap-2 pt-4">
-                        <button type="button" onClick={() => setIsModalOpen(false)} className="bg-slate-800 px-4 py-2 rounded-xl text-xs font-bold">Cancelar</button>
-                        <button type="submit" className="bg-amber-500 text-slate-950 px-5 py-2 rounded-xl text-xs font-bold">Guardar en la Nube</button>
-                      </div>
-                    </form>
+              {selectedPhone && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md fade-in">
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-8 shadow-2xl flex flex-col items-center text-center">
+                    <div className="w-20 h-20 bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl flex items-center justify-center text-amber-500 mb-5 border border-slate-700 shadow-inner">
+                      <i data-lucide="phone-call" className="w-10 h-10"></i>
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-1 tracking-tight">Menú de Contacto</h3>
+                    <p className="text-2xl font-mono text-amber-400 font-extrabold mb-8 tracking-wider bg-slate-950 px-4 py-2 rounded-xl border border-slate-800">{selectedPhone}</p>
+                    
+                    <div className="w-full space-y-3">
+                      <a href={`tel:${selectedPhone}`} className="w-full flex items-center justify-center gap-3 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold transition-colors shadow-lg shadow-blue-500/20">
+                        <i data-lucide="phone" className="w-5 h-5"></i> Llamada Telefónica
+                      </a>
+                      <a href={`https://wa.me/${selectedPhone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-3 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold transition-colors shadow-lg shadow-emerald-500/20">
+                        <i data-lucide="message-circle" className="w-5 h-5"></i> Enviar WhatsApp
+                      </a>
+                      <a href={`sms:${selectedPhone}`} className="w-full flex items-center justify-center gap-3 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-sm font-bold transition-colors">
+                        <i data-lucide="message-square" className="w-5 h-5"></i> Mensaje SMS
+                      </a>
+                    </div>
+                    
+                    <button onClick={() => setSelectedPhone(null)} className="mt-8 text-sm text-slate-500 hover:text-slate-300 font-bold px-4 py-2 uppercase tracking-widest transition-colors">
+                      Cancelar y Cerrar
+                    </button>
                   </div>
                 </div>
               )}
+
+              {isModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-md fade-in">
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
+                    
+                    <div className="flex justify-between items-center px-6 py-5 border-b border-slate-800 bg-slate-900">
+                      <h3 className="font-extrabold text-base text-white flex items-center gap-2.5">
+                        <div className="p-1.5 bg-amber-500/10 text-amber-500 rounded-lg">
+                          <i data-lucide={currentEmployee ? "user-cog" : "user-plus"} className="w-5 h-5"></i>
+                        </div>
+                        {currentEmployee ? 'Actualizar Ficha de Trabajador' : 'Ingreso de Nuevo Trabajador'}
+                      </h3>
+                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors"><i data-lucide="x" className="w-5 h-5"></i></button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-6 scroll-smooth bg-slate-950/30">
+                      {formError && <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-center gap-2.5 font-medium"><i data-lucide="alert-octagon" className="w-5 h-5"></i>{formError}</div>}
+                      
+                      <form id="employeeForm" onSubmit={handleSave} className="space-y-8">
+                        <section className="space-y-5 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
+                          <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest flex items-center gap-2"><i data-lucide="user" className="w-4 h-4"></i> Información Personal y Laboral</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-400 mb-2">Nombre Completo *</label>
+                              <input required placeholder="Ej: Juan Pérez" value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all shadow-inner" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-400 mb-2">RUT / Identificador *</label>
+                              <input required placeholder="12.345.678-9" value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all font-mono shadow-inner" />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-400 mb-2">Cargo / Función Operativa *</label>
+                            <div className="relative">
+                              <select value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full appearance-none bg-slate-950 border border-slate-700 rounded-xl pl-4 pr-10 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all font-medium shadow-inner cursor-pointer">
+                                <option value="OPERADOR CARGADOR FRONTAL">OPERADOR CARGADOR FRONTAL</option>
+                                <option value="OPERADOR GRUA HORQUILLA">OPERADOR GRUA HORQUILLA</option>
+                                <option value="SUPERVISOR TURNO">SUPERVISOR TURNO</option>
+                                <option value="MECANICO FAENA">MECÁNICO FAENA</option>
+                                <option value="ADMINISTRATIVO FAENA">ADMINISTRATIVO FAENA</option>
+                                <option value="ADMINISTRADOR DE CONTRATO">ADMINISTRADOR DE CONTRATO</option>
+                                <option value="PREVENCIONISTA DE RIESGOS">PREVENCIONISTA DE RIESGOS</option>
+                              </select>
+                              <i data-lucide="chevron-down" className="w-5 h-5 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-400 mb-2">Ciudad / Faena Base</label>
+                              <div className="relative">
+                                <select value={formData.ciudad} onChange={e=>setFormData({...formData, ciudad:e.target.value})} className="w-full appearance-none bg-slate-950 border border-slate-700 rounded-xl pl-4 pr-10 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all shadow-inner cursor-pointer">
+                                  {citiesList.map(c=><option key={c} value={c}>{c}</option>)}
+                                </select>
+                                <i data-lucide="chevron-down" className="w-5 h-5 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-400 mb-2">Añadir Nueva Ciudad (Opcional)</label>
+                              <div className="flex gap-2">
+                                <input placeholder="Nombre ciudad..." value={newCityInput} onChange={e=>setNewCityInput(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 shadow-inner" />
+                                <button type="button" onClick={()=>{if(newCityInput){setCitiesList([...citiesList, newCityInput]);setFormData({...formData, ciudad:newCityInput});setNewCityInput('');}}} className="px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-colors">Agregar</button>
+                              </div>
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="space-y-5 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
+                          <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest flex items-center gap-2"><i data-lucide="contact" className="w-4 h-4"></i> Contacto y Emergencia</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-400 mb-2">Teléfono Personal</label>
+                              <div className="relative">
+                                <i data-lucide="phone" className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                                <input placeholder="+569..." value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all font-mono shadow-inner" />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-400 mb-2">Correo Electrónico</label>
+                              <div className="relative">
+                                <i data-lucide="mail" className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                                <input placeholder="usuario@empresa.cl" type="email" value={formData.correo} onChange={e=>setFormData({...formData, correo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all shadow-inner" />
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-red-500/5 p-5 rounded-xl border border-red-500/20 space-y-4">
+                            <h5 className="text-xs font-bold text-red-400 flex items-center gap-2 uppercase tracking-widest"><i data-lucide="shield-plus" className="w-4 h-4"></i> Aviso de Emergencia</h5>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase">Nombre del Contacto</label>
+                                <input placeholder="Familiar o cercano..." value={formData.emergenciaNombre} onChange={e=>setFormData({...formData, emergenciaNombre:e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-red-500 shadow-inner" />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase">Teléfono de Emergencia</label>
+                                <input placeholder="+569..." value={formData.emergenciaFono} onChange={e=>setFormData({...formData, emergenciaFono:e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-red-500 font-mono shadow-inner" />
+                              </div>
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="space-y-4 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
+                          <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest flex items-center gap-2"><i data-lucide="file-check" className="w-4 h-4"></i> Documentación y Cumplimiento S.S.O.</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <RequisitoToggle label="Contrato Firmado" icon="file-signature" checked={formData.documentos?.contrato ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), contrato: e.target.checked }})} />
+                            <RequisitoToggle label="Inducción S.S.O. Realizada" icon="presentation" checked={formData.documentos?.induccion ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), induccion: e.target.checked }})} />
+                            <RequisitoToggle label="Exámenes Ocupacionales al día" icon="stethoscope" checked={formData.documentos?.examenes ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), examenes: e.target.checked }})} />
+                            <RequisitoToggle label="Entrega de EPP Registrada" icon="hard-hat" checked={formData.documentos?.epp ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), epp: e.target.checked }})} />
+                          </div>
+                        </section>
+
+                      </form>
+                    </div>
+
+                    <div className="px-6 py-5 border-t border-slate-800 bg-slate-900 flex justify-end gap-3">
+                      <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-colors text-sm">Cancelar</button>
+                      <button form="employeeForm" type="submit" className="px-8 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-colors text-sm flex items-center gap-2"><i data-lucide="save" className="w-4 h-4"></i> Guardar Expediente</button>
+                    </div>
+
+                  </div>
+                </div>
+              )}
+
             </div>
           );
         }
 
-        // Arranque Seguro de la Aplicación
+        // Arranque Seguro de la Aplicación (Garantiza que no exista pantalla azul/negra)
         window.addEventListener('load', () => {
             const container = document.getElementById('root');
             if (container) {
