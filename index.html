@@ -52,12 +52,12 @@
           const [selectedPhone, setSelectedPhone] = useState(null);
           
           const [userSession, setUserSession] = useState({
-            nombre: "Administrador / RRHH",
+            nombre: "María Gómez (Administrativo / RRHH)",
             rol: "Administrativo"
           });
 
           const [formData, setFormData] = useState({
-            nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '',
+            nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '',
             documentos: { contrato: true, induccion: true, examenes: true, epp: true }
           });
 
@@ -70,7 +70,9 @@
             customTipo: '',
             nota: '',
             archivoNombre: '',
-            archivoUrl: ''
+            archivoUrl: '',
+            autorBitacora: 'Juan Pérez (Supervisor)',
+            rolBitacora: 'Supervisor'
           });
 
           const fileInputRef = useRef(null);
@@ -100,7 +102,6 @@
             downloadAnchor.remove();
           };
 
-          // ELIMINACIÓN MASIVA DE TODA LA BASE DE DATOS
           const handleDeleteAllData = async () => {
             if (userSession.rol !== 'Administrativo') {
               alert("Solo el Administrador puede realizar un borrado masivo.");
@@ -125,7 +126,6 @@
             }
           };
 
-          // CARGA INTELIGENTE CON DETECCIÓN DE DUPLICADOS POR RUT Y EXTRACCIÓN DE EMERGENCIA
           const handleUploadExcel = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -174,7 +174,7 @@
                             rut: rut || 'Sin RUT',
                             direccion: direccion || '',
                             ciudad: ciudad,
-                            cargo: cargo || 'OPERADOR',
+                            cargo: cargo || 'OPERADOR GRUA HORQUILLA',
                             telefono: telefono,
                             correo: correo,
                             emergenciaNombre: emergenciaNombre,
@@ -246,8 +246,8 @@
               nota: logForm.nota,
               archivoNombre: logForm.archivoNombre,
               archivoUrl: logForm.archivoUrl,
-              autor: userSession.nombre,
-              rolAutor: userSession.rol,
+              autor: logForm.autorBitacora,
+              rolAutor: logForm.rolBitacora,
               createdAt: new Date().toISOString()
             };
 
@@ -267,7 +267,9 @@
                 customTipo: '',
                 nota: '',
                 archivoNombre: '',
-                archivoUrl: ''
+                archivoUrl: '',
+                autorBitacora: userSession.nombre,
+                rolBitacora: userSession.rol
               });
               alert("Bitácora registrada con éxito.");
             } catch (error) {
@@ -289,9 +291,7 @@
             return missing;
           };
 
-          // ORDENAMIENTO ALFABÉTICO ESTRICTO DE LA A A LA Z Y ELIMINACIÓN INTERNA DE DUPLICADOS
           const filtered = useMemo(() => {
-            // Filtrar duplicados internamente por RUT limpio
             const seenRuts = new Set();
             const uniqueEmployees = [];
             for (const emp of employees) {
@@ -528,7 +528,7 @@
                       </div>
                     )}
 
-                    {/* DIRECTORIO Y BITÁCORA ORDENADO DE A A LA Z SIN DUPLICADOS */}
+                    {/* DIRECTORIO Y BITÁCORA ORDENADO DE A A LA Z */}
                     {activeTab === 'directorio' && (
                       <div className="space-y-3">
                         <div className="relative">
@@ -573,7 +573,7 @@
                           <button 
                             onClick={() => {
                               setCurrentEmployee(null);
-                              setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0], cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '', documentos: { contrato: true, induccion: true, examenes: true, epp: true }});
+                              setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0], cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '', documentos: { contrato: true, induccion: true, examenes: true, epp: true }});
                               setIsModalOpen(true);
                             }} 
                             className="bg-amber-600 hover:bg-amber-700 text-white py-3 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all"
@@ -594,7 +594,7 @@
                           </div>
                         )}
 
-                        {/* LISTADO DE TRABAJADORES ORDENADOS ALFABÉTICAMENTE A-Z */}
+                        {/* LISTADO DE TRABAJADORES ORDENADOS ALFABÉTICAMENTE A-Z SIN DUPLICADOS */}
                         <div className="space-y-3 mt-3">
                           {filtered.length === 0 ? (
                             <div className="p-8 text-center text-slate-500 text-xs bg-slate-900 rounded-2xl border border-slate-800">No se encontraron registros.</div>
@@ -699,7 +699,7 @@
                 </div>
               )}
 
-              {/* MODAL NUEVO / EDITAR */}
+              {/* MODAL NUEVO / EDITAR CON DESPLEGABLE COMPLETO DE CARGOS */}
               {isModalOpen && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-lg border border-slate-800 space-y-3 my-auto max-h-[90vh] overflow-y-auto">
@@ -718,8 +718,20 @@
                         <input required placeholder="12.345.678-9" value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs outline-none focus:border-amber-500" />
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold">Cargo / Faena</label>
-                        <input placeholder="Ej: Supervisor, Operador Grúa..." value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs outline-none focus:border-amber-500" />
+                        <label className="text-[10px] text-slate-400 font-bold">Cargo / Faena *</label>
+                        <select 
+                          value={formData.cargo} 
+                          onChange={e=>setFormData({...formData, cargo:e.target.value})} 
+                          className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs outline-none focus:border-amber-500 font-medium"
+                        >
+                          <option value="ADMINISTRADOR DE CONTRATO">ADMINISTRADOR DE CONTRATO</option>
+                          <option value="SUPERVISOR DE FAENA">SUPERVISOR DE FAENA</option>
+                          <option value="PREVENCIONISTA DE RIESGOS">PREVENCIONISTA DE RIESGOS</option>
+                          <option value="ADMINISTRATIVO / RRHH">ADMINISTRATIVO / RRHH</option>
+                          <option value="OPERADOR GRUA HORQUILLA">OPERADOR GRUA HORQUILLA</option>
+                          <option value="OPERADOR CARGADOR FRONTAL">OPERADOR CARGADOR FRONTAL</option>
+                          <option value="MECANICO">MECÁNICO</option>
+                        </select>
                       </div>
                       <div>
                         <label className="text-[10px] text-slate-400 font-bold">Ciudad</label>
@@ -787,7 +799,7 @@
                 </div>
               )}
 
-              {/* MODAL BITÁCORA / HOJA DE VIDA */}
+              {/* MODAL BITÁCORA / HOJA DE VIDA CON SELECTOR DE QUIEN INGRESA LA OBSERVACIÓN (SUPERVISOR, ADMIN, PREVENCIÓN) */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-lg border border-slate-800 space-y-3 my-auto max-h-[90vh] overflow-y-auto">
@@ -835,6 +847,27 @@
                     <form onSubmit={handleAddLog} className="space-y-2.5 text-xs pt-3 border-t border-slate-800">
                       <div className="text-[11px] font-bold text-amber-400">Agregar Evento a la Hoja de Vida:</div>
                       
+                      {/* DESPLEGABLE DE QUIEN INGRESA LA OBSERVACIÓN */}
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Rol y Responsable)</label>
+                        <select 
+                          value={logForm.rolBitacora} 
+                          onChange={e => {
+                            const rol = e.target.value;
+                            let nombre = "Juan Pérez (Supervisor)";
+                            if (rol === "Administrativo") nombre = "María Gómez (Administrativo / RRHH)";
+                            if (rol === "Prevencionista") nombre = "Carlos Ruiz (Prevencionista)";
+                            if (rol === "Supervisor") nombre = "Juan Pérez (Supervisor de Faena)";
+                            setLogForm({...logForm, rolBitacora: rol, autorBitacora: nombre});
+                          }} 
+                          className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold text-xs"
+                        >
+                          <option value="Supervisor">Supervisor de Faena</option>
+                          <option value="Administrativo">Administrativo / RRHH</option>
+                          <option value="Prevencionista">Prevencionista de Riesgos</option>
+                        </select>
+                      </div>
+
                       <div>
                         <label className="text-[10px] text-slate-400 font-bold">Tipo de Evento</label>
                         <select 
