@@ -101,6 +101,7 @@
             downloadAnchor.remove();
           };
 
+          // Lector avanzado de Excel adaptado para extraer también el Contacto de Emergencia
           const handleUploadExcel = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -131,6 +132,8 @@
                       const ciudad = findVal(['ciudad', 'comuna', 'ubicacion']) || 'Valdivia';
                       const telefono = findVal(['telefono', 'fono', 'celular', 'contacto', 'sms']);
                       const correo = findVal(['correo', 'email', 'mail']);
+                      const emergenciaNombre = findVal(['emergencia', 'contacto_emergencia', 'avisar_a']);
+                      const emergenciaFono = findVal(['fono_emergencia', 'telefono_emergencia', 'emergencia_fono']);
 
                       if (nombre || rut) {
                         await db.collection('employees').add({
@@ -140,14 +143,14 @@
                           ciudad: ciudad,
                           telefono: telefono,
                           correo: correo,
-                          emergenciaNombre: '',
-                          emergenciaFono: '',
+                          emergenciaNombre: emergenciaNombre,
+                          emergenciaFono: emergenciaFono,
                           documentos: { contrato: true, induccion: true, examenes: true, epp: true },
                           historial: []
                         });
                       }
                     }
-                    alert("¡Carga masiva completada!");
+                    alert("¡Carga masiva completada con éxito!");
                   }
                 }
               } catch (err) {
@@ -369,7 +372,7 @@
                   <div className="text-center py-20 text-slate-500">Cargando base de datos...</div>
                 ) : (
                   <>
-                    {/* PANEL GERENCIAL CON TODAS LAS TARJETAS INTERACTIVAS */}
+                    {/* PANEL GERENCIAL */}
                     {activeTab === 'dashboard' && (
                       <div className="space-y-4 pt-2">
                         <div className="bg-slate-900/80 p-4 rounded-3xl border border-slate-800 space-y-2">
@@ -377,7 +380,6 @@
                           <p className="text-[11px] text-slate-400">Haz clic en cualquier tarjeta para ver inmediatamente el personal filtrado.</p>
                         </div>
 
-                        {/* GRILLA DE TARJETAS IDÉNTICA A LAS IMÁGENES */}
                         <div className="grid grid-cols-2 gap-3">
                           <div onClick={() => { setActiveFilter('TODOS'); setActiveTab('directorio'); }} className="bg-slate-900 p-4 rounded-2xl border border-amber-500/80 cursor-pointer shadow-lg hover:border-amber-400 transition-all">
                             <span className="text-slate-400 text-xs font-medium block">Total Dotación</span>
@@ -434,7 +436,6 @@
                           </div>
                         </div>
 
-                        {/* DISTRIBUCIÓN LOGÍSTICA POR CIUDAD */}
                         <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800 space-y-3 shadow-xl">
                           <h3 className="font-bold text-sm text-white">Distribución Logística por Ciudad</h3>
                           <p className="text-[11px] text-slate-400">Haz clic en una ciudad para ver el personal asignado.</p>
@@ -457,7 +458,6 @@
                           </div>
                         </div>
 
-                        {/* ALERTAS DE CUMPLIMIENTO */}
                         <div onClick={() => { setActiveFilter('INCOMPLETOS'); setActiveTab('directorio'); }} className="bg-slate-900 p-5 rounded-3xl border border-slate-800 space-y-3 shadow-xl cursor-pointer hover:border-red-500 transition-all">
                           <h3 className="font-bold text-sm text-white flex items-center gap-2">
                             ⚠️ Alertas de Cumplimiento BRAMAQ
@@ -485,7 +485,6 @@
                           />
                         </div>
 
-                        {/* FILTRO ACTIVO */}
                         {activeFilter !== 'TODOS' && (
                           <div className="bg-amber-950/60 border border-amber-900 px-4 py-2 rounded-2xl flex justify-between items-center text-xs">
                             <span className="text-amber-300 font-bold">Filtro activo: {activeFilter} ({filtered.length} resultados)</span>
@@ -493,7 +492,6 @@
                           </div>
                         )}
 
-                        {/* 4 BOTONES PRINCIPALES */}
                         <div className="grid grid-cols-2 gap-2">
                           <button 
                             onClick={() => setIsGlobalHistoryOpen(true)} 
@@ -527,7 +525,7 @@
                           </button>
                         </div>
 
-                        {/* LISTADO DE TRABAJADORES */}
+                        {/* LISTADO DE TRABAJADORES CON CONTACTO DE EMERGENCIA VISIBLE */}
                         <div className="space-y-3 mt-3">
                           {filtered.length === 0 ? (
                             <div className="p-8 text-center text-slate-500 text-xs bg-slate-900 rounded-2xl border border-slate-800">No se encontraron registros.</div>
@@ -546,6 +544,19 @@
                                     </span>
                                   </div>
 
+                                  {/* CONTACTO DE EMERGENCIA RECUPERADO DEL EXCEL */}
+                                  <div className="bg-slate-950 px-3 py-2 rounded-xl border border-slate-800 text-[11px] flex justify-between items-center">
+                                    <div>
+                                      <span className="text-slate-400 font-semibold">Emergencia: </span>
+                                      <span className="text-slate-200">{emp.emergenciaNombre || 'No registrado'}</span>
+                                    </div>
+                                    {emp.emergenciaFono && (
+                                      <button onClick={() => setSelectedPhone(emp.emergenciaFono)} className="text-amber-400 font-mono underline font-bold">
+                                        📞 {emp.emergenciaFono}
+                                      </button>
+                                    )}
+                                  </div>
+
                                   {missing.length > 0 && (
                                     <div className="bg-red-950/40 border border-red-900/60 p-2.5 rounded-xl text-[11px] space-y-1">
                                       <span className="text-red-400 font-bold block">⚠️ Falta información / documentos:</span>
@@ -560,7 +571,6 @@
                                   <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-800/80">
                                     <div className="text-slate-400 text-[11px] flex items-center gap-2">
                                       <span>📍 {emp.ciudad}</span>
-                                      {/* NÚMERO DE TELÉFONO INTERACTIVO */}
                                       {emp.telefono ? (
                                         <button 
                                           onClick={() => setSelectedPhone(emp.telefono)} 
@@ -596,11 +606,11 @@
                 )}
               </main>
 
-              {/* MODAL / MENÚ INTERACTIVO DE TELÉFONO (LLAMAR, SMS, WHATSAPP) */}
+              {/* MENÚ FLOTANTE INTERACTIVO DE TELÉFONO (LLAMAR, SMS, WHATSAPP) */}
               {selectedPhone && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                   <div className="bg-slate-900 p-6 rounded-3xl w-full max-w-sm border border-slate-800 space-y-4 shadow-2xl text-center">
-                    <h3 className="font-bold text-sm text-white">Opciones de Contacto</h3>
+                    <h3 className="font-bold text-sm text-white">Opciones de Contacto / Teléfono</h3>
                     <p className="text-xs font-mono text-amber-400">{selectedPhone}</p>
                     <div className="space-y-2 pt-2">
                       <a href={`tel:${selectedPhone}`} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow">
