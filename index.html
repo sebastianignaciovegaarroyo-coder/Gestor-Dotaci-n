@@ -3,16 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- ETIQUETAS PWA OBLIGATORIAS -->
-    <link rel="manifest" href="./manifest.json">
-    <meta name="theme-color" content="#020617">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="BRAMAQ">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3200/3200424.png">
-    
-    <title>Gestor de Dotación BRAMAQ - Enterprise</title>
+    <title>BRAMAQ Enterprise - Gestor de Dotación</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -21,27 +12,19 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    
-    <!-- REGISTRO DEL SERVICE WORKER AISLADO -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('PWA: Service Worker Registrado correctamente.', reg.scope))
-            .catch(err => console.log('PWA: Error al registrar Service Worker. La app web seguirá funcionando.', err));
-        });
-      }
-    </script>
-
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f1f5f9; }
+        
+        /* Custom Scrollbar for Enterprise feel */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        /* Smooth transitions */
         .glass-panel { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(30, 41, 59, 0.8); }
-        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        .fade-in { animation: fadeIn 0.2s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
@@ -49,33 +32,21 @@
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
-        
-        // CREDENCIALES REALES DE FIREBASE (Restauradas y seguras)
         const firebaseConfig = {
-          apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9Vr69wJz2vA...",
+          apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9V...",
           authDomain: "bramaqcloud.firebaseapp.com",
           projectId: "bramaqcloud",
           storageBucket: "bramaqcloud.appspot.com",
           messagingSenderId: "369713509600",
           appId: "1:369713509600:web:b6d878c..."
         };
-
         let db;
         try {
           if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();
-        } catch (e) { console.error("Error iniciando Firebase:", e); }
+        } catch (e) { console.error(e); }
 
         function App() {
-          const [deferredPrompt, setDeferredPrompt] = useState(null);
-          const [isInstallable, setIsInstallable] = useState(false);
-          const [isIOS, setIsIOS] = useState(false);
-          const [isStandalone, setIsStandalone] = useState(false);
-
-          const [hasEntered, setHasEntered] = useState(false);
-          const [gateProfile, setGateProfile] = useState('');
-          const [userSession, setUserSession] = useState({ rol: "" });
-
           const [employees, setEmployees] = useState([]);
           const [loading, setLoading] = useState(true);
           const [onlineStatus, setOnlineStatus] = useState(navigator.onLine);
@@ -94,6 +65,9 @@
           const [isGlobalHistoryOpen, setIsGlobalHistoryOpen] = useState(false);
 
           const [selectedPhone, setSelectedPhone] = useState(null);
+          
+          // LÓGICA DE PERFIL INTACTA
+          const [userSession, setUserSession] = useState({ rol: "Administrativo" });
 
           const [formData, setFormData] = useState({
             nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '',
@@ -109,58 +83,22 @@
 
           const [logForm, setLogForm] = useState({
             tipo: 'Licencia Médica', modoFechas: 'rango', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
-            customTipo: '', nota: '', archivos: [], 
-            autorBitacora: '', rolBitacora: ''
+            customTipo: '', nota: '', archivoNombre: '', archivoUrl: '', autorBitacora: 'Administrativo / RRHH', rolBitacora: 'Administrativo'
           });
 
+          // AISLAMIENTO ESTRICTO DE AUTORÍA EN BITÁCORA (Lógica Intacta)
           useEffect(() => {
-            const userAgent = window.navigator.userAgent.toLowerCase();
-            const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
-            setIsIOS(isIosDevice);
-
-            const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-            setIsStandalone(isDisplayStandalone);
-
-            const handleBeforeInstallPrompt = (e) => {
-              e.preventDefault();
-              setDeferredPrompt(e);
-              setIsInstallable(true);
-            };
-
-            window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-            window.addEventListener('appinstalled', () => {
-              setIsInstallable(false);
-              setDeferredPrompt(null);
-            });
-
-            return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-          }, []);
-
-          const handleInstallClick = async () => {
-            if (deferredPrompt) {
-              deferredPrompt.prompt();
-              const { outcome } = await deferredPrompt.userChoice;
-              if (outcome === 'accepted') setIsInstallable(false);
-              setDeferredPrompt(null);
-            }
-          };
-
-          const syncProfileLogic = (rolActivo) => {
-            if (rolActivo === 'Administrativo') {
+            if (userSession.rol === 'Administrativo') {
               setLogForm(prev => ({ ...prev, autorBitacora: 'Administrativo / RRHH', rolBitacora: 'Administrativo' }));
-            } else if (rolActivo === 'AdminContrato') {
+            } else if (userSession.rol === 'AdminContrato') {
               setLogForm(prev => ({ ...prev, autorBitacora: 'Administrador de Contrato', rolBitacora: 'AdminContrato' }));
-            } else if (rolActivo === 'Prevencionista') {
+            } else if (userSession.rol === 'Prevencionista') {
               setLogForm(prev => ({ ...prev, autorBitacora: 'Prevencionista de Riesgos', rolBitacora: 'Prevencionista' }));
-            } else if (rolActivo === 'Supervisor') {
+            } else if (userSession.rol === 'Supervisor') {
               const defaultSup = supervisorsList[0] || 'Briones Victor';
               setLogForm(prev => ({ ...prev, autorBitacora: defaultSup, rolBitacora: 'Supervisor' }));
             }
-          };
-
-          useEffect(() => {
-            if (hasEntered) syncProfileLogic(userSession.rol);
-          }, [userSession.rol, supervisorsList, hasEntered]);
+          }, [userSession.rol, supervisorsList]);
 
           const fileInputRef = useRef(null);
           const logFileRef = useRef(null);
@@ -168,111 +106,30 @@
           useEffect(() => {
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
             window.addEventListener('online', on); window.addEventListener('offline', off);
-            
-            if (!hasEntered || !db) return;
-            
-            setLoading(true);
+            if (!db) { setLoading(false); return; }
             const unsub = db.collection('employees').onSnapshot(snap => {
               const items = [];
               snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
-              setEmployees(items); 
-              setLoading(false);
-            }, (error) => {
-              console.error("Error cargando base de datos:", error);
-              setLoading(false);
-            });
+              setEmployees(items); setLoading(false);
+            }, () => setLoading(false));
             return () => { unsub(); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
-          }, [hasEntered]);
+          }, []);
 
+          // Renderizador constante de iconos Lucide
           useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
 
-          const handleEnterApp = () => {
-            if (!gateProfile) return;
-            setUserSession({ rol: gateProfile });
-            syncProfileLogic(gateProfile);
-            setHasEntered(true);
-          };
-
           const handleDownloadExcel = () => {
-            try {
-              if (!employees || employees.length === 0) {
-                alert("No hay trabajadores registrados en la base de datos para exportar.");
-                return;
-              }
-              const exportData = employees.map(emp => ({
-                "Nombre": emp.nombre || "",
-                "RUT": emp.rut || "",
-                "Cargo": emp.cargo || "",
-                "Ciudad": emp.ciudad || "",
-                "Dirección": emp.direccion || "",
-                "Teléfono": emp.telefono || "",
-                "Correo": emp.correo || "",
-                "Contacto de Emergencia": emp.emergenciaNombre || "",
-                "Teléfono Emergencia": emp.emergenciaFono || "",
-                "Contrato": emp.documentos?.contrato ? "Completo" : "Pendiente",
-                "Inducción S.S.O.": emp.documentos?.induccion ? "Completo" : "Pendiente",
-                "Exámenes Ocupacionales": emp.documentos?.examenes ? "Completo" : "Pendiente",
-                "EPP": emp.documentos?.epp ? "Completo" : "Pendiente"
-              }));
-
-              const ws = XLSX.utils.json_to_sheet(exportData);
-              const wb = XLSX.utils.book_new();
-              XLSX.utils.book_append_sheet(wb, ws, "Dotacion Completa");
-              const dateStr = new Date().toISOString().split('T')[0];
-              XLSX.writeFile(wb, `BRAMAQ_Dotacion_Completa_${dateStr}.xlsx`);
-              alert("Descarga realizada correctamente.");
-            } catch (error) {
-              alert("Error al generar la descarga: " + error.message);
-              console.error(error);
-            }
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(employees, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr); downloadAnchor.setAttribute("download", `bramaq_dotacion_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor); downloadAnchor.click(); downloadAnchor.remove();
           };
 
           const handleDownloadGlobalLogsExcel = () => {
-            try {
-              let logsToExport = [];
-              employees.forEach(emp => {
-                if (emp.historial && emp.historial.length > 0) {
-                  emp.historial.forEach(h => {
-                    let attachmentsText = "Ninguno";
-                    if (h.archivos && h.archivos.length > 0) {
-                      attachmentsText = h.archivos.map(a => a.nombre).join(", ");
-                    } else if (h.archivoNombre) {
-                      attachmentsText = h.archivoNombre; 
-                    }
-                    logsToExport.push({
-                      "Trabajador": emp.nombre || "Desconocido",
-                      "RUT": emp.rut || "",
-                      "Cargo": emp.cargo || "",
-                      "Tipo de Evento": h.tipo || "",
-                      "Fecha Inicio": h.fechaInicio || "",
-                      "Fecha Término": h.fechaTermino || "",
-                      "Observación": h.nota || "",
-                      "Autor": h.autor || "",
-                      "Perfil del Autor": h.rolAutor || "",
-                      "Fecha de Registro": new Date(h.createdAt || h.fechaInicio).toLocaleString('es-CL'),
-                      "Archivo Adjunto": attachmentsText
-                    });
-                  });
-                }
-              });
-
-              if (logsToExport.length === 0) {
-                alert("No hay registros ni observaciones en la bitácora para descargar.");
-                return;
-              }
-
-              logsToExport.sort((a, b) => new Date(b["Fecha de Registro"]) - new Date(a["Fecha de Registro"]));
-
-              const ws = XLSX.utils.json_to_sheet(logsToExport);
-              const wb = XLSX.utils.book_new();
-              XLSX.utils.book_append_sheet(wb, ws, "Hoja de Vida Global");
-              const dateStr = new Date().toISOString().split('T')[0];
-              XLSX.writeFile(wb, `BRAMAQ_Hoja_de_Vida_Global_${dateStr}.xlsx`);
-              alert("Descarga realizada correctamente.");
-            } catch (error) {
-              alert("Error al generar la descarga: " + error.message);
-              console.error(error);
-            }
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allGlobalLogs, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr); downloadAnchor.setAttribute("download", `bramaq_hoja_de_vida_global_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor); downloadAnchor.click(); downloadAnchor.remove();
           };
 
           const handleDeleteAllData = async () => {
@@ -356,71 +213,23 @@
             if (confirm("¿Eliminar este trabajador permanentemente del sistema?")) await db.collection('employees').doc(id).delete();
           };
 
-          const handleLogFileChange = (e) => {
-            const files = Array.from(e.target.files);
-            if (!files.length) return;
-
-            const newArchivos = [];
-            let processed = 0;
-
-            files.forEach(file => {
-              const reader = new FileReader();
-              reader.onload = (uploadEvent) => {
-                newArchivos.push({
-                  nombre: file.name,
-                  tipo: file.type,
-                  url: uploadEvent.target.result,
-                  fechaCarga: new Date().toISOString()
-                });
-                processed++;
-                if (processed === files.length) {
-                  setLogForm(prev => ({
-                    ...prev,
-                    archivos: [...(prev.archivos || []), ...newArchivos]
-                  }));
-                }
-              };
-              reader.readAsDataURL(file);
-            });
-            if (logFileRef.current) logFileRef.current.value = "";
-          };
-
-          const handleRemovePendingFile = (indexToRemove) => {
-            setLogForm(prev => ({
-              ...prev,
-              archivos: prev.archivos.filter((_, idx) => idx !== indexToRemove)
-            }));
-          };
-
-          const handleDeleteSavedAttachment = async (logId, attachmentIndex, isOldFormat) => {
-            if (!selectedEmpForHistory) return;
-            if (confirm("¿Está seguro de eliminar este archivo adjunto? (No eliminará la observación)")) {
-              try {
-                const updatedHistorial = selectedEmpForHistory.historial.map(h => {
-                  if (h.id === logId) {
-                    if (isOldFormat) {
-                      return { ...h, archivoUrl: '', archivoNombre: '' };
-                    } else {
-                      const newArchivos = h.archivos.filter((_, i) => i !== attachmentIndex);
-                      return { ...h, archivos: newArchivos };
-                    }
-                  }
-                  return h;
-                });
-                await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
-                setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
-              } catch (err) { alert("Error al eliminar archivo: " + err.message); }
-            }
-          };
-
           const handleDeleteLog = async (logId) => {
             if (!selectedEmpForHistory) return;
-            if (confirm("¿Estás seguro de eliminar completamente esta observación del historial?")) {
+            if (confirm("¿Estás seguro de eliminar esta observación del historial?")) {
               try {
                 const updatedHistorial = (selectedEmpForHistory.historial || []).filter(h => h.id !== logId);
                 await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
                 setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
-              } catch (err) { alert("Error al eliminar la bitácora: " + err.message); }
+              } catch (err) { alert("Error: " + err.message); }
+            }
+          };
+
+          const handleLogFileChange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (uploadEvent) => { setLogForm({ ...logForm, archivoNombre: file.name, archivoUrl: uploadEvent.target.result }); };
+              reader.readAsDataURL(file);
             }
           };
 
@@ -428,32 +237,24 @@
             e.preventDefault();
             if (!selectedEmpForHistory) return;
             const tipoFinal = logForm.tipo === 'Otro' ? (logForm.customTipo || 'Otro evento') : logForm.tipo;
-            
             const logEntry = {
-              id: String(Date.now()), 
-              tipo: String(tipoFinal), 
-              modoFechas: String(logForm.modoFechas),
+              id: String(Date.now()), tipo: String(tipoFinal), modoFechas: String(logForm.modoFechas),
               fechaInicio: String(logForm.modoFechas === 'rango' ? logForm.fechaInicio : logForm.fechaUnica),
               fechaTermino: String(logForm.modoFechas === 'rango' ? logForm.fechaTermino : logForm.fechaUnica),
-              nota: String(logForm.nota || ''), 
-              archivos: logForm.archivos || [], 
-              autor: String(logForm.autorBitacora), 
-              rolAutor: String(logForm.rolBitacora), 
-              createdAt: new Date().toISOString()
+              nota: String(logForm.nota || ''), archivoNombre: String(logForm.archivoNombre || ''), archivoUrl: String(logForm.archivoUrl || ''),
+              autor: String(logForm.autorBitacora), rolAutor: String(logForm.rolBitacora), createdAt: new Date().toISOString()
             };
 
             try {
               const updatedHistorial = [...(selectedEmpForHistory.historial || []), logEntry];
               await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
               setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
-              
               setLogForm({
                 tipo: 'Licencia Médica', modoFechas: 'rango', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
-                customTipo: '', nota: '', archivos: [],
+                customTipo: '', nota: '', archivoNombre: '', archivoUrl: '',
                 autorBitacora: userSession.rol === 'Supervisor' ? (supervisorsList[0] || '') : logForm.autorBitacora,
                 rolBitacora: userSession.rol
               });
-              alert("Bitácora registrada con éxito.");
             } catch (error) { alert("Error al registrar: " + error.message); }
           };
 
@@ -515,13 +316,14 @@
           const allGlobalLogs = useMemo(() => {
             let logs = [];
             employees.forEach(emp => {
-              if (emp.historial && emp.historial.length > 0) { emp.historial.forEach(h => { logs.push({ ...h, empleadoNombre: emp.nombre, empleadoRut: emp.rut, empleadoCargo: emp.cargo }); }); }
+              if (emp.historial && emp.historial.length > 0) { emp.historial.forEach(h => { logs.push({ ...h, empleadoNombre: emp.nombre, empleadoRut: emp.rut }); }); }
             });
-            return logs.sort((a, b) => new Date(b.createdAt || b.fechaInicio) - new Date(a.createdAt || a.fechaInicio));
+            return logs.sort((a, b) => new Date(b.fechaInicio || b.createdAt) - new Date(a.fechaInicio || a.createdAt));
           }, [employees]);
 
+          // Componente de Panel de Requisitos (Visual Toggle)
           const RequisitoToggle = ({ label, icon, checked, onChange }) => (
-            <label className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all cursor-pointer ${checked ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}>
+            <label className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${checked ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}>
                 <input type="checkbox" checked={checked} onChange={onChange} className="hidden" />
                 <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${checked ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 border border-slate-700'}`}>
                     {checked && <i data-lucide="check" className="w-3.5 h-3.5"></i>}
@@ -533,106 +335,46 @@
             </label>
           );
 
-          if (!hasEntered) {
-            return (
-              <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 selection:bg-amber-500/30 relative overflow-hidden">
-                <div className="absolute top-1/4 -left-32 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
-                <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none"></div>
-
-                <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800/80 p-8 sm:p-12 rounded-3xl w-full max-w-md shadow-2xl flex flex-col items-center fade-in z-10 relative">
-                  <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.2)] mb-6">
-                    <i data-lucide="hard-hat" className="w-10 h-10"></i>
-                  </div>
-                  <h1 className="text-2xl font-extrabold text-white mb-2 tracking-tight text-center">Gestor de Dotación</h1>
-                  <h2 className="text-lg font-bold text-amber-400 mb-2 tracking-widest uppercase">BRAMAQ</h2>
-                  <p className="text-sm text-slate-400 mb-8 text-center px-4 leading-relaxed">Seleccione su perfil para ingresar al sistema de gestión.</p>
-
-                  <div className="w-full space-y-6">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2.5 block px-1">Perfil Operativo</label>
-                      <div className="relative group">
-                        <select 
-                          value={gateProfile}
-                          onChange={e => setGateProfile(e.target.value)}
-                          className="w-full appearance-none bg-slate-950/80 border border-slate-800 hover:border-slate-700 rounded-xl px-4 py-4 text-sm font-semibold text-amber-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all cursor-pointer shadow-inner"
-                        >
-                          <option value="" disabled>-- Elija un perfil --</option>
-                          <option value="Administrativo">Administrativo / RRHH</option>
-                          <option value="AdminContrato">Administrador de Contrato</option>
-                          <option value="Supervisor">Supervisor</option>
-                          <option value="Prevencionista">Prevencionista</option>
-                        </select>
-                        <i data-lucide="chevron-down" className="w-5 h-5 text-slate-500 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-amber-500 transition-colors"></i>
-                      </div>
-                    </div>
-
-                    <button 
-                      disabled={!gateProfile}
-                      onClick={handleEnterApp}
-                      className={`w-full py-4 rounded-xl font-bold text-sm transition-all flex justify-center items-center gap-2 ${gateProfile ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.3)] cursor-pointer' : 'bg-slate-800/50 text-slate-500 cursor-not-allowed border border-slate-800'}`}
-                    >
-                      INGRESAR <i data-lucide="arrow-right" className="w-4 h-4"></i>
-                    </button>
-                    
-                    {isInstallable && (
-                      <button onClick={handleInstallClick} className="w-full py-3 rounded-xl font-semibold text-xs text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10 transition-colors flex items-center justify-center gap-2">
-                        <i data-lucide="download-cloud" className="w-4 h-4"></i> Instalar Aplicación BRAMAQ
-                      </button>
-                    )}
-                    {isIOS && !isStandalone && (
-                      <div className="w-full py-3 rounded-xl font-medium text-xs text-slate-400 border border-slate-800 bg-slate-900/50 flex flex-col items-center justify-center gap-1.5 text-center px-4">
-                        <span>Para instalar en iOS, toque Compartir <i data-lucide="share" className="w-3 h-3 inline text-slate-300 mx-0.5"></i></span>
-                        <span>y luego seleccione <strong>"Agregar a inicio"</strong></span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
           return (
             <div className="flex h-screen overflow-hidden bg-slate-950">
               
+              {/* SIDEBAR DESKTOP */}
               <aside className="hidden lg:flex flex-col w-64 bg-slate-900/50 backdrop-blur border-r border-slate-800 h-full z-10">
-                <div className="h-20 flex items-center px-6 border-b border-slate-800 justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-gradient-to-br from-amber-400 to-amber-600 p-2.5 rounded-xl text-slate-950 shadow-lg shadow-amber-500/20">
+                <div className="h-16 flex items-center px-6 border-b border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="bg-gradient-to-br from-amber-400 to-amber-600 p-2 rounded-lg text-slate-950 shadow-lg shadow-amber-500/20">
                       <i data-lucide="hard-hat" className="w-5 h-5"></i>
                     </div>
-                    <div>
-                      <div className="font-extrabold tracking-tight text-white text-base">BRAMAQ</div>
-                      <div className="text-[9px] text-amber-500 uppercase tracking-widest font-bold">Enterprise</div>
-                    </div>
+                    <span className="font-bold tracking-tight text-white text-lg">BRAMAQ</span>
                   </div>
                 </div>
                 
-                <div className="p-4 space-y-2 flex-1 overflow-y-auto">
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-4 px-2 mt-2">Menú Principal</div>
+                <div className="p-4 space-y-1.5 flex-1 overflow-y-auto">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3 px-2">Menú Principal</div>
                   
-                  <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm transition-all font-semibold ${activeTab === 'dashboard' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800/50 border border-transparent'}`}>
+                  <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all font-medium ${activeTab === 'dashboard' ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
                     <i data-lucide="layout-dashboard" className="w-4 h-4"></i> Panel Gerencial
                   </button>
-                  <button onClick={() => setActiveTab('directorio')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm transition-all font-semibold ${activeTab === 'directorio' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800/50 border border-transparent'}`}>
+                  <button onClick={() => setActiveTab('directorio')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all font-medium ${activeTab === 'directorio' ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
                     <i data-lucide="users" className="w-4 h-4"></i> Directorio y Bitácora
                   </button>
                   
-                  <div className="mt-8 pt-6 border-t border-slate-800">
-                    <div className="bg-slate-950/50 rounded-2xl p-4 border border-slate-800/80 space-y-4">
-                      <div className="flex items-center gap-2 px-1">
+                  <div className="mt-8">
+                    <div className="bg-slate-900/80 rounded-2xl p-4 border border-slate-800 space-y-3">
+                      <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full ${onlineStatus ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500 animate-pulse'}`}></span>
-                        <span className="text-xs font-semibold text-slate-300">{onlineStatus ? 'Conexión Segura' : 'Sin Conexión'}</span>
+                        <span className="text-xs font-semibold text-slate-300">{onlineStatus ? 'Conectado a Cloud' : 'Sin Conexión'}</span>
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Perfil Activo</label>
+                      <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Perfil Activo</label>
                         <div className="relative">
                           <select 
                             value={userSession.rol} 
                             onChange={e => setUserSession({ rol: e.target.value })} 
-                            className="w-full appearance-none bg-slate-900 border border-slate-700 text-amber-400 font-bold text-xs py-2.5 pl-3 pr-8 rounded-lg outline-none focus:border-amber-500 transition-colors cursor-pointer shadow-inner"
+                            className="w-full appearance-none bg-slate-950 border border-slate-700 text-amber-400 font-semibold text-xs py-2 pl-3 pr-8 rounded-lg outline-none focus:border-amber-500 transition-colors cursor-pointer"
                           >
                             <option value="Administrativo">Administrativo / RRHH</option>
-                            <option value="AdminContrato">Admin. de Contrato</option>
+                            <option value="AdminContrato">Administrador de Contrato</option>
                             <option value="Supervisor">Supervisor de Faena</option>
                             <option value="Prevencionista">Prevencionista</option>
                           </select>
@@ -644,10 +386,13 @@
                 </div>
               </aside>
 
+              {/* MAIN CONTENT AREA */}
               <div className="flex-1 flex flex-col h-screen relative">
+                
+                {/* HEADER (Mobile & General) */}
                 <header className="lg:hidden h-16 flex items-center justify-between px-4 sm:px-6 bg-slate-900/80 backdrop-blur border-b border-slate-800 z-30 sticky top-0">
                   <div className="flex items-center gap-2">
-                    <div className="bg-gradient-to-br from-amber-400 to-amber-600 p-1.5 rounded-lg text-slate-950">
+                    <div className="bg-gradient-to-br from-amber-400 to-amber-600 p-1.5 rounded-md text-slate-950">
                       <i data-lucide="hard-hat" className="w-4 h-4"></i>
                     </div>
                     <span className="font-bold text-white tracking-tight">BRAMAQ</span>
@@ -657,7 +402,7 @@
                     <select 
                       value={userSession.rol} 
                       onChange={e => setUserSession({ rol: e.target.value })} 
-                      className="bg-slate-950 border border-slate-700 text-amber-400 font-bold text-[10px] py-1.5 px-2 rounded-md outline-none focus:border-amber-500"
+                      className="bg-slate-950 border border-slate-700 text-amber-400 font-semibold text-[10px] py-1.5 px-2 rounded outline-none"
                     >
                       <option value="Administrativo">Administrativo</option>
                       <option value="AdminContrato">Admin. Contrato</option>
@@ -667,110 +412,111 @@
                   </div>
                 </header>
 
+                {/* SCROLLABLE MAIN */}
                 <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative scroll-smooth">
                   {loading ? (
                     <div className="flex flex-col items-center justify-center h-full space-y-4">
                       <i data-lucide="loader-2" className="w-10 h-10 text-amber-500 animate-spin"></i>
-                      <p className="text-sm text-slate-400 font-medium">Sincronizando plataforma corporativa...</p>
+                      <p className="text-sm text-slate-400 font-medium">Sincronizando plataforma empresarial...</p>
                     </div>
                   ) : (
-                    <div className="max-w-7xl mx-auto space-y-8 fade-in">
+                    <div className="max-w-6xl mx-auto space-y-6 fade-in">
                       
+                      {/* DASHBOARD (PANEL GERENCIAL) */}
                       {activeTab === 'dashboard' && (
                         <>
-                          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div>
-                              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Panel Gerencial</h1>
+                              <h1 className="text-2xl font-bold text-white tracking-tight">Panel Gerencial</h1>
                               <p className="text-sm text-slate-400 mt-1">Visión general y control estratégico de dotación.</p>
                             </div>
-                            <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-xl border border-emerald-500/20 text-xs font-bold">
-                              <i data-lucide="shield-check" className="w-4 h-4"></i> Datos en Línea
+                            <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-xl border border-emerald-500/20 text-xs font-semibold">
+                              <i data-lucide="shield-check" className="w-4 h-4"></i> Datos Sincronizados
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                            <div onClick={() => { setActiveFilter('TODOS'); setActiveTab('directorio'); }} className="glass-panel p-6 rounded-3xl hover:border-amber-500/50 cursor-pointer transition-all group">
+                          {/* MAIN KPIs */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div onClick={() => { setActiveFilter('TODOS'); setActiveTab('directorio'); }} className="glass-panel p-5 rounded-2xl hover:border-amber-500/50 cursor-pointer transition-all group">
                               <div className="flex items-start justify-between">
                                 <div>
-                                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Dotación Total</p>
-                                  <h3 className="text-4xl sm:text-5xl font-extrabold text-white mt-2">{kpis.total}</h3>
+                                  <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Dotación Total</p>
+                                  <h3 className="text-4xl font-extrabold text-white mt-1">{kpis.total}</h3>
                                 </div>
-                                <div className="bg-amber-500/10 text-amber-400 p-3.5 rounded-2xl group-hover:scale-110 transition-transform">
-                                  <i data-lucide="users" className="w-7 h-7"></i>
+                                <div className="bg-amber-500/10 text-amber-400 p-3 rounded-xl group-hover:scale-110 transition-transform">
+                                  <i data-lucide="users" className="w-6 h-6"></i>
                                 </div>
                               </div>
                             </div>
                             
-                            <div onClick={() => { setActiveFilter('INCOMPLETOS'); setActiveTab('directorio'); }} className="glass-panel p-6 rounded-3xl hover:border-red-500/50 cursor-pointer transition-all group relative overflow-hidden">
-                              <div className="absolute top-0 right-0 w-24 h-24 bg-red-500/5 rounded-bl-full -mr-8 -mt-8 pointer-events-none"></div>
+                            <div onClick={() => { setActiveFilter('INCOMPLETOS'); setActiveTab('directorio'); }} className="glass-panel p-5 rounded-2xl hover:border-red-500/50 cursor-pointer transition-all group relative overflow-hidden">
+                              <div className="absolute top-0 right-0 w-16 h-16 bg-red-500/10 rounded-bl-full -mr-8 -mt-8"></div>
                               <div className="flex items-start justify-between relative z-10">
                                 <div>
-                                  <p className="text-red-400 text-xs font-bold uppercase tracking-widest">Incompletos / Alerta</p>
-                                  <h3 className="text-4xl sm:text-5xl font-extrabold text-red-400 mt-2">{kpis.incompletos}</h3>
+                                  <p className="text-red-400 text-xs font-semibold uppercase tracking-wider">Incompletos / Alerta</p>
+                                  <h3 className="text-4xl font-extrabold text-red-400 mt-1">{kpis.incompletos}</h3>
                                 </div>
-                                <div className="bg-red-500/10 text-red-400 p-3.5 rounded-2xl group-hover:scale-110 transition-transform">
-                                  <i data-lucide="alert-triangle" className="w-7 h-7"></i>
+                                <div className="bg-red-500/10 text-red-400 p-3 rounded-xl group-hover:scale-110 transition-transform">
+                                  <i data-lucide="alert-triangle" className="w-6 h-6"></i>
                                 </div>
                               </div>
                             </div>
 
-                            <div onClick={() => { setActiveFilter('ADMIN_CONTRATO'); setActiveTab('directorio'); }} className="glass-panel p-6 rounded-3xl hover:border-blue-500/50 cursor-pointer transition-all group">
+                            <div onClick={() => { setActiveFilter('ADMIN_CONTRATO'); setActiveTab('directorio'); }} className="glass-panel p-5 rounded-2xl hover:border-blue-500/50 cursor-pointer transition-all group">
                               <div className="flex items-start justify-between">
                                 <div>
-                                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Admin. Contrato</p>
-                                  <h3 className="text-4xl sm:text-5xl font-extrabold text-blue-400 mt-2">{kpis.adminContrato}</h3>
+                                  <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Admin. Contrato</p>
+                                  <h3 className="text-4xl font-extrabold text-blue-400 mt-1">{kpis.adminContrato}</h3>
                                 </div>
-                                <div className="bg-blue-500/10 text-blue-400 p-3.5 rounded-2xl group-hover:scale-110 transition-transform">
-                                  <i data-lucide="briefcase" className="w-7 h-7"></i>
+                                <div className="bg-blue-500/10 text-blue-400 p-3 rounded-xl group-hover:scale-110 transition-transform">
+                                  <i data-lucide="briefcase" className="w-6 h-6"></i>
                                 </div>
                               </div>
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+                          {/* SECONDARY KPIs */}
+                          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
                             {[
                               { label: 'Supervisores', val: kpis.supervisores, icon: 'user-check', filter: 'SUPERVISORES', color: 'text-indigo-400' },
                               { label: 'Prevención', val: kpis.prevencionistas, icon: 'shield-alert', filter: 'PREVENCIONISTAS', color: 'text-emerald-400' },
                               { label: 'Administrativos', val: kpis.administrativos, icon: 'file-spreadsheet', filter: 'ADMINISTRATIVOS', color: 'text-purple-400' },
-                              { label: 'Op. Grúa', val: kpis.operadoresGrua, icon: 'truck', filter: 'OPERADORES_GRUA', color: 'text-sky-400' },
+                              { label: 'Operador Grúa', val: kpis.operadoresGrua, icon: 'truck', filter: 'OPERADORES_GRUA', color: 'text-sky-400' },
                               { label: 'Carg. Frontal', val: kpis.cargadorFrontal, icon: 'box', filter: 'CARGADOR_FRONTAL', color: 'text-yellow-400' },
                               { label: 'Mecánicos', val: kpis.mecanicos, icon: 'wrench', filter: 'MECANICOS', color: 'text-stone-400' }
                             ].map(item => (
-                              <div key={item.label} onClick={() => { setActiveFilter(item.filter); setActiveTab('directorio'); }} className="glass-panel p-5 rounded-2xl hover:bg-slate-800/80 cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-3 group">
-                                <div className={`p-2.5 rounded-xl bg-slate-900 border border-slate-800 group-hover:border-slate-600 transition-colors`}>
-                                  <i data-lucide={item.icon} className={`w-5 h-5 ${item.color}`}></i>
-                                </div>
-                                <div>
-                                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{item.label}</div>
-                                  <div className={`text-2xl font-extrabold ${item.color} mt-0.5`}>{item.val}</div>
-                                </div>
+                              <div key={item.label} onClick={() => { setActiveFilter(item.filter); setActiveTab('directorio'); }} className="glass-panel p-4 rounded-2xl hover:bg-slate-800/50 cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-2 group">
+                                <i data-lucide={item.icon} className={`w-5 h-5 ${item.color} group-hover:scale-110 transition-transform`}></i>
+                                <span className="text-[10px] text-slate-400 font-semibold uppercase">{item.label}</span>
+                                <span className={`text-xl font-bold ${item.color}`}>{item.val}</span>
                               </div>
                             ))}
                           </div>
 
-                          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                            <div className="xl:col-span-2 glass-panel p-6 sm:p-8 rounded-3xl">
-                              <div className="flex justify-between items-end mb-6 border-b border-slate-800 pb-4">
-                                <div>
-                                  <h3 className="font-bold text-base text-white flex items-center gap-2">
-                                    <i data-lucide="map" className="w-5 h-5 text-amber-500"></i> Distribución Logística Operativa
-                                  </h3>
-                                </div>
+                          {/* LOGISTICS & ALERTS */}
+                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            
+                            <div className="lg:col-span-2 glass-panel p-6 rounded-3xl">
+                              <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+                                <h3 className="font-bold text-white flex items-center gap-2">
+                                  <i data-lucide="map" className="w-5 h-5 text-amber-500"></i> Distribución Logística Operativa
+                                </h3>
+                                <span className="text-xs font-semibold px-2.5 py-1 bg-slate-900 rounded-lg text-slate-400">{citiesList.length} Zonas</span>
                               </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
+                              <div className="space-y-4">
                                 {citiesList.map(city => {
                                   const count = kpis.porCiudad[city] || 0;
                                   const maxCount = Math.max(...Object.values(kpis.porCiudad), 1);
                                   const percentage = Math.round((count / maxCount) * 100);
-                                  if (count === 0) return null; 
+                                  if (count === 0) return null; // Hide empty cities for cleaner UI
                                   return (
                                     <div key={city} onClick={() => { setActiveFilter(city); setActiveTab('directorio'); }} className="cursor-pointer group">
-                                      <div className="flex justify-between text-xs mb-2">
-                                        <span className="text-slate-300 font-semibold group-hover:text-amber-400 transition-colors">{city}</span>
-                                        <span className="font-bold text-slate-400 bg-slate-900 px-2 rounded">{count} Pers.</span>
+                                      <div className="flex justify-between text-xs mb-1.5">
+                                        <span className="text-slate-300 font-medium group-hover:text-amber-400 transition-colors">{city}</span>
+                                        <span className="font-bold text-slate-400">{count} Personal</span>
                                       </div>
-                                      <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800/50">
-                                        <div className="bg-gradient-to-r from-amber-600 to-amber-400 h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }}></div>
+                                      <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden">
+                                        <div className="bg-amber-500 h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }}></div>
                                       </div>
                                     </div>
                                   );
@@ -778,151 +524,151 @@
                               </div>
                             </div>
 
-                            <div className="glass-panel p-6 sm:p-8 rounded-3xl flex flex-col">
-                              <h3 className="font-bold text-base text-white flex items-center gap-2 mb-6 border-b border-slate-800 pb-4">
-                                <i data-lucide="bell-ring" className="w-5 h-5 text-red-400"></i> Alertas de Cumplimiento
+                            <div className="glass-panel p-6 rounded-3xl flex flex-col">
+                              <h3 className="font-bold text-white flex items-center gap-2 mb-6 border-b border-slate-800 pb-4">
+                                <i data-lucide="bell-ring" className="w-5 h-5 text-red-400"></i> Alertas y Auditoría
                               </h3>
-                              <div onClick={() => { setActiveFilter('INCOMPLETOS'); setActiveTab('directorio'); }} className="flex-1 bg-gradient-to-b from-red-500/10 to-transparent border border-red-500/20 rounded-2xl p-6 cursor-pointer hover:border-red-500/40 transition-all flex flex-col justify-center text-center group">
-                                <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center mb-4 text-red-400 mx-auto border border-red-500/20 group-hover:scale-110 transition-transform">
-                                  <i data-lucide="clipboard-x" className="w-7 h-7"></i>
+                              <div onClick={() => { setActiveFilter('INCOMPLETOS'); setActiveTab('directorio'); }} className="flex-1 bg-red-500/5 border border-red-500/20 rounded-2xl p-5 cursor-pointer hover:bg-red-500/10 transition-colors flex flex-col justify-center">
+                                <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4 text-red-500 mx-auto">
+                                  <i data-lucide="clipboard-x" className="w-6 h-6"></i>
                                 </div>
-                                <h4 className="text-red-400 font-extrabold text-xl mb-2">{kpis.incompletos} Pendientes</h4>
-                                <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
-                                  Registros con faltantes en documentación, contactos de emergencia o teléfonos requeridos.
-                                </p>
+                                <div className="text-center space-y-2">
+                                  <p className="text-red-400 font-bold text-lg">{kpis.incompletos} Registros Pendientes</p>
+                                  <p className="text-xs text-slate-400 leading-relaxed">Faltan datos obligatorios de contacto, emergencia o requisitos S.S.O.</p>
+                                  <p className="text-[10px] text-red-400 font-semibold uppercase tracking-wider pt-2">Click para regularizar →</p>
+                                </div>
                               </div>
                             </div>
+
                           </div>
                         </>
                       )}
 
+                      {/* DIRECTORIO Y BITACORA */}
                       {activeTab === 'directorio' && (
                         <>
-                          <div className="glass-panel p-4 sm:p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 sticky top-0 z-20 shadow-xl">
-                            <div className="w-full md:flex-1 space-y-3 md:space-y-0 md:flex md:items-center gap-4">
-                              <div className="relative w-full md:max-w-md">
-                                <i data-lucide="search" className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"></i>
-                                <input type="text" placeholder="Buscar por nombre, RUT, cargo o ciudad..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm font-medium rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all shadow-inner" />
-                              </div>
-                              {activeFilter !== 'TODOS' && (
-                                <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 px-3 py-2 rounded-xl text-xs font-bold w-max">
-                                  <span><i data-lucide="filter" className="w-3.5 h-3.5 inline mr-1"></i> {activeFilter}</span>
-                                  <div className="w-px h-3 bg-amber-500/30 mx-1"></div>
-                                  <button onClick={() => setActiveFilter('TODOS')} className="hover:text-white transition-colors">Limpiar</button>
-                                </div>
-                              )}
+                          {/* TOOLBAR */}
+                          <div className="glass-panel p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-20">
+                            <div className="relative w-full md:max-w-md">
+                              <i data-lucide="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"></i>
+                              <input type="text" placeholder="Buscar empleado, RUT o cargo..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all" />
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-start md:justify-end">
-                              <button onClick={() => setIsGlobalHistoryOpen(true)} className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-2 border border-slate-700 transition-colors shadow-sm" title="Auditoría Global">
+                            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+                              {activeFilter !== 'TODOS' && (
+                                <div className="flex items-center bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs px-3 py-2 rounded-lg font-medium">
+                                  <span>Filtro: {activeFilter}</span>
+                                  <button onClick={() => setActiveFilter('TODOS')} className="ml-2 p-0.5 hover:bg-amber-500/20 rounded"><i data-lucide="x" className="w-3 h-3"></i></button>
+                                </div>
+                              )}
+                              
+                              <button onClick={() => setIsGlobalHistoryOpen(true)} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-2 border border-slate-700 transition-colors" title="Hoja de Vida Global">
                                 <i data-lucide="file-clock" className="w-4 h-4"></i> <span className="hidden sm:inline">Reporte Global</span>
                               </button>
-                              <button onClick={handleDownloadExcel} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-colors" title="Exportar Dotación Completa">
-                                <i data-lucide="download" className="w-4 h-4"></i> <span className="hidden sm:inline">Exportar Base (XLSX)</span>
+                              
+                              <button onClick={handleDownloadExcel} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-2 border border-slate-700 transition-colors" title="Exportar">
+                                <i data-lucide="download" className="w-4 h-4"></i>
                               </button>
+                              
                               <input type="file" ref={fileInputRef} onChange={handleUploadExcel} accept=".xlsx, .xls, .csv" className="hidden" />
-                              <button onClick={() => fileInputRef.current.click()} className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-colors">
-                                <i data-lucide="upload" className="w-4 h-4"></i> <span className="hidden sm:inline">Importar</span>
+                              <button onClick={() => fileInputRef.current.click()} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-2 border border-slate-700 transition-colors" title="Importar">
+                                <i data-lucide="upload" className="w-4 h-4"></i>
                               </button>
-                              <button onClick={() => { setCurrentEmployee(null); setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0], cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '', documentos: { contrato: true, induccion: true, examenes: true, epp: true }}); setIsModalOpen(true); }} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)]">
-                                <i data-lucide="user-plus" className="w-4 h-4"></i> <span className="hidden sm:inline">Nuevo Ficha</span>
+
+                              <button onClick={() => { setCurrentEmployee(null); setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0], cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '', documentos: { contrato: true, induccion: true, examenes: true, epp: true }}); setIsModalOpen(true); }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors shadow-lg shadow-amber-500/20">
+                                <i data-lucide="user-plus" className="w-4 h-4"></i> Nuevo Ingreso
                               </button>
                             </div>
                           </div>
 
+                          {/* ACTION BAR INFERIOR (BORRADO MASIVO) */}
                           {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
                             <div className="flex justify-end">
-                              <button onClick={handleDeleteAllData} className="text-xs text-red-500 hover:text-red-400 font-bold flex items-center gap-2 px-4 py-2 bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 rounded-xl transition-colors">
-                                <i data-lucide="trash-2" className="w-4 h-4"></i> Vaciar Base de Datos
+                              <button onClick={handleDeleteAllData} className="text-[11px] text-red-500 hover:text-red-400 font-semibold flex items-center gap-1.5 px-3 py-1.5 bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 rounded-lg transition-colors">
+                                <i data-lucide="trash-2" className="w-3.5 h-3.5"></i> Eliminar y Vaciar Base de Datos
                               </button>
                             </div>
                           )}
 
+                          {/* LISTA EMPRESARIAL DE TRABAJADORES */}
                           {filtered.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center p-20 glass-panel rounded-3xl text-slate-500 space-y-4">
-                              <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center border border-slate-800">
-                                <i data-lucide="search-x" className="w-8 h-8 text-slate-600"></i>
-                              </div>
-                              <p className="text-sm font-medium">No se encontraron registros en el directorio actual.</p>
+                            <div className="flex flex-col items-center justify-center p-16 glass-panel rounded-2xl text-slate-500 space-y-3">
+                              <i data-lucide="users" className="w-12 h-12 opacity-50"></i>
+                              <p className="text-sm font-medium">No se encontraron registros activos en esta vista.</p>
                             </div>
                           ) : (
-                            <div className="space-y-3 pb-8">
-                              <div className="hidden lg:flex items-center px-6 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-800">
-                                <div className="flex-1 min-w-[220px]">Identificación</div>
-                                <div className="flex-1 min-w-[180px]">Cargo / Faena</div>
-                                <div className="flex-1 min-w-[200px]">Contacto</div>
-                                <div className="w-48 text-center">Auditoría y Acciones</div>
-                              </div>
-
+                            <div className="space-y-3">
                               {filtered.map(emp => {
                                 const missing = getMissingDataList(emp);
                                 return (
                                   <div key={emp.id} className="glass-panel p-0 rounded-2xl overflow-hidden hover:border-slate-600 transition-colors">
-                                    <div className="flex flex-col lg:flex-row lg:items-center p-4 sm:p-5 lg:px-6 gap-4 lg:gap-6">
+                                    <div className="flex flex-col lg:flex-row lg:items-center p-4 gap-4 sm:gap-6">
                                       
-                                      <div className="flex-1 min-w-[220px]">
-                                        <div className="flex items-center gap-3">
-                                          <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-300 font-bold border border-slate-700 shrink-0 shadow-inner">
+                                      {/* COL 1: Info Principal */}
+                                      <div className="flex-1 min-w-[200px]">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 font-bold border border-slate-700 shrink-0">
                                             {(emp.nombre || 'S').charAt(0).toUpperCase()}
                                           </div>
                                           <div>
                                             <h4 className="font-bold text-white text-sm leading-tight">{emp.nombre}</h4>
-                                            <p className="text-xs text-slate-400 font-mono mt-0.5">{emp.rut}</p>
+                                            <p className="text-[11px] text-slate-400 font-mono mt-0.5">{emp.rut}</p>
                                           </div>
                                         </div>
                                       </div>
 
+                                      {/* COL 2: Cargo y Ciudad */}
                                       <div className="flex-1 min-w-[180px]">
-                                        <div className="text-xs font-bold text-amber-400 mb-1 line-clamp-1 flex items-center gap-1.5"><i data-lucide="briefcase" className="w-3.5 h-3.5"></i> {emp.cargo || 'SIN CARGO'}</div>
-                                        <div className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
-                                          <i data-lucide="map-pin" className="w-3.5 h-3.5"></i> {emp.ciudad}
+                                        <div className="text-xs font-semibold text-amber-400 mb-1 line-clamp-1">{emp.cargo || 'SIN CARGO'}</div>
+                                        <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                                          <i data-lucide="map-pin" className="w-3 h-3"></i> {emp.ciudad}
                                         </div>
                                       </div>
 
-                                      <div className="flex-1 min-w-[200px] space-y-2 border-l border-slate-800 pl-4 lg:border-none lg:pl-0">
+                                      {/* COL 3: Contactos */}
+                                      <div className="flex-1 min-w-[180px] space-y-1.5 border-l border-slate-800 pl-4 lg:border-none lg:pl-0">
                                         <div className="flex items-center gap-2 text-xs">
-                                          <i data-lucide="phone" className="w-3.5 h-3.5 text-slate-500 shrink-0"></i>
+                                          <i data-lucide="phone" className="w-3.5 h-3.5 text-slate-500"></i>
                                           {emp.telefono ? (
-                                            <button onClick={() => setSelectedPhone(emp.telefono)} className="text-slate-200 hover:text-amber-400 font-mono font-semibold transition-colors truncate">{emp.telefono}</button>
-                                          ) : <span className="text-slate-500 italic">Sin teléfono personal</span>}
+                                            <button onClick={() => setSelectedPhone(emp.telefono)} className="text-slate-200 hover:text-amber-400 font-mono transition-colors">{emp.telefono}</button>
+                                          ) : <span className="text-slate-500 italic">No registrado</span>}
                                         </div>
                                         <div className="flex items-center gap-2 text-xs">
-                                          <i data-lucide="shield-plus" className="w-3.5 h-3.5 text-red-400 shrink-0"></i>
+                                          <i data-lucide="shield-plus" className="w-3.5 h-3.5 text-red-400"></i>
                                           {emp.emergenciaFono ? (
-                                            <div className="truncate">
-                                              <span className="text-slate-400 mr-1">{emp.emergenciaNombre}:</span>
-                                              <button onClick={() => setSelectedPhone(emp.emergenciaFono)} className="text-slate-300 hover:text-red-400 font-mono font-bold transition-colors">{emp.emergenciaFono}</button>
-                                            </div>
-                                          ) : <span className="text-slate-500 italic">Sin contacto de emergencia</span>}
+                                            <button onClick={() => setSelectedPhone(emp.emergenciaFono)} className="text-slate-300 hover:text-red-400 font-mono transition-colors" title={`Avisar a: ${emp.emergenciaNombre}`}>{emp.emergenciaFono}</button>
+                                          ) : <span className="text-slate-500 italic">Sin emergencia</span>}
                                         </div>
                                       </div>
 
-                                      <div className="w-full lg:w-48 flex flex-row lg:flex-col items-center justify-between lg:justify-center gap-3 pt-4 lg:pt-0 border-t border-slate-800 lg:border-none shrink-0">
+                                      {/* COL 4: Cumplimiento & Acciones */}
+                                      <div className="flex-1 flex flex-row lg:flex-col items-center lg:items-end justify-between lg:justify-center gap-3 pt-3 lg:pt-0 border-t border-slate-800 lg:border-none">
                                         {missing.length > 0 ? (
-                                          <div className="flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2.5 py-1 rounded-md text-[10px] font-bold border border-red-500/20 w-full lg:justify-center">
-                                            <i data-lucide="alert-triangle" className="w-3 h-3"></i> {missing.length} Alertas doc.
+                                          <div className="flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2 py-1 rounded text-[10px] font-bold border border-red-500/20">
+                                            <i data-lucide="alert-triangle" className="w-3 h-3"></i> Faltan {missing.length} datos
                                           </div>
                                         ) : (
-                                          <div className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-md text-[10px] font-bold border border-emerald-500/20 w-full lg:justify-center">
-                                            <i data-lucide="check-circle" className="w-3 h-3"></i> Ficha Completa
+                                          <div className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-[10px] font-bold border border-emerald-500/20">
+                                            <i data-lucide="check-circle" className="w-3 h-3"></i> Expediente OK
                                           </div>
                                         )}
 
-                                        <div className="flex items-center gap-2 w-full lg:justify-center">
-                                          <button onClick={() => { setSelectedEmpForHistory(emp); setIsHistoryModalOpen(true); }} className="p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg transition-colors group relative border border-slate-700" title="Ver Bitácora de Observaciones">
+                                        <div className="flex items-center gap-1.5">
+                                          <button onClick={() => { setSelectedEmpForHistory(emp); setIsHistoryModalOpen(true); }} className="p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg transition-colors group relative" title="Bitácora">
                                             <i data-lucide="book-open" className="w-4 h-4"></i>
-                                            {emp.historial && emp.historial.length > 0 && <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-slate-950 border border-slate-900">{emp.historial.length}</span>}
+                                            {emp.historial && emp.historial.length > 0 && <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-slate-900">{emp.historial.length}</span>}
                                           </button>
-                                          <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors border border-slate-700" title="Editar Expediente">
+                                          <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors" title="Editar Ficha">
                                             <i data-lucide="edit-2" className="w-4 h-4"></i>
                                           </button>
                                           {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
-                                            <button onClick={() => handleDelete(emp.id)} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors border border-red-500/20" title="Eliminar Registro">
+                                            <button onClick={() => handleDelete(emp.id)} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors" title="Eliminar Registro">
                                               <i data-lucide="trash" className="w-4 h-4"></i>
                                             </button>
                                           )}
                                         </div>
                                       </div>
+
                                     </div>
                                   </div>
                                 );
@@ -935,81 +681,88 @@
                   )}
                 </main>
                 
-                <nav className="lg:hidden bg-slate-900/90 backdrop-blur border-t border-slate-800 flex justify-around p-2 pb-safe z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
-                  <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 rounded-xl text-[10px] font-bold transition-all ${activeTab === 'dashboard' ? 'text-amber-500 bg-amber-500/10' : 'text-slate-500 hover:text-slate-300'}`}>
+                {/* BOTTOM MOBILE NAV */}
+                <nav className="md:hidden bg-slate-900 border-t border-slate-800 flex justify-around p-2 pb-safe z-30">
+                  <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 rounded-xl text-[10px] font-medium transition-colors ${activeTab === 'dashboard' ? 'text-amber-500' : 'text-slate-500 hover:text-slate-300'}`}>
                     <i data-lucide="layout-dashboard" className="w-5 h-5 mb-1"></i>
-                    Panel Gerencial
+                    Gerencial
                   </button>
-                  <button onClick={() => setActiveTab('directorio')} className={`flex flex-col items-center p-2 rounded-xl text-[10px] font-bold transition-all ${activeTab === 'directorio' ? 'text-amber-500 bg-amber-500/10' : 'text-slate-500 hover:text-slate-300'}`}>
+                  <button onClick={() => setActiveTab('directorio')} className={`flex flex-col items-center p-2 rounded-xl text-[10px] font-medium transition-colors ${activeTab === 'directorio' ? 'text-amber-500' : 'text-slate-500 hover:text-slate-300'}`}>
                     <i data-lucide="users" className="w-5 h-5 mb-1"></i>
-                    Personal
+                    Directorio
                   </button>
                 </nav>
               </div>
 
+              {/* MODAL TELÉFONO */}
               {selectedPhone && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md fade-in">
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-8 shadow-2xl flex flex-col items-center text-center">
-                    <div className="w-20 h-20 bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl flex items-center justify-center text-amber-500 mb-5 border border-slate-700 shadow-inner">
-                      <i data-lucide="phone-call" className="w-10 h-10"></i>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm fade-in">
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-6 shadow-2xl flex flex-col items-center text-center">
+                    <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-500 mb-4 border border-amber-500/20">
+                      <i data-lucide="phone-call" className="w-8 h-8"></i>
                     </div>
-                    <h3 className="text-xl font-bold text-white mb-1 tracking-tight">Menú de Contacto</h3>
-                    <p className="text-2xl font-mono text-amber-400 font-extrabold mb-8 tracking-wider bg-slate-950 px-4 py-2 rounded-xl border border-slate-800">{selectedPhone}</p>
+                    <h3 className="text-lg font-bold text-white mb-1">Contacto Rápido</h3>
+                    <p className="text-xl font-mono text-amber-400 font-bold mb-6 tracking-wider">{selectedPhone}</p>
                     
                     <div className="w-full space-y-3">
-                      <a href={`tel:${selectedPhone}`} className="w-full flex items-center justify-center gap-3 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold transition-colors shadow-lg shadow-blue-500/20">
-                        <i data-lucide="phone" className="w-5 h-5"></i> Llamada Telefónica
+                      <a href={`tel:${selectedPhone}`} className="w-full flex items-center justify-center gap-3 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors">
+                        <i data-lucide="phone" className="w-5 h-5"></i> Llamar Regular
                       </a>
-                      <a href={`https://wa.me/${selectedPhone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-3 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold transition-colors shadow-lg shadow-emerald-500/20">
+                      <a href={`https://wa.me/${selectedPhone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-3 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors">
                         <i data-lucide="message-circle" className="w-5 h-5"></i> Enviar WhatsApp
                       </a>
-                      <a href={`sms:${selectedPhone}`} className="w-full flex items-center justify-center gap-3 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-sm font-bold transition-colors">
+                      <a href={`sms:${selectedPhone}`} className="w-full flex items-center justify-center gap-3 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-semibold transition-colors">
                         <i data-lucide="message-square" className="w-5 h-5"></i> Mensaje SMS
                       </a>
                     </div>
                     
-                    <button onClick={() => setSelectedPhone(null)} className="mt-8 text-sm text-slate-500 hover:text-slate-300 font-bold px-4 py-2 uppercase tracking-widest transition-colors">
+                    <button onClick={() => setSelectedPhone(null)} className="mt-6 text-sm text-slate-400 hover:text-white font-medium px-4 py-2">
                       Cancelar y Cerrar
                     </button>
                   </div>
                 </div>
               )}
 
+              {/* MODAL NUEVO / EDITAR FICHA */}
               {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-md fade-in">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
                     
-                    <div className="flex justify-between items-center px-6 py-5 border-b border-slate-800 bg-slate-900">
-                      <h3 className="font-extrabold text-base text-white flex items-center gap-2.5">
-                        <div className="p-1.5 bg-amber-500/10 text-amber-500 rounded-lg">
-                          <i data-lucide={currentEmployee ? "user-cog" : "user-plus"} className="w-5 h-5"></i>
-                        </div>
-                        {currentEmployee ? 'Actualizar Ficha de Trabajador' : 'Ingreso de Nuevo Trabajador'}
+                    <div className="flex justify-between items-center px-6 py-4 border-b border-slate-800 bg-slate-900/50">
+                      <h3 className="font-bold text-base text-white flex items-center gap-2">
+                        <i data-lucide={currentEmployee ? "user-cog" : "user-plus"} className="w-5 h-5 text-amber-500"></i>
+                        {currentEmployee ? 'Actualizar Expediente' : 'Nuevo Ingreso de Personal'}
                       </h3>
-                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors"><i data-lucide="x" className="w-5 h-5"></i></button>
+                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors"><i data-lucide="x" className="w-5 h-5"></i></button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-6 scroll-smooth bg-slate-950/30">
-                      {formError && <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-center gap-2.5 font-medium"><i data-lucide="alert-octagon" className="w-5 h-5"></i>{formError}</div>}
+                    <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
+                      {formError && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-center gap-2"><i data-lucide="alert-octagon" className="w-4 h-4"></i>{formError}</div>}
                       
                       <form id="employeeForm" onSubmit={handleSave} className="space-y-8">
-                        <section className="space-y-5 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
-                          <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest flex items-center gap-2"><i data-lucide="user" className="w-4 h-4"></i> Información Personal y Laboral</h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        
+                        {/* SECCIÓN 1 */}
+                        <section className="space-y-4">
+                          <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest border-b border-slate-800 pb-2 flex items-center gap-2"><i data-lucide="user" className="w-4 h-4"></i> 1. Identificación Principal</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-xs font-semibold text-slate-400 mb-2">Nombre Completo *</label>
-                              <input required placeholder="Ej: Juan Pérez" value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all shadow-inner" />
+                              <label className="block text-xs font-medium text-slate-400 mb-1.5">Nombre Completo *</label>
+                              <input required placeholder="Ej: Juan Pérez" value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-shadow" />
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold text-slate-400 mb-2">RUT / Identificador *</label>
-                              <input required placeholder="12.345.678-9" value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all font-mono shadow-inner" />
+                              <label className="block text-xs font-medium text-slate-400 mb-1.5">RUT / Identificador *</label>
+                              <input required placeholder="12.345.678-9" value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-shadow font-mono" />
                             </div>
                           </div>
+                        </section>
 
+                        {/* SECCIÓN 2 */}
+                        <section className="space-y-4">
+                          <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest border-b border-slate-800 pb-2 flex items-center gap-2"><i data-lucide="briefcase" className="w-4 h-4"></i> 2. Asignación Laboral</h4>
                           <div>
-                            <label className="block text-xs font-semibold text-slate-400 mb-2">Cargo / Función Operativa *</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Cargo / Función Operativa *</label>
                             <div className="relative">
-                              <select value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full appearance-none bg-slate-950 border border-slate-700 rounded-xl pl-4 pr-10 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all font-medium shadow-inner cursor-pointer">
+                              <select value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-lg pl-3 pr-10 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-shadow font-medium">
                                 <option value="OPERADOR CARGADOR FRONTAL">OPERADOR CARGADOR FRONTAL</option>
                                 <option value="OPERADOR GRUA HORQUILLA">OPERADOR GRUA HORQUILLA</option>
                                 <option value="SUPERVISOR TURNO">SUPERVISOR TURNO</option>
@@ -1018,67 +771,69 @@
                                 <option value="ADMINISTRADOR DE CONTRATO">ADMINISTRADOR DE CONTRATO</option>
                                 <option value="PREVENCIONISTA DE RIESGOS">PREVENCIONISTA DE RIESGOS</option>
                               </select>
-                              <i data-lucide="chevron-down" className="w-5 h-5 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                              <i data-lucide="chevron-down" className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
                             </div>
                           </div>
                           
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-xs font-semibold text-slate-400 mb-2">Ciudad / Faena Base</label>
+                              <label className="block text-xs font-medium text-slate-400 mb-1.5">Ciudad / Faena Base</label>
                               <div className="relative">
-                                <select value={formData.ciudad} onChange={e=>setFormData({...formData, ciudad:e.target.value})} className="w-full appearance-none bg-slate-950 border border-slate-700 rounded-xl pl-4 pr-10 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all shadow-inner cursor-pointer">
+                                <select value={formData.ciudad} onChange={e=>setFormData({...formData, ciudad:e.target.value})} className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-lg pl-3 pr-10 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-shadow">
                                   {citiesList.map(c=><option key={c} value={c}>{c}</option>)}
                                 </select>
-                                <i data-lucide="chevron-down" className="w-5 h-5 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                                <i data-lucide="chevron-down" className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
                               </div>
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold text-slate-400 mb-2">Añadir Nueva Ciudad (Opcional)</label>
+                              <label className="block text-xs font-medium text-slate-400 mb-1.5">Añadir Nueva Ciudad (Opcional)</label>
                               <div className="flex gap-2">
-                                <input placeholder="Nombre ciudad..." value={newCityInput} onChange={e=>setNewCityInput(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 shadow-inner" />
-                                <button type="button" onClick={()=>{if(newCityInput){setCitiesList([...citiesList, newCityInput]);setFormData({...formData, ciudad:newCityInput});setNewCityInput('');}}} className="px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-colors">Agregar</button>
+                                <input placeholder="Nombre..." value={newCityInput} onChange={e=>setNewCityInput(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500" />
+                                <button type="button" onClick={()=>{if(newCityInput){setCitiesList([...citiesList, newCityInput]);setFormData({...formData, ciudad:newCityInput});setNewCityInput('');}}} className="px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition-colors">Añadir</button>
                               </div>
                             </div>
                           </div>
                         </section>
 
-                        <section className="space-y-5 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
-                          <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest flex items-center gap-2"><i data-lucide="contact" className="w-4 h-4"></i> Contacto y Emergencia</h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        {/* SECCIÓN 3 */}
+                        <section className="space-y-4">
+                          <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest border-b border-slate-800 pb-2 flex items-center gap-2"><i data-lucide="contact" className="w-4 h-4"></i> 3. Información de Contacto</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-xs font-semibold text-slate-400 mb-2">Teléfono Personal</label>
+                              <label className="block text-xs font-medium text-slate-400 mb-1.5">Teléfono Personal</label>
                               <div className="relative">
-                                <i data-lucide="phone" className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-                                <input placeholder="+569..." value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all font-mono shadow-inner" />
+                                <i data-lucide="phone" className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                                <input placeholder="+569..." value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-shadow font-mono" />
                               </div>
                             </div>
                             <div>
-                              <label className="block text-xs font-semibold text-slate-400 mb-2">Correo Electrónico</label>
+                              <label className="block text-xs font-medium text-slate-400 mb-1.5">Correo Electrónico</label>
                               <div className="relative">
-                                <i data-lucide="mail" className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-                                <input placeholder="usuario@empresa.cl" type="email" value={formData.correo} onChange={e=>setFormData({...formData, correo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all shadow-inner" />
+                                <i data-lucide="mail" className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                                <input placeholder="usuario@empresa.cl" type="email" value={formData.correo} onChange={e=>setFormData({...formData, correo:e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-shadow" />
                               </div>
                             </div>
                           </div>
                           
-                          <div className="bg-red-500/5 p-5 rounded-xl border border-red-500/20 space-y-4">
-                            <h5 className="text-xs font-bold text-red-400 flex items-center gap-2 uppercase tracking-widest"><i data-lucide="shield-plus" className="w-4 h-4"></i> Aviso de Emergencia</h5>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 mt-4 space-y-4">
+                            <h5 className="text-xs font-semibold text-slate-300 flex items-center gap-2"><i data-lucide="shield-plus" className="w-4 h-4 text-red-400"></i> Contacto de Emergencia Obligatorio</h5>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div>
-                                <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase">Nombre del Contacto</label>
-                                <input placeholder="Familiar o cercano..." value={formData.emergenciaNombre} onChange={e=>setFormData({...formData, emergenciaNombre:e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-red-500 shadow-inner" />
+                                <label className="block text-xs font-medium text-slate-500 mb-1.5">Nombre (Familiar / Cercano)</label>
+                                <input placeholder="Nombre completo..." value={formData.emergenciaNombre} onChange={e=>setFormData({...formData, emergenciaNombre:e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-red-500" />
                               </div>
                               <div>
-                                <label className="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase">Teléfono de Emergencia</label>
-                                <input placeholder="+569..." value={formData.emergenciaFono} onChange={e=>setFormData({...formData, emergenciaFono:e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-red-500 font-mono shadow-inner" />
+                                <label className="block text-xs font-medium text-slate-500 mb-1.5">Fono de Emergencia</label>
+                                <input placeholder="+569..." value={formData.emergenciaFono} onChange={e=>setFormData({...formData, emergenciaFono:e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-red-500 font-mono" />
                               </div>
                             </div>
                           </div>
                         </section>
 
-                        <section className="space-y-4 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
-                          <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest flex items-center gap-2"><i data-lucide="file-check" className="w-4 h-4"></i> Documentación y Cumplimiento S.S.O.</h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* SECCIÓN 4 */}
+                        <section className="space-y-4">
+                          <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest border-b border-slate-800 pb-2 flex items-center gap-2"><i data-lucide="file-check" className="w-4 h-4"></i> 4. Control de Documentación S.S.O.</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <RequisitoToggle label="Contrato Firmado" icon="file-signature" checked={formData.documentos?.contrato ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), contrato: e.target.checked }})} />
                             <RequisitoToggle label="Inducción S.S.O. Realizada" icon="presentation" checked={formData.documentos?.induccion ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), induccion: e.target.checked }})} />
                             <RequisitoToggle label="Exámenes Ocupacionales al día" icon="stethoscope" checked={formData.documentos?.examenes ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), examenes: e.target.checked }})} />
@@ -1089,163 +844,120 @@
                       </form>
                     </div>
 
-                    <div className="px-6 py-5 border-t border-slate-800 bg-slate-900 flex justify-end gap-3">
-                      <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-colors text-sm">Cancelar</button>
-                      <button form="employeeForm" type="submit" className="px-8 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-colors text-sm flex items-center gap-2"><i data-lucide="save" className="w-4 h-4"></i> Guardar Expediente</button>
+                    <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3">
+                      <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium transition-colors text-sm">Cancelar</button>
+                      <button form="employeeForm" type="submit" className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl shadow-lg transition-colors text-sm flex items-center gap-2"><i data-lucide="save" className="w-4 h-4"></i> Guardar Ficha</button>
                     </div>
 
                   </div>
                 </div>
               )}
 
+              {/* MODAL BITÁCORA - TIMELINE CORPORATIVO E AISLAMIENTO ESTRICTO DE PERFILES */}
               {isHistoryModalOpen && selectedEmpForHistory && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-md fade-in">
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-5xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm fade-in">
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
                     
-                    <div className="px-6 py-5 border-b border-slate-800 bg-slate-900 flex justify-between items-center">
+                    {/* CABECERA MODAL */}
+                    <div className="px-6 py-5 border-b border-slate-800 bg-slate-900 flex justify-between items-start">
                       <div className="flex gap-4 items-center">
-                        <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 hidden sm:flex shadow-inner">
+                        <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 hidden sm:flex">
                           <i data-lucide="book-open" className="w-6 h-6"></i>
                         </div>
                         <div>
-                          <h3 className="font-extrabold text-lg text-white leading-tight">Auditoría y Hoja de Vida</h3>
-                          <p className="text-sm text-slate-400 font-medium mt-0.5">{selectedEmpForHistory.nombre} <span className="font-mono text-xs text-slate-500 ml-2">RUT: {selectedEmpForHistory.rut}</span></p>
+                          <h3 className="font-bold text-lg text-white leading-tight">Auditoría y Hoja de Vida</h3>
+                          <p className="text-sm text-slate-400 font-medium">{selectedEmpForHistory.nombre} <span className="font-mono text-xs opacity-70 ml-2">RUT: {selectedEmpForHistory.rut}</span></p>
                         </div>
                       </div>
-                      <button onClick={() => setIsHistoryModalOpen(false)} className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition-colors"><i data-lucide="x" className="w-6 h-6"></i></button>
+                      <button onClick={() => setIsHistoryModalOpen(false)} className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors"><i data-lucide="x" className="w-5 h-5"></i></button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto flex flex-col lg:flex-row bg-slate-950/30">
+                    <div className="flex-1 overflow-y-auto flex flex-col lg:flex-row">
                       
-                      <div className="flex-1 p-6 border-b lg:border-b-0 lg:border-r border-slate-800">
-                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2"><i data-lucide="history" className="w-4 h-4"></i> Registros Históricos</h4>
+                      {/* HISTORIAL (TIMELINE) */}
+                      <div className="flex-1 p-6 border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-950/30">
+                        <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-6 flex items-center gap-2"><i data-lucide="history" className="w-4 h-4"></i> Registros Históricos</h4>
                         
                         {(!selectedEmpForHistory.historial || selectedEmpForHistory.historial.length === 0) ? (
-                          <div className="flex flex-col items-center justify-center py-20 text-slate-500 space-y-4">
-                            <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center border border-slate-800">
-                              <i data-lucide="folder-search" className="w-8 h-8 opacity-50"></i>
-                            </div>
+                          <div className="flex flex-col items-center justify-center py-12 text-slate-500 space-y-3">
+                            <i data-lucide="folder-search" className="w-10 h-10 opacity-50"></i>
                             <p className="text-sm font-medium">Expediente limpio. Sin observaciones previas.</p>
                           </div>
                         ) : (
-                          <div className="relative pl-4 border-l-2 border-slate-800 space-y-8 pb-4 ml-2">
+                          <div className="relative pl-4 border-l border-slate-800 space-y-8 pb-4">
                             {selectedEmpForHistory.historial.map(h => (
                               <div key={h.id} className="relative">
-                                <span className="absolute -left-[23px] top-1.5 w-3 h-3 rounded-full bg-amber-500 ring-4 ring-slate-950 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></span>
+                                {/* Dot indicator */}
+                                <span className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-amber-500 ring-4 ring-slate-950"></span>
                                 
-                                <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg hover:border-slate-700 transition-colors group">
-                                  <div className="flex justify-between items-start mb-3">
-                                    <span className="font-bold text-slate-200 text-sm px-2.5 py-1 bg-slate-800 rounded-lg border border-slate-700">{h.tipo}</span>
-                                    <div className="flex items-center gap-3">
-                                      <span className="text-[11px] text-slate-400 font-mono font-medium flex items-center gap-1.5">
-                                        <i data-lucide="calendar" className="w-3.5 h-3.5"></i>
+                                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-md hover:border-slate-700 transition-colors group">
+                                  <div className="flex justify-between items-start mb-2">
+                                    <span className="font-bold text-slate-200 text-sm">{h.tipo}</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-1 rounded font-mono font-medium">
+                                        <i data-lucide="calendar" className="w-3 h-3 inline mr-1"></i>
                                         {h.modoFechas === 'unica' ? h.fechaInicio : `${h.fechaInicio} al ${h.fechaTermino}`}
                                       </span>
-                                      {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato' || userSession.rol === h.rolAutor) && (
-                                        <button onClick={() => handleDeleteLog(h.id)} className="text-slate-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 p-1.5 bg-slate-950 rounded border border-slate-800" title="Eliminar observación completa">
+                                      {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
+                                        <button onClick={() => handleDeleteLog(h.id)} className="text-slate-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 p-1" title="Eliminar este registro">
                                           <i data-lucide="trash-2" className="w-4 h-4"></i>
                                         </button>
                                       )}
                                     </div>
                                   </div>
                                   
-                                  {h.nota && <p className="text-sm text-slate-300 leading-relaxed mb-4 bg-slate-950/50 p-3 rounded-xl border border-slate-800/50">{h.nota}</p>}
+                                  {h.nota && <p className="text-sm text-slate-400 leading-relaxed mb-3">{h.nota}</p>}
                                   
-                                  {(h.archivos && h.archivos.length > 0) ? (
-                                    <div className="space-y-2 mb-4">
-                                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Documentos Adjuntos</span>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-3">
-                                        {h.archivos.map((file, fIdx) => {
-                                          const isImage = file.tipo ? file.tipo.startsWith('image/') : (file.url && file.url.startsWith('data:image'));
-                                          return (
-                                            <div key={fIdx} className="flex flex-col p-3 bg-slate-950 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors gap-3">
-                                              <div className="flex items-center gap-3 overflow-hidden">
-                                                {isImage ? (
-                                                  <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-slate-800"><img src={file.url} alt={file.nombre} className="w-full h-full object-cover" /></div>
-                                                ) : (
-                                                  <div className="w-10 h-10 rounded-lg bg-slate-900 flex items-center justify-center shrink-0 border border-slate-800"><i data-lucide="file-text" className="w-5 h-5 text-blue-400"></i></div>
-                                                )}
-                                                <div className="flex flex-col truncate">
-                                                  <span className="text-xs text-slate-300 font-semibold truncate" title={file.nombre}>{file.nombre}</span>
-                                                  <span className="text-[9px] text-slate-500 uppercase font-mono">{isImage ? 'Imagen' : 'Documento'}</span>
-                                                </div>
-                                              </div>
-                                              <div className="flex items-center justify-between border-t border-slate-800/80 pt-2 w-full gap-1">
-                                                <div className="flex gap-1.5">
-                                                  <a href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-slate-800 text-slate-300 hover:text-white rounded transition-colors"><i data-lucide="external-link" className="w-3 h-3"></i> Abrir</a>
-                                                  <a href={file.url} download={file.nombre} className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-slate-800 text-slate-300 hover:text-emerald-400 rounded transition-colors"><i data-lucide="download" className="w-3 h-3"></i> Bajar</a>
-                                                </div>
-                                                {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato' || userSession.rol === h.rolAutor) && (
-                                                  <button type="button" onClick={() => handleDeleteSavedAttachment(h.id, fIdx, false)} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-900 rounded-lg transition-colors" title="Eliminar archivo"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
-                                                )}
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  ) : h.archivoUrl && (
-                                    <div className="mb-4 space-y-2">
-                                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Documento Adjunto (Legado)</span>
-                                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800 gap-3">
-                                        <div className="flex items-center gap-3 overflow-hidden w-full sm:w-auto">
-                                          {h.archivoUrl.startsWith('data:image') ? (
-                                            <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-slate-800"><img src={h.archivoUrl} alt="Adjunto" className="w-full h-full object-cover" /></div>
-                                          ) : (
-                                            <div className="w-10 h-10 rounded-lg bg-slate-900 flex items-center justify-center shrink-0 border border-slate-800"><i data-lucide="file" className="w-5 h-5 text-blue-400"></i></div>
-                                          )}
-                                          <div className="flex flex-col truncate flex-1">
-                                            <span className="text-xs text-slate-300 font-semibold truncate" title={h.archivoNombre || 'Archivo adjunto'}>{h.archivoNombre || 'Archivo adjunto'}</span>
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 shrink-0 justify-end w-full sm:w-auto border-t sm:border-t-0 border-slate-800/80 pt-2 sm:pt-0">
-                                          <a href={h.archivoUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold bg-slate-800 text-slate-300 hover:text-white rounded transition-colors"><i data-lucide="external-link" className="w-3 h-3"></i> Abrir</a>
-                                          <a href={h.archivoUrl} download={h.archivoNombre || "archivo"} className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold bg-slate-800 text-slate-300 hover:text-emerald-400 rounded transition-colors"><i data-lucide="download" className="w-3 h-3"></i> Bajar</a>
-                                          {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato' || userSession.rol === h.rolAutor) && (
-                                            <button type="button" onClick={() => handleDeleteSavedAttachment(h.id, 0, true)} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-900 rounded-lg transition-colors" title="Eliminar archivo"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
-                                          )}
-                                        </div>
-                                      </div>
+                                  {h.archivoUrl && (
+                                    <div className="mb-3">
+                                      {h.archivoUrl.startsWith('data:image') ? (
+                                        <img src={h.archivoUrl} alt="Adjunto" className="max-h-32 rounded-lg border border-slate-700 shadow-sm" />
+                                      ) : (
+                                        <a href={h.archivoUrl} download={h.archivoName || "archivo"} className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-blue-400 hover:bg-slate-800 transition-colors font-medium">
+                                          <i data-lucide="paperclip" className="w-3.5 h-3.5"></i> {h.archivoNombre || 'Descargar Documento'}
+                                        </a>
+                                      )}
                                     </div>
                                   )}
                                   
-                                  <div className="flex items-center justify-between text-[11px] pt-3 border-t border-slate-800/80">
-                                    <div className="flex items-center gap-2 text-slate-400 font-medium">
-                                      <i data-lucide="user-check" className="w-3.5 h-3.5 text-slate-500"></i>
-                                      <span>Autorizado por: <strong className="text-white ml-1">{h.autor}</strong></span>
-                                    </div>
-                                    <span className="uppercase text-[9px] bg-slate-950 px-2 py-1 rounded border border-slate-700 text-slate-300 font-bold tracking-wider">{h.rolAutor}</span>
+                                  <div className="flex items-center gap-2 text-[10px] text-slate-500 pt-2 border-t border-slate-800/50">
+                                    <i data-lucide="user" className="w-3 h-3"></i>
+                                    <span>Registrado por: <strong className="text-slate-300">{h.autor}</strong></span>
+                                    <span className="mx-1">•</span>
+                                    <span className="bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 font-semibold">{h.rolAutor}</span>
                                   </div>
                                 </div>
                               </div>
-                            </div>
-                          )}
-                        </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
-                      <div className="w-full lg:w-[380px] xl:w-[420px] p-6 bg-slate-900 flex flex-col">
-                        <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-6 flex items-center gap-2"><i data-lucide="file-plus-2" className="w-4 h-4"></i> Registrar Evento</h4>
+                      {/* FORMULARIO NUEVA OBSERVACION (AISLADO POR PERFIL) */}
+                      <div className="w-full lg:w-80 p-6 bg-slate-900 flex flex-col">
+                        <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-6 flex items-center gap-2"><i data-lucide="plus-circle" className="w-4 h-4"></i> Añadir Evento</h4>
                         
                         <form onSubmit={handleAddLog} className="space-y-5 flex-1 flex flex-col">
                           
+                          {/* LÓGICA ESTRICTA: SOLO SUPERVISOR VE EL SELECT. LOS DEMÁS VEN TEXTO FIJO. */}
                           <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Perfil de Autoría (Sesión)</label>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Responsable Autorizado</label>
                             {userSession.rol === 'Supervisor' ? (
                               <div className="relative">
                                 <select 
                                   value={logForm.autorBitacora} 
                                   onChange={e => setLogForm({...logForm, autorBitacora: e.target.value, rolBitacora: 'Supervisor'})} 
-                                  className="w-full appearance-none bg-slate-950 border border-amber-500/40 rounded-xl pl-4 pr-10 py-3 text-sm font-bold text-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-inner cursor-pointer"
+                                  className="w-full appearance-none bg-slate-950 border border-amber-500/50 rounded-lg pl-3 pr-8 py-2.5 text-sm font-semibold text-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
                                 >
                                   {supervisorsList.map(sup => (
                                     <option key={sup} value={sup}>{sup}</option>
                                   ))}
                                 </select>
-                                <i data-lucide="chevron-down" className="w-4 h-4 text-amber-500/60 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                                <i data-lucide="chevron-down" className="w-4 h-4 text-amber-500/50 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
                               </div>
                             ) : (
-                              <div className="flex items-center gap-3 px-4 py-3 bg-slate-950/60 border border-slate-800 rounded-xl text-sm font-bold text-slate-400 cursor-not-allowed shadow-inner">
-                                <i data-lucide="lock" className="w-4 h-4 text-slate-500"></i>
+                              <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-950/50 border border-slate-800 rounded-lg text-sm font-semibold text-slate-400 cursor-not-allowed">
+                                <i data-lucide="lock" className="w-4 h-4 opacity-50"></i>
                                 {userSession.rol === 'Prevencionista' ? "Prevencionista de Riesgos" :
                                  userSession.rol === 'AdminContrato' ? "Administrador de Contrato" :
                                  "Administrativo / RRHH"}
@@ -1253,13 +965,13 @@
                             )}
                           </div>
 
-                          <div className="border-t border-slate-800 pt-5">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Categoría del Evento *</label>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Tipo de Registro *</label>
                             <div className="relative">
                               <select 
                                 value={logForm.tipo} 
                                 onChange={e => setLogForm({...logForm, tipo: e.target.value})} 
-                                className="w-full appearance-none bg-slate-950 border border-slate-700 rounded-xl pl-4 pr-10 py-3 text-sm font-semibold text-slate-200 focus:outline-none focus:border-amber-500 transition-shadow shadow-inner cursor-pointer"
+                                className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-lg pl-3 pr-8 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-shadow"
                               >
                                 <option value="Licencia Médica">Licencia Médica</option>
                                 <option value="Extensión de Licencia">Extensión de Licencia</option>
@@ -1267,82 +979,69 @@
                                 <option value="Enmendaduras">Enmendaduras</option>
                                 <option value="Falta a Reunión">Falta a Reunión</option>
                                 <option value="Incidente">Incidente</option>
-                                <option value="Otro">Especificar otro evento...</option>
+                                <option value="Otro">Especificar otro...</option>
                               </select>
-                              <i data-lucide="chevron-down" className="w-4 h-4 text-slate-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                              <i data-lucide="chevron-down" className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
                             </div>
                           </div>
 
                           {logForm.tipo === 'Otro' && (
                             <div className="animate-fadeIn">
-                              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Especificar *</label>
-                              <input required type="text" placeholder="Ej: Capacitación interna..." value={logForm.customTipo} onChange={e => setLogForm({...logForm, customTipo: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 transition-shadow shadow-inner" />
+                              <label className="block text-xs font-medium text-slate-400 mb-1.5">Especifique *</label>
+                              <input required type="text" placeholder="Ej: Felicitación..." value={logForm.customTipo} onChange={e => setLogForm({...logForm, customTipo: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-shadow" />
                             </div>
                           )}
 
-                          <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800/80">
-                            <div className="flex gap-4 mb-4 pb-3 border-b border-slate-800">
-                              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300">
-                                <input type="radio" name="modoFechas" checked={logForm.modoFechas === 'rango'} onChange={() => setLogForm({...logForm, modoFechas: 'rango'})} className="text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700 w-4 h-4" /> Rango de Días
+                          <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800/80">
+                            <div className="flex gap-4 mb-3">
+                              <label className="flex items-center gap-1.5 cursor-pointer text-xs font-medium text-slate-300">
+                                <input type="radio" name="modoFechas" checked={logForm.modoFechas === 'rango'} onChange={() => setLogForm({...logForm, modoFechas: 'rango'})} className="text-amber-500 focus:ring-0 bg-slate-900 border-slate-700" /> Rango Días
                               </label>
-                              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300">
-                                <input type="radio" name="modoFechas" checked={logForm.modoFechas === 'unica'} onChange={() => setLogForm({...logForm, modoFechas: 'unica'})} className="text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700 w-4 h-4" /> Día Único
+                              <label className="flex items-center gap-1.5 cursor-pointer text-xs font-medium text-slate-300">
+                                <input type="radio" name="modoFechas" checked={logForm.modoFechas === 'unica'} onChange={() => setLogForm({...logForm, modoFechas: 'unica'})} className="text-amber-500 focus:ring-0 bg-slate-900 border-slate-700" /> Día Único
                               </label>
                             </div>
 
                             {logForm.modoFechas === 'rango' ? (
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Día Inicio</span>
-                                  <input type="date" value={logForm.fechaInicio} onChange={e=>setLogForm({...logForm, fechaInicio:e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-amber-500" />
+                              <div className="flex gap-3">
+                                <div className="w-1/2">
+                                  <span className="block text-[10px] text-slate-500 mb-1">Inicio</span>
+                                  <input type="date" value={logForm.fechaInicio} onChange={e=>setLogForm({...logForm, fechaInicio:e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1.5 text-xs text-slate-200" />
                                 </div>
-                                <div>
-                                  <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Día Término</span>
-                                  <input type="date" value={logForm.fechaTermino} onChange={e=>setLogForm({...logForm, fechaTermino:e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-amber-500" />
+                                <div className="w-1/2">
+                                  <span className="block text-[10px] text-slate-500 mb-1">Término</span>
+                                  <input type="date" value={logForm.fechaTermino} onChange={e=>setLogForm({...logForm, fechaTermino:e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1.5 text-xs text-slate-200" />
                                 </div>
                               </div>
                             ) : (
                               <div>
-                                <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha Exacta</span>
-                                <input type="date" value={logForm.fechaUnica} onChange={e=>setLogForm({...logForm, fechaUnica:e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-amber-500" />
+                                <span className="block text-[10px] text-slate-500 mb-1">Fecha exacta</span>
+                                <input type="date" value={logForm.fechaUnica} onChange={e=>setLogForm({...logForm, fechaUnica:e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1.5 text-xs text-slate-200" />
                               </div>
                             )}
                           </div>
 
                           <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Detalles u Observaciones</label>
-                            <textarea placeholder="Redacte los acuerdos o motivos del registro..." value={logForm.nota} onChange={e=>setLogForm({...logForm, nota:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 transition-shadow resize-none shadow-inner" rows="4"></textarea>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Detalles u Observaciones</label>
+                            <textarea placeholder="Comentarios..." value={logForm.nota} onChange={e=>setLogForm({...logForm, nota:e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-shadow resize-none" rows="3"></textarea>
                           </div>
 
-                          <div className="space-y-2">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Evidencia / Adjuntos Múltiples</label>
-                            
-                            {logForm.archivos && logForm.archivos.length > 0 && (
-                              <div className="space-y-2 mb-3 max-h-32 overflow-y-auto pr-1">
-                                {logForm.archivos.map((file, idx) => (
-                                  <div key={idx} className="flex justify-between items-center bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 text-xs shadow-sm">
-                                    <span className="truncate text-slate-300 font-medium max-w-[180px] sm:max-w-[200px]"><i data-lucide="check" className="w-3 h-3 inline text-emerald-500 mr-1.5"></i>{file.nombre}</span>
-                                    <button type="button" onClick={() => handleRemovePendingFile(idx)} className="text-slate-500 hover:text-red-400 p-1.5 bg-slate-900 rounded border border-slate-800 transition-colors" title="Quitar archivo"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
-                            <div className="relative group">
-                                <input type="file" multiple ref={logFileRef} onChange={handleLogFileChange} accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-                                <div className="w-full bg-slate-950 border-2 border-dashed border-slate-700 rounded-xl px-4 py-5 text-center flex flex-col items-center justify-center group-hover:bg-slate-900 group-hover:border-amber-500/50 transition-colors">
-                                  <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center mb-2 text-slate-400 group-hover:text-amber-500 group-hover:bg-amber-500/10 transition-colors">
-                                    <i data-lucide="upload-cloud" className="w-5 h-5"></i>
-                                  </div>
-                                  <span className="text-xs font-bold text-slate-300">Añadir Documentos o Fotos</span>
-                                  <span className="text-[10px] text-slate-500 mt-1">Permite JPG, PNG, PDF, DOC, XLS</span>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Adjunto Físico (Foto/Doc)</label>
+                            <div className="relative">
+                                <input type="file" ref={logFileRef} onChange={handleLogFileChange} accept="image/*,application/pdf,.doc,.docx" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                                <div className="w-full bg-slate-950 border border-dashed border-slate-700 rounded-lg px-3 py-4 text-center flex flex-col items-center justify-center hover:bg-slate-900 hover:border-amber-500/50 transition-colors">
+                                  <i data-lucide={logForm.archivoNombre ? "file-check" : "upload-cloud"} className={`w-6 h-6 mb-1 ${logForm.archivoNombre ? 'text-emerald-500' : 'text-slate-500'}`}></i>
+                                  <span className={`text-xs ${logForm.archivoNombre ? 'text-emerald-400 font-semibold truncate w-full' : 'text-slate-400'}`}>
+                                      {logForm.archivoNombre ? logForm.archivoNombre : 'Clic para seleccionar archivo'}
+                                  </span>
                                 </div>
                             </div>
                           </div>
 
                           <div className="pt-4 mt-auto">
-                            <button type="submit" className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-sm uppercase tracking-wider rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-colors flex justify-center items-center gap-2">
-                              <i data-lucide="save" className="w-4 h-4"></i> Guardar Evento
+                            <button type="submit" className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl shadow-lg transition-colors flex justify-center items-center gap-2">
+                              <i data-lucide="save" className="w-4 h-4"></i> Generar Registro
                             </button>
                           </div>
                         </form>
@@ -1352,49 +1051,45 @@
                 </div>
               )}
 
+              {/* MODAL REPORTE GLOBAL */}
               {isGlobalHistoryOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-md fade-in">
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-                    <div className="flex justify-between items-center px-6 py-5 border-b border-slate-800 bg-slate-900/80">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm fade-in">
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+                    <div className="flex justify-between items-center px-6 py-5 border-b border-slate-800 bg-slate-900/50">
                       <div>
-                        <h3 className="font-extrabold text-lg text-white flex items-center gap-2.5">
-                          <div className="p-1.5 bg-amber-500/10 text-amber-500 rounded-lg"><i data-lucide="file-bar-chart" className="w-5 h-5"></i></div>
-                          Consolidado Global de Auditoría
-                        </h3>
-                        <p className="text-xs text-slate-400 mt-1 font-medium">Visualización maestra de eventos históricos a nivel dotación.</p>
+                        <h3 className="font-bold text-lg text-white flex items-center gap-2"><i data-lucide="file-bar-chart" className="w-5 h-5 text-amber-500"></i> Consolidado Global de Bitácoras</h3>
+                        <p className="text-xs text-slate-400 mt-1">Reporte de auditoría general. Todos los eventos históricos registrados.</p>
                       </div>
-                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition-colors"><i data-lucide="x" className="w-6 h-6"></i></button>
+                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors"><i data-lucide="x" className="w-5 h-5"></i></button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-6 bg-slate-950/50">
+                    <div className="flex-1 overflow-y-auto p-6 bg-slate-950/30">
                       {allGlobalLogs.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-32 text-slate-500 space-y-4">
-                          <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center border border-slate-800">
-                            <i data-lucide="clipboard-list" className="w-10 h-10 opacity-40"></i>
-                          </div>
-                          <p className="text-sm font-semibold">Sistema limpio. No se detectaron anotaciones globales en ningún trabajador.</p>
+                        <div className="flex flex-col items-center justify-center py-20 text-slate-500 space-y-4">
+                          <i data-lucide="clipboard-list" className="w-12 h-12 opacity-30"></i>
+                          <p className="text-sm font-medium">No existen anotaciones en el sistema a nivel global.</p>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {allGlobalLogs.map((log, idx) => (
-                            <div key={idx} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-lg flex flex-col h-full hover:border-slate-700 transition-colors">
-                              <div className="flex justify-between items-start mb-4">
-                                <div className="pr-3">
-                                  <h4 className="font-bold text-white text-sm leading-tight mb-0.5">{log.empleadoNombre}</h4>
-                                  <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">{log.empleadoRut}</span>
+                            <div key={idx} className="bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-sm flex flex-col h-full">
+                              <div className="flex justify-between items-start mb-3">
+                                <div>
+                                  <h4 className="font-bold text-white text-sm leading-tight">{log.empleadoNombre}</h4>
+                                  <span className="text-[10px] font-mono text-slate-400">{log.empleadoRut}</span>
                                 </div>
-                                <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9px] font-bold rounded-lg shrink-0 text-right uppercase tracking-wider">{log.tipo}</span>
+                                <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold rounded-lg shrink-0 text-right">{log.tipo}</span>
                               </div>
                               <div className="flex-1">
-                                {log.nota && <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border border-slate-800/50 mb-4">{log.nota}</p>}
+                                {log.nota && <p className="text-sm text-slate-300 leading-relaxed bg-slate-950 p-3 rounded-xl border border-slate-800/50 mb-3">{log.nota}</p>}
                               </div>
-                              <div className="flex items-end justify-between mt-auto pt-4 border-t border-slate-800/80">
-                                <div className="text-[11px] text-slate-400 font-mono font-medium bg-slate-950 px-2 py-1 rounded-md border border-slate-800">
-                                  <i data-lucide="calendar" className="w-3 h-3 inline mr-1 text-slate-500"></i> {log.fechaInicio}
+                              <div className="flex items-end justify-between mt-auto pt-3 border-t border-slate-800/80">
+                                <div className="text-[11px] text-slate-500 font-medium">
+                                  <i data-lucide="calendar" className="w-3 h-3 inline mr-1"></i> {log.fechaInicio}
                                 </div>
                                 <div className="text-right">
-                                  <p className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-0.5">Autorizado</p>
-                                  <p className="text-[11px] font-semibold text-indigo-400">{log.autor}</p>
+                                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">Autorizado por</p>
+                                  <p className="text-xs font-semibold text-indigo-400">{log.autor}</p>
                                 </div>
                               </div>
                             </div>
@@ -1403,11 +1098,11 @@
                       )}
                     </div>
 
-                    <div className="px-6 py-5 border-t border-slate-800 bg-slate-900/80 flex flex-col sm:flex-row justify-between items-center gap-4">
-                      <button onClick={handleDownloadGlobalLogsExcel} className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all">
-                        <i data-lucide="file-spreadsheet" className="w-4 h-4"></i> Exportar a Excel (XLSX)
+                    <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center">
+                      <button onClick={handleDownloadGlobalLogsExcel} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm flex items-center gap-2 shadow-lg transition-colors">
+                        <i data-lucide="download" className="w-4 h-4"></i> Exportar Auditoría JSON
                       </button>
-                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="w-full sm:w-auto px-8 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-sm transition-colors">Cerrar</button>
+                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition-colors">Cerrar</button>
                     </div>
                   </div>
                 </div>
