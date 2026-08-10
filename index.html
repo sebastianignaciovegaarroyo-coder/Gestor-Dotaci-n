@@ -3,28 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Base para que las rutas funcionen en el subdirectorio /Gestor-Dotaci-n/ -->
     <base href="/Gestor-Dotaci-n/">
-    
-    <title>BRAMAQ Enterprise</title>
-    
-    <!-- Scripts de carga -->
+    <title>Gestor de Dotación BRAMAQ - Enterprise</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    
     <style>
-        body { background-color: #020617; color: white; margin: 0; font-family: sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f1f5f9; margin: 0; }
+        .glass-panel { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(30, 41, 59, 0.8); }
+        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        #root { min-height: 100vh; }
     </style>
 </head>
 <body>
     <div id="root"></div>
-
     <script type="text/babel">
-        // 1. Configuración de Firebase
+        const { useState, useEffect, useMemo, useRef } = React;
         const firebaseConfig = {
           apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9Vr69wJz2vA...",
           authDomain: "bramaqcloud.firebaseapp.com",
@@ -33,52 +34,62 @@
           messagingSenderId: "369713509600",
           appId: "1:369713509600:web:b6d878c..."
         };
-
-        try {
-            if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-        } catch (e) { console.error("Firebase init:", e); }
-
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // 2. Componente principal (Mantiene toda tu lógica original)
         function App() {
-            const [hasEntered, setHasEntered] = React.useState(false);
-            
+            const [hasEntered, setHasEntered] = useState(false);
+            const [gateProfile, setGateProfile] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [employees, setEmployees] = useState([]);
+
+            const handleEnter = () => { if(gateProfile) setHasEntered(true); };
+
+            useEffect(() => {
+                if(hasEntered) {
+                    setLoading(true);
+                    return db.collection('employees').onSnapshot(snap => {
+                        const items = [];
+                        snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
+                        setEmployees(items);
+                        setLoading(false);
+                    });
+                }
+            }, [hasEntered]);
+
             if (!hasEntered) {
                 return (
-                    <div className="flex flex-col items-center justify-center min-h-screen p-4">
-                        <h1 className="text-2xl font-bold mb-8">BRAMAQ Acceso</h1>
-                        <button 
-                            onClick={() => setHasEntered(true)} 
-                            className="bg-amber-500 text-black px-8 py-4 rounded-xl font-bold"
-                        >
-                            INGRESAR AL SISTEMA
-                        </button>
+                    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 p-6">
+                        <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-sm shadow-2xl">
+                            <h1 className="text-2xl font-bold text-white mb-6 text-center">BRAMAQ Acceso</h1>
+                            <select value={gateProfile} onChange={e => setGateProfile(e.target.value)} className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl mb-4 text-amber-400 font-bold">
+                                <option value="">Seleccione Perfil</option>
+                                <option value="Administrativo">Administrativo</option>
+                                <option value="Supervisor">Supervisor</option>
+                            </select>
+                            <button onClick={handleEnter} className="w-full bg-amber-500 text-black font-bold py-4 rounded-xl">INGRESAR</button>
+                        </div>
                     </div>
                 );
             }
 
             return (
-                <div className="p-4">
-                    <h1 className="text-xl font-bold">Interfaz Cargada Correctamente</h1>
-                    <p>Si ves este mensaje, la aplicación ya no está bloqueada por la pantalla azul.</p>
-                    {/* AQUI VA TU DASHBOARD COMPLETO QUE YA TENIAS */}
+                <div className="p-4 bg-slate-950 min-h-screen">
+                    <h1 className="text-white font-bold text-xl mb-4">Panel de Control</h1>
+                    {loading ? <p>Cargando datos...</p> : (
+                        <div className="space-y-2">
+                            {employees.map(e => (
+                                <div key={e.id} className="bg-slate-900 p-4 rounded-lg border border-slate-800">{e.nombre}</div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             );
         }
 
-        // 3. Montaje seguro
         window.addEventListener('load', () => {
-            const container = document.getElementById('root');
-            if (container) {
-                try {
-                    const root = ReactDOM.createRoot(container);
-                    root.render(<App />);
-                } catch (e) {
-                    console.error("Error al renderizar:", e);
-                    container.innerHTML = '<div style="padding:20px;">Error al cargar la interfaz.</div>';
-                }
-            }
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
         });
     </script>
 </body>
