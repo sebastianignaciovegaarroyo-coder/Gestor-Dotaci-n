@@ -1,31 +1,17 @@
-
-const CACHE_NAME = "bramaq-pwa-v1";
-
-self.addEventListener("install", (event) => {
+// Service Worker BRAMAQ - Modo No Bloqueante
+self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-self.addEventListener("activate", (event) => {
+self.addEventListener('activate', (event) => {
   event.waitUntil(clients.claim());
 });
 
-self.addEventListener("fetch", (event) => {
-  if (event.request.url.includes("firestore.googleapis.com") || event.request.url.includes("chrome-extension")) {
-    return;
-  }
-  
+self.addEventListener('fetch', (event) => {
+  // Pasa todas las peticiones directamente a la red sin bloquear nada
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        return caches.open(CACHE_NAME).then((cache) => {
-          if (event.request.method === "GET") {
-            cache.put(event.request, networkResponse.clone());
-          }
-          return networkResponse;
-        });
-      })
-      .catch(() => {
-        return caches.match(event.request);
-      })
+    fetch(event.request).catch(() => {
+      return caches.match(event.request);
+    })
   );
 });
