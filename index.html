@@ -102,6 +102,16 @@
             downloadAnchor.remove();
           };
 
+          const handleDownloadGlobalLogsExcel = () => {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allGlobalLogs, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `bramaq_hoja_de_vida_global_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+          };
+
           const handleDeleteAllData = async () => {
             if (userSession.rol !== 'Administrativo') {
               alert("Solo el Administrador puede realizar un borrado masivo.");
@@ -216,12 +226,28 @@
             if (confirm("¿Eliminar trabajador?")) await db.collection('employees').doc(id).delete();
           };
 
+          // Función para eliminar un registro individual de la bitácora
+          const handleDeleteLog = async (logId) => {
+            if (!selectedEmpForHistory) return;
+            if (confirm("¿Estás seguro de eliminar esta observación de la hoja de vida?")) {
+              try {
+                const updatedHistorial = (selectedEmpForHistory.historial || []).filter(h => h.id !== logId);
+                await db.collection('employees').doc(selectedEmpForHistory.id).update({
+                  historial: updatedHistorial
+                });
+                setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
+                alert("Observación eliminada correctamente.");
+              } catch (err) {
+                alert("Error al eliminar observación: " + err.message);
+              }
+            }
+          };
+
           const handleLogFileChange = (e) => {
             const file = e.target.files[0];
             if (file) {
               const reader = new FileReader();
               reader.onload = (uploadEvent) => {
-                // Comprimir o limitar tamaño de archivo para evitar errores de Firestore en arreglos
                 setLogForm({
                   ...logForm,
                   archivoNombre: file.name,
@@ -238,7 +264,6 @@
 
             const tipoFinal = logForm.tipo === 'Otro' ? (logForm.customTipo || 'Otro evento') : logForm.tipo;
 
-            // Objeto limpio sin valores undefined para prevenir el error de Firestore
             const logEntry = {
               id: String(Date.now()),
               tipo: String(tipoFinal),
@@ -801,7 +826,7 @@
                 </div>
               )}
 
-              {/* MODAL BITÁCORA / HOJA DE VIDA CON NOMBRES DE SUPERVISORES REALES */}
+              {/* MODAL BITÁCORA / HOJA DE VIDA CON SELECTOR DE SUPERVISORES Y OPCIÓN DE ELIMINAR OBSERVACIONES */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-lg border border-slate-800 space-y-3 my-auto max-h-[90vh] overflow-y-auto">
@@ -818,12 +843,22 @@
                         <p className="text-slate-500 text-center py-4">Sin registros en la hoja de vida.</p>
                       ) : (
                         selectedEmpForHistory.historial.map(h => (
-                          <div key={h.id} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1.5">
+                          <div key={h.id} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1.5 relative">
                             <div className="flex justify-between items-center">
                               <span className="font-bold text-amber-400 text-xs">{h.tipo}</span>
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                {h.modoFechas === 'unica' ? `Día: ${h.fechaInicio}` : `Del ${h.fechaInicio} al ${h.fechaTermino}`}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                  {h.modoFechas === 'unica' ? `Día: ${h.fechaInicio}` : `Del ${h.fechaInicio} al ${h.fechaTermino}`}
+                                </span>
+                                {/* Botón para eliminar observación individual de la bitácora */}
+                                <button 
+                                  onClick={() => handleDeleteLog(h.id)} 
+                                  className="text-red-400 hover:text-red-300 p-1 rounded bg-slate-900 border border-slate-800" 
+                                  title="Eliminar observación"
+                                >
+                                  <i data-lucide="trash-2" className="w-3.5 h-3.5"></i>
+                                </button>
+                              </div>
                             </div>
                             {h.nota && <p className="text-slate-300 text-xs">{h.nota}</p>}
                             {h.archivoUrl && (
@@ -849,7 +884,7 @@
                     <form onSubmit={handleAddLog} className="space-y-2.5 text-xs pt-3 border-t border-slate-800">
                       <div className="text-[11px] font-bold text-amber-400">Agregar Evento a la Hoja de Vida:</div>
                       
-                      {/* DESPLEGABLE CON NOMBRES EXACTOS DE SUPERVISORES */}
+                      {/* DESPLEGABLE CON NOMBRES EXACTOS DE SUPERVISORES Y OTROS RESPONSABLES */}
                       <div>
                         <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Supervisor / Responsable)</label>
                         <select 
@@ -973,7 +1008,7 @@
                 </div>
               )}
 
-              {/* MODAL HOJA DE VIDA GLOBAL */}
+              {/* MODAL HOJA DE VIDA GLOBAL CON BOTÓN DE DESCARGA */}
               {isGlobalHistoryOpen && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-2xl border border-slate-800 space-y-3 my-auto">
@@ -1005,8 +1040,11 @@
                       )}
                     </div>
 
-                    <div className="flex justify-end pt-2 border-t border-slate-800">
-                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="px-5 py-2 bg-slate-800 text-slate-300 font-bold rounded-xl">Cerrar</button>
+                    <div className="flex justify-between pt-2 border-t border-slate-800">
+                      <button onClick={handleDownloadGlobalLogsExcel} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow">
+                        <i data-lucide="download" className="w-4 h-4"></i> Descargar Hoja Global
+                      </button>
+                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="px-5 py-2 bg-slate-800 text-slate-300 font-bold rounded-xl text-xs">Cerrar</button>
                     </div>
                   </div>
                 </div>
