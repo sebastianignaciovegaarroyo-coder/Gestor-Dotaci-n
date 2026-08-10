@@ -51,7 +51,7 @@
 
           const [selectedPhone, setSelectedPhone] = useState(null);
           
-          // Perfil activo en la cabecera
+          // Perfil activo principal en la cabecera
           const [userSession, setUserSession] = useState({
             rol: "Administrativo"
           });
@@ -61,7 +61,7 @@
             documentos: { contrato: true, induccion: true, examenes: true, epp: true }
           });
 
-          // Lista de supervisores extraídos de los empleados
+          // Lista de supervisores extraídos de la dotación
           const supervisorsList = useMemo(() => {
             const list = employees
               .filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR'))
@@ -83,7 +83,7 @@
             rolBitacora: 'Administrativo'
           });
 
-          // Sincronizar automáticamente el autor de la bitácora según el rol activo de manera estrictamente aislada
+          // Sincronización estricta y limpia del autor según el rol activo
           useEffect(() => {
             if (userSession.rol === 'Administrativo') {
               setLogForm(prev => ({ ...prev, autorBitacora: 'Administrativo / RRHH', rolBitacora: 'Administrativo' }));
@@ -851,7 +851,7 @@
                 </div>
               )}
 
-              {/* MODAL BITÁCORA / HOJA DE VIDA CON PERFILES ESTRICTAMENTE AISLADOS SIN NOMBRES FICTICIOS */}
+              {/* MODAL BITÁCORA / HOJA DE VIDA CON AISLAMIENTO ESTRICTO DE PERFILES (SUPERVISORES CON DESPLEGABLE, OTROS ÚNICOS SIN NOMBRE) */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-lg border border-slate-800 space-y-3 my-auto max-h-[90vh] overflow-y-auto">
@@ -910,7 +910,7 @@
                     <form onSubmit={handleAddLog} className="space-y-2.5 text-xs pt-3 border-t border-slate-800">
                       <div className="text-[11px] font-bold text-amber-400">Agregar Evento a la Hoja de Vida:</div>
                       
-                      {/* AISLAMIENTO ESTRICTO DE PERFILES (SUPERVISORES CON DESPLEGABLE DE NOMBRE, LOS DEMÁS ÚNICOS SIN NOMBRE) */}
+                      {/* AISLAMIENTO ESTRICTO DE PERFILES EN LA BITÁCORA */}
                       <div>
                         <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Perfil Activo)</label>
                         {userSession.rol === 'Supervisor' ? (
