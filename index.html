@@ -83,7 +83,7 @@
             rolBitacora: 'Administrativo'
           });
 
-          // Sincronizar automáticamente el autor de la bitácora según el rol de la sesión de manera aislada
+          // Sincronizar automáticamente el autor de la bitácora según el rol activo de manera estrictamente aislada
           useEffect(() => {
             if (userSession.rol === 'Administrativo') {
               setLogForm(prev => ({ ...prev, autorBitacora: 'Administrativo / RRHH', rolBitacora: 'Administrativo' }));
@@ -851,7 +851,7 @@
                 </div>
               )}
 
-              {/* MODAL BITÁCORA / HOJA DE VIDA CON PERFILES ESTRICTAMENTE SEPARADOS (SUPERVISORES CON NOMBRE, LOS DEMÁS SIN NOMBRE DE EMPLEADO) */}
+              {/* MODAL BITÁCORA / HOJA DE VIDA CON PERFILES ESTRICTAMENTE AISLADOS SIN NOMBRES FICTICIOS */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-lg border border-slate-800 space-y-3 my-auto max-h-[90vh] overflow-y-auto">
@@ -910,9 +910,9 @@
                     <form onSubmit={handleAddLog} className="space-y-2.5 text-xs pt-3 border-t border-slate-800">
                       <div className="text-[11px] font-bold text-amber-400">Agregar Evento a la Hoja de Vida:</div>
                       
-                      {/* REGLA ESTRICTA DE AUTORÍA SEGÚN PERFIL ACTIVO */}
+                      {/* AISLAMIENTO ESTRICTO DE PERFILES (SUPERVISORES CON DESPLEGABLE DE NOMBRE, LOS DEMÁS ÚNICOS SIN NOMBRE) */}
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Según perfil activo)</label>
+                        <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Perfil Activo)</label>
                         {userSession.rol === 'Supervisor' ? (
                           <select 
                             value={logForm.autorBitacora} 
@@ -920,7 +920,7 @@
                             className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold text-xs"
                           >
                             {supervisorsList.map(sup => (
-                              <option key={sup} value={sup}>{sup} (Supervisor)</option>
+                              <option key={sup} value={sup}>{sup}</option>
                             ))}
                           </select>
                         ) : userSession.rol === 'Prevencionista' ? (
