@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor Master Cloud</title>
+    <title>Gestor de Dotación BRAMAQ</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -12,10 +12,10 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans pb-16">
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans pb-20">
     <div id="root"></div>
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
         const firebaseConfig = {
           apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9V...",
           authDomain: "bramaqcloud.firebaseapp.com",
@@ -35,7 +35,6 @@
           const [loading, setLoading] = useState(true);
           const [onlineStatus, setOnlineStatus] = useState(navigator.onLine);
           const [searchTerm, setSearchTerm] = useState('');
-          const [activeFilter, setActiveFilter] = useState('TODOS');
           const [activeTab, setActiveTab] = useState('directorio');
           const [citiesList, setCitiesList] = useState(['Valdivia', 'Lanco', 'Loncoche', 'San José de la Mariquina']);
           const [newCityInput, setNewCityInput] = useState('');
@@ -44,9 +43,25 @@
           const [formError, setFormError] = useState('');
           const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
           const [selectedEmpForHistory, setSelectedEmpForHistory] = useState(null);
-          const [userSession, setUserSession] = useState({ nombre: "Admin General", rol: "Administrativo" });
-          const [formData, setFormData] = useState({ nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '' });
-          const [newLog, setNewLog] = useState({ tipo: 'Licencia Médica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], nota: '' });
+          const [isGlobalHistoryOpen, setIsGlobalHistoryOpen] = useState(false);
+          
+          const [userSession, setUserSession] = useState({
+            nombre: "Administrador / RRHH",
+            rol: "Administrativo"
+          });
+
+          const [formData, setFormData] = useState({
+            nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''
+          });
+
+          const [newLog, setNewLog] = useState({
+            tipo: 'Licencia Médica',
+            fechaInicio: new Date().toISOString().split('T')[0],
+            fechaTermino: new Date().toISOString().split('T')[0],
+            nota: ''
+          });
+
+          const fileInputRef = useRef(null);
 
           useEffect(() => {
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
@@ -61,6 +76,43 @@
           }, []);
 
           useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+          // 📥 DESCARGAR EXCEL / JSON RESPALDO
+          const handleDownloadExcel = () => {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(employees, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `bramaq_dotacion_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+          };
+
+          // 📤 CARGAR / IMPORTAR EXCEL / JSON
+          const handleUploadExcel = (e) => {
+            const fileReader = new FileReader();
+            if (e.target.files[0]) {
+              fileReader.readAsText(e.target.files[0], "UTF-8");
+              fileReader.onload = async (event) => {
+                try {
+                  const importedData = JSON.parse(event.target.result);
+                  if (Array.isArray(importedData)) {
+                    if (confirm(`¿Deseas importar ${importedData.length} registros a la base de datos en la nube?`)) {
+                      for (let item of importedData) {
+                        const { id, ...itemData } = item;
+                        await db.collection('employees').add(itemData);
+                      }
+                      alert("¡Importación completada con éxito!");
+                    }
+                  } else {
+                    alert("El archivo no tiene el formato correcto.");
+                  }
+                } catch (error) {
+                  alert("Error al leer el archivo: " + error.message);
+                }
+              };
+            }
+          };
 
           const handleSave = async (e) => {
             e.preventDefault();
@@ -92,12 +144,11 @@
 
           const filtered = useMemo(() => employees.filter(emp => {
             const s = searchTerm.toLowerCase();
-            const match = (emp.nombre||'').toLowerCase().includes(s) || (emp.rut||'').toLowerCase().includes(s) || (emp.cargo||'').toLowerCase().includes(s) || (emp.ciudad||'').toLowerCase().includes(s);
-            if (activeFilter === 'INCOMPLETOS') return match && (!emp.telefono || !emp.emergenciaNombre);
-            if (activeFilter === 'SUPERVISORES') return match && (emp.cargo||'').toUpperCase().includes('SUPERVISOR');
-            if (activeFilter === 'PREVENCION') return match && (emp.cargo||'').toUpperCase().includes('PREVENCION');
-            return match;
-          }), [employees, searchTerm, activeFilter]);
+            return (emp.nombre||'').toLowerCase().includes(s) || 
+                   (emp.rut||'').toLowerCase().includes(s) || 
+                   (emp.cargo||'').toLowerCase().includes(s) || 
+                   (emp.ciudad||'').toLowerCase().includes(s);
+          }), [employees, searchTerm]);
 
           const kpis = useMemo(() => ({
             total: employees.length,
@@ -106,88 +157,208 @@
             incompletos: employees.filter(e => !e.telefono || !e.emergenciaNombre).length
           }), [employees]);
 
+          // Recopilar todas las observaciones/bitácoras globales
+          const allGlobalLogs = useMemo(() => {
+            let logs = [];
+            employees.forEach(emp => {
+              if (emp.historial && emp.historial.length > 0) {
+                emp.historial.forEach(h => {
+                  logs.push({ ...h, empleadoNombre: emp.nombre, empleadoRut: emp.rut });
+                });
+              }
+            });
+            return logs.sort((a, b) => new Date(b.fechaInicio) - new Date(a.fechaInicio));
+          }, [employees]);
+
           return (
-            <div className="min-h-screen bg-slate-950 text-slate-100 pb-20">
-              <div className={`text-center text-xs py-1.5 font-bold ${onlineStatus ? 'bg-emerald-950 text-emerald-400' : 'bg-red-950 text-red-400 animate-pulse'}`}>
+            <div className="min-h-screen bg-slate-950 text-slate-100 pb-24">
+              {/* ESTADO DE CONEXIÓN */}
+              <div className={`text-center text-[11px] py-1 font-bold ${onlineStatus ? 'bg-emerald-950 text-emerald-400' : 'bg-red-950 text-red-400 animate-pulse'}`}>
                 {onlineStatus ? '🟢 Conectado a la Nube (Tiempo Real)' : '🔴 Sin Conexión'}
               </div>
-              <nav className="bg-slate-900 border-b border-slate-800 sticky top-0 z-20 p-4 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span className="bg-amber-600 p-2 rounded-xl text-white font-bold text-xs">🏗️ BRAMAQ</span>
-                  <h1 className="font-bold text-sm">Gestor Master Cloud</h1>
-                </div>
-                <div className="flex gap-2">
-                  <select value={userSession.rol} onChange={e=>setUserSession({...userSession, rol: e.target.value})} className="bg-slate-950 text-amber-400 text-xs px-2 py-1 rounded border border-slate-700">
-                    <option value="Administrativo">Admin</option>
-                    <option value="Supervisor">Supervisor</option>
-                    <option value="Prevencionista">Prevención</option>
-                  </select>
-                  <button onClick={()=>setActiveTab('dashboard')} className={`px-3 py-1 rounded text-xs ${activeTab==='dashboard'?'bg-amber-600 text-white':'bg-slate-800'}`}>Panel</button>
-                  <button onClick={()=>setActiveTab('directorio')} className={`px-3 py-1 rounded text-xs ${activeTab==='directorio'?'bg-amber-600 text-white':'bg-slate-800'}`}>Directorio</button>
-                </div>
-              </nav>
 
-              <main className="max-w-7xl mx-auto px-4 mt-6">
-                {loading ? <div className="text-center py-24">Cargando...</div> : (
+              {/* CABECERA PRINCIPAL */}
+              <header className="px-4 pt-4 pb-2 space-y-3 max-w-7xl mx-auto">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-amber-600 px-3 py-2 rounded-2xl text-white font-black text-xs shadow-md">
+                      BRAMAQ
+                    </div>
+                    <div>
+                      <h1 className="font-bold text-base leading-tight text-white">Gestor de Dotación BRAMAQ</h1>
+                      <span className="text-[10px] text-emerald-400 font-semibold tracking-wide flex items-center gap-1">
+                        ● MODO PWA INSTALABLE
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SELECTOR DE PERFIL */}
+                <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-2 rounded-2xl text-xs">
+                  <span className="text-slate-400 font-medium">Perfil:</span>
+                  <select 
+                    value={userSession.rol} 
+                    onChange={e => setUserSession({...userSession, rol: e.target.value})} 
+                    className="bg-slate-950 text-amber-400 font-bold px-2 py-1 rounded-xl border border-slate-700 outline-none w-full"
+                  >
+                    <option value="Administrativo">Administrativo / RRHH</option>
+                    <option value="Supervisor">Supervisor de Faena</option>
+                    <option value="Prevencionista">Prevencionista</option>
+                  </select>
+                </div>
+
+                {/* BOTONES DE PESTAÑAS (Panel y Directorio) */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button 
+                    onClick={() => setActiveTab('dashboard')} 
+                    className={`py-2.5 rounded-2xl text-xs font-bold transition-all border ${activeTab === 'dashboard' ? 'bg-slate-900 text-white border-slate-700 shadow' : 'bg-slate-900/40 text-slate-400 border-slate-800'}`}
+                  >
+                    Panel Gerencial
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('directorio')} 
+                    className={`py-2.5 rounded-2xl text-xs font-bold transition-all border ${activeTab === 'directorio' ? 'bg-amber-600 text-white border-amber-500 shadow-lg' : 'bg-slate-900/40 text-slate-400 border-slate-800'}`}
+                  >
+                    Directorio y Bitácora
+                  </button>
+                </div>
+              </header>
+
+              <main className="max-w-7xl mx-auto px-4 mt-2">
+                {loading ? (
+                  <div className="text-center py-20 text-slate-500">Cargando base de datos...</div>
+                ) : (
                   <>
+                    {/* PANEL GERENCIAL */}
                     {activeTab === 'dashboard' && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div onClick={()=>{setActiveFilter('TODOS');setActiveTab('directorio');}} className="bg-slate-900 p-4 rounded-xl border border-slate-800 cursor-pointer">
-                          <span className="text-slate-400 text-xs">Total Dotación</span>
-                          <span className="text-3xl font-bold text-white">{kpis.total}</span>
-                        </div>
-                        <div onClick={()=>{setActiveFilter('SUPERVISORES');setActiveTab('directorio');}} className="bg-slate-900 p-4 rounded-xl border border-slate-800 cursor-pointer">
-                          <span className="text-slate-400 text-xs">Supervisores</span>
-                          <span className="text-3xl font-bold text-indigo-400">{kpis.supervisores}</span>
-                        </div>
-                        <div onClick={()=>{setActiveFilter('PREVENCION');setActiveTab('directorio');}} className="bg-slate-900 p-4 rounded-xl border border-slate-800 cursor-pointer">
-                          <span className="text-slate-400 text-xs">Prevención</span>
-                          <span className="text-3xl font-bold text-emerald-400">{kpis.prevencionistas}</span>
-                        </div>
-                        <div onClick={()=>{setActiveFilter('INCOMPLETOS');setActiveTab('directorio');}} className="bg-slate-900 p-4 rounded-xl border border-red-950 cursor-pointer">
-                          <span className="text-red-400 text-xs">Incompletos</span>
-                          <span className="text-3xl font-bold text-red-400">{kpis.incompletos}</span>
+                      <div className="space-y-4 pt-2">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                            <span className="text-slate-400 text-xs">Total Dotación</span>
+                            <span className="text-3xl font-bold text-white mt-1 block">{kpis.total}</span>
+                          </div>
+                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                            <span className="text-slate-400 text-xs">Supervisores</span>
+                            <span className="text-3xl font-bold text-indigo-400 mt-1 block">{kpis.supervisores}</span>
+                          </div>
+                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                            <span className="text-slate-400 text-xs">Prevención</span>
+                            <span className="text-3xl font-bold text-emerald-400 mt-1 block">{kpis.prevencionistas}</span>
+                          </div>
+                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                            <span className="text-red-400 text-xs">Datos Incompletos</span>
+                            <span className="text-3xl font-bold text-red-400 mt-1 block">{kpis.incompletos}</span>
+                          </div>
                         </div>
                       </div>
                     )}
 
+                    {/* DIRECTORIO Y BITÁCORA */}
                     {activeTab === 'directorio' && (
-                      <div className="space-y-4">
-                        <div className="flex flex-col md:flex-row gap-3 justify-between">
-                          <input type="text" placeholder="Buscar trabajador..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full md:w-1/3 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm" />
-                          <button onClick={()=>{setCurrentEmployee(null);setFormData({nombre:'',rut:'',direccion:'',ciudad:citiesList[0],cargo:'',telefono:'',correo:'',emergenciaNombre:'',emergenciaFono:''});setIsModalOpen(true);}} className="bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Nuevo Trabajador</button>
+                      <div className="space-y-3">
+                        {/* BUSCADOR */}
+                        <div className="relative">
+                          <i data-lucide="search" className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400"></i>
+                          <input 
+                            type="text" 
+                            placeholder="Buscar por operador, ciudad o cargo..." 
+                            value={searchTerm} 
+                            onChange={e => setSearchTerm(e.target.value)} 
+                            className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-800 text-white rounded-2xl text-xs outline-none focus:border-amber-500 shadow-inner" 
+                          />
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {filtered.map(emp => (
-                            <div key={emp.id} className="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-3">
-                              <div>
-                                <h3 className="font-bold text-base">{emp.nombre}</h3>
-                                <span className="text-xs text-slate-400 font-mono">{emp.rut}</span>
-                                <div className="mt-2 text-xs bg-slate-950 p-2 rounded-xl border border-slate-800">
-                                  <div><b>Cargo:</b> {emp.cargo || 'Sin cargo'}</div>
-                                  <div><b>Ciudad:</b> {emp.ciudad}</div>
-                                </div>
-                              </div>
-                              <div className="space-y-1 text-xs">
-                                <div className="flex justify-between items-center bg-slate-950 p-2 rounded-xl border border-slate-800">
-                                  <span>{emp.telefono || 'Sin teléfono'}</span>
-                                  {emp.telefono && (
-                                    <div className="flex gap-1">
-                                      <a href={`tel:${emp.telefono}`} className="bg-blue-950 text-blue-400 px-2 py-0.5 rounded text-[10px]">Llamar</a>
-                                      <a href={`https://wa.me/${emp.telefono.replace(/[^0-9]/g,'')}`} target="_blank" rel="noopener noreferrer" className="bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded text-[10px]">WhatsApp</a>
+
+                        {/* BOTONERA PRINCIPAL DE ACCIONES */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <button 
+                            onClick={() => setIsGlobalHistoryOpen(true)} 
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all"
+                          >
+                            <i data-lucide="file-text" className="w-4 h-4"></i> Hoja de Vida Global
+                          </button>
+                          <button 
+                            onClick={handleDownloadExcel} 
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all"
+                          >
+                            <i data-lucide="download" className="w-4 h-4"></i> Descargar Excel
+                          </button>
+                          
+                          <input type="file" ref={fileInputRef} onChange={handleUploadExcel} accept=".json,.csv" className="hidden" />
+                          <button 
+                            onClick={() => fileInputRef.current.click()} 
+                            className="bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 py-3 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all"
+                          >
+                            <i data-lucide="upload" className="w-4 h-4"></i> Cargar Excel
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setCurrentEmployee(null);
+                              setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0], cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''});
+                              setIsModalOpen(true);
+                            }} 
+                            className="bg-amber-600 hover:bg-amber-700 text-white py-3 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all"
+                          >
+                            <i data-lucide="user-plus" className="w-4 h-4"></i> Nuevo Ingreso
+                          </button>
+                        </div>
+
+                        {/* ENCABEZADO DE TABLA / LISTADO */}
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden mt-3 shadow-xl">
+                          <div className="grid grid-cols-3 bg-slate-950 p-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800">
+                            <div>Personal (A-Z)</div>
+                            <div>Rol y Ubicación</div>
+                            <div className="text-right">Contacto / SMS</div>
+                          </div>
+
+                          <div className="divide-y divide-slate-800/60">
+                            {filtered.length === 0 ? (
+                              <div className="p-8 text-center text-slate-500 text-xs">No se encontraron registros.</div>
+                            ) : (
+                              filtered.map(emp => (
+                                <div key={emp.id} className="grid grid-cols-3 p-3 items-center hover:bg-slate-800/30 transition-colors gap-2 text-xs">
+                                  {/* Columna Nombre y RUT */}
+                                  <div className="truncate">
+                                    <div className="font-bold text-white leading-tight">{emp.nombre}</div>
+                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">{emp.rut}</div>
+                                    <button 
+                                      onClick={() => { setSelectedEmpForHistory(emp); setIsHistoryModalOpen(true); }}
+                                      className="mt-1.5 text-[10px] text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded-lg border border-amber-900/50 inline-flex items-center gap-1 font-semibold"
+                                    >
+                                      📝 Bitácora ({emp.historial ? emp.historial.length : 0})
+                                    </button>
+                                  </div>
+
+                                  {/* Columna Rol y Ubicación */}
+                                  <div>
+                                    <span className="px-2 py-1 rounded-xl text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-900/75 block text-center truncate">
+                                      {emp.cargo || 'SIN CARGO'}
+                                    </span>
+                                    <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1 truncate">
+                                      📍 {emp.ciudad}
                                     </div>
-                                  )}
+                                  </div>
+
+                                  {/* Columna Contacto y Llamada */}
+                                  <div className="text-right flex flex-col items-end gap-1">
+                                    <span className="text-[11px] font-medium text-slate-200">{emp.telefono || 'Sin fono'}</span>
+                                    {emp.telefono && (
+                                      <div className="flex gap-1">
+                                        <a href={`tel:${emp.telefono}`} className="bg-blue-950 text-blue-400 px-2 py-0.5 rounded-lg text-[10px] font-bold border border-blue-900">
+                                          📞 Llamar
+                                        </a>
+                                      </div>
+                                    )}
+                                    <div className="flex gap-1 mt-1">
+                                      <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="text-slate-400 hover:text-amber-400 text-[10px]">Editar</button>
+                                      {userSession.rol === 'Administrativo' && (
+                                        <button onClick={() => handleDelete(emp.id)} className="text-slate-400 hover:text-red-400 text-[10px]">Eliminar</button>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="pt-2 border-t border-slate-800 flex justify-between">
-                                <button onClick={()=>{setSelectedEmpForHistory(emp);setIsHistoryModalOpen(true);}} className="bg-slate-800 text-amber-400 px-2.5 py-1 rounded text-xs">Hoja de Vida ({emp.historial?.length || 0})</button>
-                                <div className="flex gap-1">
-                                  <button onClick={()=>{setCurrentEmployee(emp);setFormData(emp);setIsModalOpen(true);}} className="bg-slate-800 text-slate-300 px-2 py-1 rounded text-xs">Editar</button>
-                                  {userSession.rol === 'Administrativo' && <button onClick={()=>handleDelete(emp.id)} className="bg-slate-800 text-red-400 px-2 py-1 rounded text-xs">Eliminar</button>}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+                              ))
+                            )}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -195,65 +366,145 @@
                 )}
               </main>
 
+              {/* MODAL NUEVO / EDITAR */}
               {isModalOpen && (
-                <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
-                  <div className="bg-slate-900 p-6 rounded-2xl w-full max-w-lg border border-slate-800 space-y-4">
-                    <h3 className="font-bold text-base">{currentEmployee ? 'Editar' : 'Nuevo'} Trabajador</h3>
+                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+                  <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-lg border border-slate-800 space-y-3 my-auto">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+                      <h3 className="font-bold text-sm text-white">{currentEmployee ? 'Editar Ficha' : 'Nuevo Ingreso de Personal'}</h3>
+                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400"><i data-lucide="x" className="w-5 h-5"></i></button>
+                    </div>
                     {formError && <div className="text-red-400 text-xs">{formError}</div>}
-                    <form onSubmit={handleSave} className="space-y-3 text-xs">
-                      <input required placeholder="Nombre completo" value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
-                      <input required placeholder="RUT" value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
-                      <input placeholder="Cargo" value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
-                      <select value={formData.ciudad} onChange={e=>setFormData({...formData, ciudad:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl">
-                        {citiesList.map(c=><option key={c} value={c}>{c}</option>)}
-                      </select>
-                      <div className="flex gap-2">
-                        <input placeholder="Otra ciudad" value={newCityInput} onChange={e=>setNewCityInput(e.target.value)} className="w-full p-1 bg-slate-950 border border-slate-800 rounded-lg text-xs" />
-                        <button type="button" onClick={()=>{if(newCityInput){setCitiesList([...citiesList, newCityInput]);setFormData({...formData, ciudad:newCityInput});setNewCityInput('');}}} className="bg-slate-800 px-3 py-1 rounded text-xs">Añadir</button>
+                    <form onSubmit={handleSave} className="space-y-2.5 text-xs">
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold">Nombre Completo *</label>
+                        <input required placeholder="Ej: Juan Pérez" value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs outline-none focus:border-amber-500" />
                       </div>
-                      <input placeholder="Teléfono" value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
-                      <input placeholder="Correo" value={formData.correo} onChange={e=>setFormData({...formData, correo:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
-                      <input placeholder="Emergencia (Nombre)" value={formData.emergenciaNombre} onChange={e=>setFormData({...formData, emergenciaNombre:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
-                      <input placeholder="Emergencia (Teléfono)" value={formData.emergenciaFono} onChange={e=>setFormData({...formData, emergenciaFono:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
-                      <div className="flex justify-end gap-2 pt-2">
-                        <button type="button" onClick={()=>setIsModalOpen(false)} className="px-3 py-1 bg-slate-800 rounded">Cancelar</button>
-                        <button type="submit" className="px-4 py-1 bg-amber-600 text-white font-bold rounded">Guardar</button>
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold">RUT *</label>
+                        <input required placeholder="12.345.678-9" value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs outline-none focus:border-amber-500" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold">Cargo / Faena</label>
+                        <input placeholder="Ej: OPERADOR CARGADOR FRONTAL" value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs outline-none focus:border-amber-500" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold">Ciudad</label>
+                        <select value={formData.ciudad} onChange={e=>setFormData({...formData, ciudad:e.target.value})} className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs outline-none focus:border-amber-500">
+                          {citiesList.map(c=><option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex gap-2">
+                        <input placeholder="Añadir otra ciudad" value={newCityInput} onChange={e=>setNewCityInput(e.target.value)} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white" />
+                        <button type="button" onClick={()=>{if(newCityInput){setCitiesList([...citiesList, newCityInput]);setFormData({...formData, ciudad:newCityInput});setNewCityInput('');}}} className="bg-slate-800 px-3 py-1 rounded-xl text-xs text-amber-400 font-bold">Añadir</button>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold">Teléfono</label>
+                        <input placeholder="+569..." value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs outline-none" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold">Correo</label>
+                        <input placeholder="correo@bramaq.cl" value={formData.correo} onChange={e=>setFormData({...formData, correo:e.target.value})} className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs outline-none" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input placeholder="Contacto Emergencia" value={formData.emergenciaNombre} onChange={e=>setFormData({...formData, emergenciaNombre:e.target.value})} className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs" />
+                        <input placeholder="Fono Emergencia" value={formData.emergenciaFono} onChange={e=>setFormData({...formData, emergenciaFono:e.target.value})} className="p-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs" />
+                      </div>
+                      <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                        <button type="button" onClick={()=>setIsModalOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Cancelar</button>
+                        <button type="submit" className="px-5 py-2 bg-amber-600 text-white font-bold rounded-xl shadow">Guardar</button>
                       </div>
                     </form>
                   </div>
                 </div>
               )}
 
+              {/* MODAL BITÁCORA / HOJA DE VIDA INDIVIDUAL */}
               {isHistoryModalOpen && selectedEmpForHistory && (
-                <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
-                  <div className="bg-slate-900 p-6 rounded-2xl w-full max-w-lg border border-slate-800 space-y-4">
-                    <h3 className="font-bold text-base">Hoja de Vida: {selectedEmpForHistory.nombre}</h3>
-                    <div className="space-y-2 max-h-48 overflow-y-auto text-xs">
-                      {selectedEmpForHistory.historial?.length === 0 ? <p className="text-slate-500">Sin eventos registrados.</p> :
-                        selectedEmpForHistory.historial?.map(h=>(
-                          <div key={h.id} className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-                            <span className="font-bold text-amber-400">{h.tipo}</span> ({h.fechaInicio})<p className="text-slate-300">{h.nota}</p>
+                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+                  <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-lg border border-slate-800 space-y-3 my-auto">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+                      <div>
+                        <h3 className="font-bold text-sm text-white">Bitácora: {selectedEmpForHistory.nombre}</h3>
+                        <span className="text-[10px] text-slate-400 font-mono">{selectedEmpForHistory.rut}</span>
+                      </div>
+                      <button onClick={() => setIsHistoryModalOpen(false)} className="text-slate-400"><i data-lucide="x" className="w-5 h-5"></i></button>
+                    </div>
+
+                    <div className="space-y-2 max-h-44 overflow-y-auto text-xs pr-1">
+                      {(!selectedEmpForHistory.historial || selectedEmpForHistory.historial.length === 0) ? (
+                        <p className="text-slate-500 text-center py-4">Sin observaciones registradas.</p>
+                      ) : (
+                        selectedEmpForHistory.historial.map(h => (
+                          <div key={h.id} className="bg-slate-950 p-2.5 rounded-2xl border border-slate-800 space-y-1">
+                            <div className="flex justify-between items-center">
+                              <span className="font-bold text-amber-400 text-[10px]">{h.tipo}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">{h.fechaInicio}</span>
+                            </div>
+                            <p className="text-slate-300 text-xs">{h.nota}</p>
+                            <div className="text-[9px] text-slate-500 text-right">Por: {h.autor}</div>
                           </div>
                         ))
-                      }
+                      )}
                     </div>
+
                     <form onSubmit={handleLog} className="space-y-2 text-xs pt-2 border-t border-slate-800">
-                      <select value={newLog.tipo} onChange={e=>setNewLog({...newLog, tipo:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded">
+                      <select value={newLog.tipo} onChange={e=>setNewLog({...newLog, tipo:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl text-white">
                         <option value="Licencia Médica">Licencia Médica</option>
                         <option value="Permiso">Permiso</option>
                         <option value="Incidente">Incidente</option>
                         <option value="Felicitación">Felicitación</option>
+                        <option value="Observación de Seguridad">Observación de Seguridad</option>
                       </select>
                       <div className="flex gap-2">
-                        <input type="date" value={newLog.fechaInicio} onChange={e=>setNewLog({...newLog, fechaInicio:e.target.value})} className="w-1/2 p-1 bg-slate-950 border border-slate-800 rounded" />
-                        <input type="date" value={newLog.fechaTermino} onChange={e=>setNewLog({...newLog, fechaTermino:e.target.value})} className="w-1/2 p-1 bg-slate-950 border border-slate-800 rounded" />
+                        <input type="date" value={newLog.fechaInicio} onChange={e=>setNewLog({...newLog, fechaInicio:e.target.value})} className="w-1/2 p-2 bg-slate-950 border border-slate-800 rounded-xl text-white" />
+                        <input type="date" value={newLog.fechaTermino} onChange={e=>setNewLog({...newLog, fechaTermino:e.target.value})} className="w-1/2 p-2 bg-slate-950 border border-slate-800 rounded-xl text-white" />
                       </div>
-                      <textarea placeholder="Detalle..." value={newLog.nota} onChange={e=>setNewLog({...newLog, nota:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded" rows="2"></textarea>
+                      <textarea placeholder="Detalle de la observación..." value={newLog.nota} onChange={e=>setNewLog({...newLog, nota:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl text-white" rows="2"></textarea>
                       <div className="flex justify-end gap-2">
-                        <button type="button" onClick={()=>setIsHistoryModalOpen(false)} className="px-3 py-1 bg-slate-800 rounded">Cerrar</button>
-                        <button type="submit" className="px-4 py-1 bg-amber-600 text-white font-bold rounded">Registrar</button>
+                        <button type="button" onClick={()=>setIsHistoryModalOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Cerrar</button>
+                        <button type="submit" className="px-4 py-2 bg-amber-600 text-white font-bold rounded-xl shadow">Registrar</button>
                       </div>
                     </form>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL HOJA DE VIDA GLOBAL (SOLO CON OBSERVACIONES) */}
+              {isGlobalHistoryOpen && (
+                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+                  <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-2xl border border-slate-800 space-y-3 my-auto">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+                      <div>
+                        <h3 className="font-bold text-sm text-white">Hoja de Vida Global (Personal con Observaciones)</h3>
+                        <span className="text-[10px] text-amber-400 font-semibold">Resumen consolidado de bitácoras activas</span>
+                      </div>
+                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400"><i data-lucide="x" className="w-5 h-5"></i></button>
+                    </div>
+
+                    <div className="space-y-2.5 max-h-80 overflow-y-auto text-xs pr-1">
+                      {allGlobalLogs.length === 0 ? (
+                        <p className="text-slate-500 text-center py-8">No hay observaciones registradas en ningún trabajador.</p>
+                      ) : (
+                        allGlobalLogs.map((log, idx) => (
+                          <div key={idx} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
+                            <div className="flex justify-between items-center">
+                              <span className="font-bold text-white">{log.empleadoNombre} <span className="text-[10px] text-slate-400 font-mono">({log.empleadoRut})</span></span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-900">{log.tipo}</span>
+                            </div>
+                            <p className="text-slate-300 text-xs mt-1">{log.nota}</p>
+                            <div className="flex justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-900">
+                              <span>Fecha: {log.fechaInicio}</span>
+                              <span>Registrado por: {log.autor} ({log.rolAutor})</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="flex justify-end pt-2 border-t border-slate-800">
+                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="px-5 py-2 bg-slate-800 text-slate-300 font-bold rounded-xl">Cerrar</button>
+                    </div>
                   </div>
                 </div>
               )}
