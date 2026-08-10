@@ -100,13 +100,13 @@
             downloadAnchor.remove();
           };
 
-          // ELIMINACIÓN MASIVA DE TODA LA BASE DE DATOS (PARA RECARGAR DESDE CERO)
+          // ELIMINACIÓN MASIVA DE TODA LA BASE DE DATOS
           const handleDeleteAllData = async () => {
             if (userSession.rol !== 'Administrativo') {
               alert("Solo el Administrador puede realizar un borrado masivo.");
               return;
             }
-            if (confirm("⚠️ ADVERTENCIA: ¿Estás seguro de eliminar TODOS los registros de la base de datos de la nube para volver a cargar información desde cero? Esta acción no se puede deshacer.")) {
+            if (confirm("⚠️ ADVERTENCIA: ¿Estás seguro de eliminar TODOS los registros de la base de datos de la nube para volver a cargar información desde cero?")) {
               try {
                 const batchSize = 400;
                 let snapshot = await db.collection('employees').limit(batchSize).get();
@@ -118,14 +118,14 @@
                   await batch.commit();
                   snapshot = await db.collection('employees').limit(batchSize).get();
                 }
-                alert("¡Base de datos limpiada correctamente! Ya puedes cargar tu nuevo archivo Excel.");
+                alert("¡Base de datos limpiada correctamente! Ya puedes cargar tu archivo Excel nuevo.");
               } catch (err) {
                 alert("Error al vaciar la base de datos: " + err.message);
               }
             }
           };
 
-          // CARGA INTELIGENTE ANTIDUPLICADOS CON DETECCIÓN EXACTA DE TUS COLUMNAS EXCEL
+          // CARGA INTELIGENTE CON DETECCIÓN Y ELIMINACIÓN AUTOMÁTICA DE DUPLICADOS POR RUT
           const handleUploadExcel = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -141,10 +141,10 @@
 
                 if (jsonSheet.length > 0) {
                   let addedCount = 0;
-                  // Normalizamos los RUTs existentes eliminando puntos, guiones y espacios
+                  let duplicateCount = 0;
                   let existingRuts = new Set(employees.map(emp => (emp.rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '')));
 
-                  if (confirm(`Se leyeron ${jsonSheet.length} filas del archivo. ¿Deseas importar y agregar solo los registros faltantes sin duplicar?`)) {
+                  if (confirm(`Se leyeron ${jsonSheet.length} filas del archivo. ¿Deseas importar omitiendo duplicados?`)) {
                     for (let row of jsonSheet) {
                       const keys = Object.keys(row);
                       const findVal = (terms) => {
@@ -167,25 +167,29 @@
 
                       const cleanRut = (rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '');
 
-                      if ((nombre || rut) && cleanRut && !existingRuts.has(cleanRut)) {
-                        await db.collection('employees').add({
-                          nombre: nombre || 'Sin Nombre',
-                          rut: rut || 'Sin RUT',
-                          direccion: direccion || '',
-                          ciudad: ciudad,
-                          cargo: cargo || 'OPERADOR',
-                          telefono: telefono,
-                          correo: correo,
-                          emergenciaNombre: emergenciaNombre,
-                          emergenciaFono: emergenciaFono,
-                          documentos: { contrato: true, induccion: true, examenes: true, epp: true },
-                          historial: []
-                        });
-                        existingRuts.add(cleanRut);
-                        addedCount++;
+                      if ((nombre || rut) && cleanRut) {
+                        if (!existingRuts.has(cleanRut)) {
+                          await db.collection('employees').add({
+                            nombre: nombre || 'Sin Nombre',
+                            rut: rut || 'Sin RUT',
+                            direccion: direccion || '',
+                            ciudad: ciudad,
+                            cargo: cargo || 'OPERADOR',
+                            telefono: telefono,
+                            correo: correo,
+                            emergenciaNombre: emergenciaNombre,
+                            emergenciaFono: emergenciaFono,
+                            documentos: { contrato: true, induccion: true, examenes: true, epp: true },
+                            historial: []
+                          });
+                          existingRuts.add(cleanRut);
+                          addedCount++;
+                        } else {
+                          duplicateCount++;
+                        }
                       }
                     }
-                    alert(`¡Importación completada! Se agregaron ${addedCount} nuevos trabajadores (se omitieron los duplicados).`);
+                    alert(`¡Importación finalizada!\n- Nuevos agregados: ${addedCount}\n- Duplicados detectados y omitidos: ${duplicateCount}`);
                   }
                 }
               } catch (err) {
@@ -285,7 +289,7 @@
             return missing;
           };
 
-          // ORDENAMIENTO ALFABÉTICO ESTRICTO DE LA A A LA Z (IGNORANDO ACENTOS Y MAYÚSCULAS)
+          // ORDENAMIENTO ALFABÉTICO ESTRICTO DE LA A A LA Z
           const filtered = useMemo(() => {
             const list = employees.filter(emp => {
               const s = searchTerm.toLowerCase();
@@ -410,7 +414,7 @@
                   <div className="text-center py-20 text-slate-500">Cargando base de datos...</div>
                 ) : (
                   <>
-                    {/* PANEL GERENCIAL CON TODAS LAS TARJETAS */}
+                    {/* PANEL GERENCIAL */}
                     {activeTab === 'dashboard' && (
                       <div className="space-y-4 pt-2">
                         <div className="bg-slate-900/80 p-4 rounded-3xl border border-slate-800 space-y-2">
@@ -563,7 +567,7 @@
                           </button>
                         </div>
 
-                        {/* BOTÓN DE ELIMINACIÓN MASIVA (PARA RECARGAR DESDE CERO SIN DUPLICADOS) */}
+                        {/* BOTÓN DE BORRADO MASIVO */}
                         {userSession.rol === 'Administrativo' && (
                           <div className="pt-1">
                             <button 
