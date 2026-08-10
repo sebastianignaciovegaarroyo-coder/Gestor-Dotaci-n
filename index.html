@@ -3,8 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- ETIQUETAS PWA OBLIGATORIAS -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#020617">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -12,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="BRAMAQ">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3200/3200424.png">
     
-    <title>Gestor de Dotación BRAMAQ - Enterprise</title>
+    <title>Gestor de Dotación BRAMAQ</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -22,31 +20,18 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     
-    <!-- REGISTRO DEL SERVICE WORKER -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('PWA: Service Worker Registrado.'))
-            .catch(err => console.log('PWA: Error Service Worker.', err));
+          navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW error:', err));
         });
       }
     </script>
-
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f1f5f9; }
-        .glass-panel { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(30, 41, 59, 0.8); }
-        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-    </style>
 </head>
-<body class="antialiased selection:bg-amber-500/30 selection:text-amber-200">
+<body class="bg-slate-950 text-slate-100">
     <div id="root"></div>
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
-        
-        // MANTENEMOS TUS CREDENCIALES DE FIREBASE EXACTAS
+        const { useState, useEffect } = React;
         const firebaseConfig = {
           apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9Vr69wJz2vA...",
           authDomain: "bramaqcloud.firebaseapp.com",
@@ -55,45 +40,38 @@
           messagingSenderId: "369713509600",
           appId: "1:369713509600:web:b6d878c..."
         };
-
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
         function App() {
           const [deferredPrompt, setDeferredPrompt] = useState(null);
-          const [isInstallable, setIsInstallable] = useState(false);
-          const [showInstallHelp, setShowInstallHelp] = useState(false);
 
           useEffect(() => {
-            const handleBeforeInstallPrompt = (e) => {
+            window.addEventListener('beforeinstallprompt', (e) => {
               e.preventDefault();
               setDeferredPrompt(e);
-              setIsInstallable(true);
-            };
-            window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-            return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+            });
           }, []);
 
-          const handleInstallClick = async () => {
+          const handleInstall = () => {
             if (deferredPrompt) {
               deferredPrompt.prompt();
-              const { outcome } = await deferredPrompt.userChoice;
-              if (outcome === 'accepted') setIsInstallable(false);
               setDeferredPrompt(null);
             } else {
-              setShowInstallHelp(true);
+              alert("Para instalar: En el menú del navegador, busca 'Instalar aplicación' o 'Agregar a pantalla de inicio'.");
             }
           };
 
-          // ... (AQUÍ IRÍA EL RESTO DE TU LÓGICA DE APP, PERFILES, BITÁCORA, ETC.)
-          // HE MANTENIDO LA ESTRUCTURA EXACTA PARA QUE TUS FUNCIONES NO SE ALTEREN.
-          
           return (
-             /* MANTEN TU ESTRUCTURA DE COMPONENTES AQUÍ */
-             <div>
-                {/* Asegúrate de que el botón de instalación llame a handleInstallClick */}
-                <button onClick={handleInstallClick} className="...">Instalar Aplicación</button>
-             </div>
+            <div className="flex flex-col items-center justify-center min-h-screen p-4">
+              <h1 className="text-2xl font-bold mb-6">BRAMAQ App</h1>
+              <button 
+                onClick={handleInstall}
+                className="bg-emerald-600 px-6 py-3 rounded-xl font-bold text-white shadow-lg"
+              >
+                Instalar Aplicación
+              </button>
+            </div>
           );
         }
         ReactDOM.render(<App />, document.getElementById('root'));
