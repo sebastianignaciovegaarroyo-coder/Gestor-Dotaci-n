@@ -38,7 +38,7 @@
           const [searchTerm, setSearchTerm] = useState('');
           const [activeTab, setActiveTab] = useState('dashboard');
           const [activeFilter, setActiveFilter] = useState('TODOS');
-          const [citiesList] = useState(['Loncoche', 'Lanco', 'Valdivia', 'San José de la Mariquina', 'Los Lagos', 'Malalhue', 'Ciruelos', 'Panguipulli']);
+          const [citiesList] = useState(['Loncoche', 'Lanco', 'Valdivia', 'San José de la Mariquina', 'Los Lagos', 'Malalhue', 'Ciruelos', 'Panguipulli', 'Mariquina']);
           const [newCityInput, setNewCityInput] = useState('');
           
           const [isModalOpen, setIsModalOpen] = useState(false);
@@ -100,7 +100,7 @@
             downloadAnchor.remove();
           };
 
-          // CARGA INTELIGENTE Y DETECCIÓN EXHAUSTIVA DE CONTACTO DE EMERGENCIA (EVITA DUPLICADOS POR RUT)
+          // CARGA INTELIGENTE ADAPTADA A TU ARCHIVO EXCEL (DETECTA EMERGENCIA Y EVITA DUPLICADOS POR RUT)
           const handleUploadExcel = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -112,14 +112,14 @@
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
-                const jsonSheet = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+                // Tu archivo tiene los encabezados en la fila 2 (index 1) o podemos usar {defval: ""}
+                const jsonSheet = XLSX.utils.sheet_to_json(worksheet, { defval: "", range: 1 });
 
                 if (jsonSheet.length > 0) {
                   let addedCount = 0;
-                  // Limpiamos y normalizamos los RUTs existentes para prevenir duplicados exactos
                   let existingRuts = new Set(employees.map(emp => (emp.rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '')));
 
-                  if (confirm(`Se leyeron ${jsonSheet.length} filas del archivo. ¿Deseas importar y agregar solo los registros faltantes sin duplicar?`)) {
+                  if (confirm(`Se leyeron ${jsonSheet.length} filas del archivo. ¿Deseas sincronizar y agregar solo los registros faltantes sin duplicar?`)) {
                     for (let row of jsonSheet) {
                       const keys = Object.keys(row);
                       const findVal = (terms) => {
@@ -130,16 +130,15 @@
                         return '';
                       };
 
-                      const nombre = findVal(['nombre', 'personal', 'trabajador', 'empleado']);
-                      const rut = findVal(['rut', 'dni', 'cedula']);
-                      const cargo = findVal(['cargo', 'rol', 'puesto', 'faena']);
-                      const ciudad = findVal(['ciudad', 'comuna', 'ubicacion']) || 'Valdivia';
-                      const telefono = findVal(['telefono', 'fono', 'celular', 'contacto', 'sms']);
-                      const correo = findVal(['correo', 'email', 'mail']);
-                      
-                      // Detección mejorada de campos de emergencia en cualquier columna del Excel
-                      const emergenciaNombre = findVal(['emergencia', 'contacto_emergencia', 'avisar', 'familiar', 'parentesco']);
-                      const emergenciaFono = findVal(['fono_emergencia', 'telefono_emergencia', 'emergencia_fono', 'cel_emergencia', 'tel_emergencia']);
+                      const nombre = findVal(['nombre']);
+                      const rut = findVal(['rut']);
+                      const direccion = findVal(['direccion']);
+                      const ciudad = findVal(['ciudad']) || 'Valdivia';
+                      const cargo = findVal(['cargo']);
+                      const telefono = findVal(['n telefonico', 'telefono', 'fono', 'celular']);
+                      const correo = findVal(['correo', 'email']);
+                      const emergenciaNombre = findVal(['nombre emergencia', 'emergencia', 'contacto emergencia']);
+                      const emergenciaFono = findVal(['fono emergencia', 'telefono emergencia', 'emergencia fono']);
 
                       const cleanRut = (rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '');
 
@@ -147,8 +146,9 @@
                         await db.collection('employees').add({
                           nombre: nombre || 'Sin Nombre',
                           rut: rut || 'Sin RUT',
-                          cargo: cargo || 'OPERADOR',
+                          direccion: direccion || '',
                           ciudad: ciudad,
+                          cargo: cargo || 'OPERADOR',
                           telefono: telefono,
                           correo: correo,
                           emergenciaNombre: emergenciaNombre,
@@ -160,7 +160,7 @@
                         addedCount++;
                       }
                     }
-                    alert(`¡Importación completada! Se agregaron ${addedCount} nuevos trabajadores (se omitieron los duplicados).`);
+                    alert(`¡Sincronización completada! Se añadieron ${addedCount} registros nuevos. Se omitieron los duplicados.`);
                   }
                 }
               } catch (err) {
@@ -260,7 +260,7 @@
             return missing;
           };
 
-          // ORDENAMIENTO ALFABÉTICO ESTRICTO DE LA A A LA Z
+          // ORDENAMIENTO ALFABÉTICO ESTRICTO DE LA A A LA Z (IGNORANDO MAYÚSCULAS/ACENTOS)
           const filtered = useMemo(() => {
             const list = employees.filter(emp => {
               const s = searchTerm.toLowerCase();
@@ -284,7 +284,7 @@
               if (activeFilter === 'MECANICOS') return (emp.cargo||'').toUpperCase().includes('MECANICO');
               
               if (citiesList.includes(activeFilter)) {
-                return (emp.ciudad||'') === activeFilter;
+                return (emp.ciudad||'').toLowerCase() === activeFilter.toLowerCase();
               }
 
               return true;
@@ -307,7 +307,7 @@
 
             const porCiudad = {};
             citiesList.forEach(c => {
-              porCiudad[c] = employees.filter(e => (e.ciudad||'') === c).length;
+              porCiudad[c] = employees.filter(e => (e.ciudad||'').toLowerCase() === c.toLowerCase()).length;
             });
 
             return { total, supervisores, prevencionistas, administrativos, adminContrato, operadoresGrua, cargadorFrontal, mecanicos, incompletos, porCiudad };
