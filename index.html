@@ -49,12 +49,11 @@
           const [selectedEmpForHistory, setSelectedEmpForHistory] = useState(null);
           const [isGlobalHistoryOpen, setIsGlobalHistoryOpen] = useState(false);
 
-          // Estado para el menú interactivo de llamadas telefónicas
           const [selectedPhone, setSelectedPhone] = useState(null);
           
           const [userSession, setUserSession] = useState({
-            nombre: "Juan Pérez (Supervisor)",
-            rol: "Supervisor"
+            nombre: "Administrador / RRHH",
+            rol: "Administrativo"
           });
 
           const [formData, setFormData] = useState({
@@ -101,7 +100,7 @@
             downloadAnchor.remove();
           };
 
-          // Lector avanzado de Excel adaptado para extraer también el Contacto de Emergencia
+          // CARGA INTELIGENTE: VERIFICA POR RUT Y SOLO AGREGA LOS QUE FALTAN (NO REPITE)
           const handleUploadExcel = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -116,7 +115,10 @@
                 const jsonSheet = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
                 if (jsonSheet.length > 0) {
-                  if (confirm(`Se detectaron ${jsonSheet.length} filas. ¿Importarlas a la nube?`)) {
+                  let addedCount = 0;
+                  let existingRuts = new Set(employees.map(emp => (emp.rut || '').trim().toLowerCase()));
+
+                  if (confirm(`Se leyeron ${jsonSheet.length} filas del archivo. ¿Deseas sincronizar y agregar solo los nuevos registros?`)) {
                     for (let row of jsonSheet) {
                       const keys = Object.keys(row);
                       const findVal = (terms) => {
@@ -135,7 +137,8 @@
                       const emergenciaNombre = findVal(['emergencia', 'contacto_emergencia', 'avisar_a']);
                       const emergenciaFono = findVal(['fono_emergencia', 'telefono_emergencia', 'emergencia_fono']);
 
-                      if (nombre || rut) {
+                      const cleanRut = rut.toLowerCase();
+                      if ((nombre || rut) && !existingRuts.has(cleanRut)) {
                         await db.collection('employees').add({
                           nombre: nombre || 'Sin Nombre',
                           rut: rut || 'Sin RUT',
@@ -148,9 +151,11 @@
                           documentos: { contrato: true, induccion: true, examenes: true, epp: true },
                           historial: []
                         });
+                        existingRuts.add(cleanRut);
+                        addedCount++;
                       }
                     }
-                    alert("¡Carga masiva completada con éxito!");
+                    alert(`¡Sincronización finalizada! Se agregaron ${addedCount} nuevos trabajadores (se omitieron los repetidos).`);
                   }
                 }
               } catch (err) {
@@ -250,8 +255,9 @@
             return missing;
           };
 
+          // ORDENAMIENTO ALFABÉTICO ESTRICTO DE LA A A LA Z
           const filtered = useMemo(() => {
-            return employees.filter(emp => {
+            const list = employees.filter(emp => {
               const s = searchTerm.toLowerCase();
               const matchSearch = (emp.nombre||'').toLowerCase().includes(s) || 
                                     (emp.rut||'').toLowerCase().includes(s) || 
@@ -267,8 +273,8 @@
               if (activeFilter === 'ADMIN_CONTRATO') return (emp.cargo||'').toUpperCase().includes('ADMINISTRADOR DE CONTRATO') || (emp.cargo||'').toUpperCase().includes('ADMIN. CONTRATO');
               if (activeFilter === 'SUPERVISORES') return (emp.cargo||'').toUpperCase().includes('SUPERVISOR');
               if (activeFilter === 'PREVENCIONISTAS') return (emp.cargo||'').toUpperCase().includes('PREVENCION');
-              if (activeFilter === 'ADMINISTRATIVOS') return (emp.cargo||'').toUpperCase().includes('ADMINISTRATIVO');
-              if (activeFilter === 'OPERADORES_GRUA') return (emp.cargo||'').toUpperCase().includes('GRUA') || (emp.cargo||'').toUpperCase().includes('GRUETA');
+              if (activeFilter === 'ADMINISTRATIVOS') return (emp.cargo||'').toUpperCase().includes('ADMINISTRATIVO') && !(emp.cargo||'').toUpperCase().includes('CONTRATO');
+              if (activeFilter === 'OPERADORES_GRUA') return (emp.cargo||'').toUpperCase().includes('GRUA');
               if (activeFilter === 'CARGADOR_FRONTAL') return (emp.cargo||'').toUpperCase().includes('CARGADOR FRONTAL');
               if (activeFilter === 'MECANICOS') return (emp.cargo||'').toUpperCase().includes('MECANICO');
               
@@ -278,6 +284,8 @@
 
               return true;
             });
+
+            return list.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           }, [employees, searchTerm, activeFilter, citiesList]);
 
           const kpis = useMemo(() => {
@@ -372,7 +380,7 @@
                   <div className="text-center py-20 text-slate-500">Cargando base de datos...</div>
                 ) : (
                   <>
-                    {/* PANEL GERENCIAL */}
+                    {/* PANEL GERENCIAL CON TODAS LAS TARJETAS */}
                     {activeTab === 'dashboard' && (
                       <div className="space-y-4 pt-2">
                         <div className="bg-slate-900/80 p-4 rounded-3xl border border-slate-800 space-y-2">
@@ -471,7 +479,7 @@
                       </div>
                     )}
 
-                    {/* DIRECTORIO Y BITÁCORA */}
+                    {/* DIRECTORIO Y BITÁCORA ORDENADO DE A A LA Z */}
                     {activeTab === 'directorio' && (
                       <div className="space-y-3">
                         <div className="relative">
@@ -525,7 +533,7 @@
                           </button>
                         </div>
 
-                        {/* LISTADO DE TRABAJADORES CON CONTACTO DE EMERGENCIA VISIBLE */}
+                        {/* LISTADO DE TRABAJADORES ORDENADOS ALFABÉTICAMENTE A-Z */}
                         <div className="space-y-3 mt-3">
                           {filtered.length === 0 ? (
                             <div className="p-8 text-center text-slate-500 text-xs bg-slate-900 rounded-2xl border border-slate-800">No se encontraron registros.</div>
@@ -544,7 +552,7 @@
                                     </span>
                                   </div>
 
-                                  {/* CONTACTO DE EMERGENCIA RECUPERADO DEL EXCEL */}
+                                  {/* CONTACTO DE EMERGENCIA */}
                                   <div className="bg-slate-950 px-3 py-2 rounded-xl border border-slate-800 text-[11px] flex justify-between items-center">
                                     <div>
                                       <span className="text-slate-400 font-semibold">Emergencia: </span>
