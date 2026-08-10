@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/Gestor-Dotaci-n/">
     
-    <!-- PWA & SEO Meta Tags -->
+    <!-- PWA & Mobile Optimization -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#020617">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,18 +13,18 @@
     <meta name="apple-mobile-web-app-title" content="BRAMAQ">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3200/3200424.png">
     
-    <title>Gestor de Dotación BRAMAQ - Enterprise</title>
+    <title>Gestor de Dotación BRAMAQ - Enterprise Cloud</title>
     
-    <!-- CDNs de Producción -->
+    <!-- CDNs Empresariales -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f1f5f9; margin: 0; }
@@ -43,14 +43,14 @@
     <div id="root">
         <div class="app-loader">
             <div style="font-size: 24px; margin-bottom: 10px;">BRAMAQ Enterprise</div>
-            <div style="font-size: 14px; color: #94a3b8; font-weight: normal;">Estableciendo conexión segura con la nube...</div>
+            <div style="font-size: 14px; color: #94a3b8; font-weight: normal;">Cargando núcleo de sincronización en tiempo real...</div>
         </div>
     </div>
     
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
         
-        // CONFIGURACIÓN DE FIREBASE (Nube en Tiempo Real)
+        // Credenciales de conexión centralizada en la nube
         const firebaseConfig = {
           apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9Vr69wJz2vA...",
           authDomain: "bramaqcloud.firebaseapp.com",
@@ -64,20 +64,19 @@
         try {
           if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();
-        } catch (e) { console.error("Error iniciando Firebase:", e); }
+        } catch (e) { console.error("Error crítico conectando a la nube:", e); }
 
         function App() {
           const [hasEntered, setHasEntered] = useState(false);
           const [gateProfile, setGateProfile] = useState('');
           const [userSession, setUserSession] = useState({ rol: "" });
-
           const [employees, setEmployees] = useState([]);
           const [loading, setLoading] = useState(true);
           const [onlineStatus, setOnlineStatus] = useState(navigator.onLine);
           const [searchTerm, setSearchTerm] = useState('');
           const [activeTab, setActiveTab] = useState('dashboard');
           const [activeFilter, setActiveFilter] = useState('TODOS');
-          const [citiesList, setCitiesList] = useState(['Loncoche', 'Lanco', 'Valdivia', 'San José de la Mariquina', 'Los Lagos', 'Malalhue', 'Ciruelos', 'Panguipulli', 'Mariquina']);
+          const [citiesList] = useState(['Loncoche', 'Lanco', 'Valdivia', 'San José de la Mariquina', 'Los Lagos', 'Malalhue', 'Ciruelos', 'Panguipulli', 'Mariquina']);
           
           const [isModalOpen, setIsModalOpen] = useState(false);
           const [currentEmployee, setCurrentEmployee] = useState(null);
@@ -91,7 +90,7 @@
             documentos: { contrato: true, induccion: true, examenes: true, epp: true }
           });
 
-          // Sincronización en Tiempo Real con Cloud Firestore
+          // Sincronización en Tiempo Real Multiusuario vía Cloud Firestore
           useEffect(() => {
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
             window.addEventListener('online', on); window.addEventListener('offline', off);
@@ -105,7 +104,7 @@
               setEmployees(items); 
               setLoading(false);
             }, (error) => {
-              console.error("Error sincronizando base de datos en tiempo real:", error);
+              console.error("Error en sincronización en tiempo real:", error);
               setLoading(false);
             });
             return () => { unsub(); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
@@ -133,8 +132,11 @@
           };
 
           const handleDelete = async (id) => {
-            if (userSession.rol !== 'Administrativo' && userSession.rol !== 'AdminContrato') { alert("Sin permisos suficientes para eliminar."); return; }
-            if (confirm("¿Estás seguro de eliminar este registro de la base de datos central?")) {
+            if (userSession.rol !== 'Administrativo' && userSession.rol !== 'AdminContrato') {
+              alert("Sin permisos suficientes para realizar esta acción."); 
+              return;
+            }
+            if (confirm("¿Estás seguro de eliminar este registro permanentemente de la base de datos central?")) {
               await db.collection('employees').doc(id).delete();
             }
           };
@@ -194,7 +196,7 @@
                     <span className="font-bold text-white tracking-tight text-lg">BRAMAQ Enterprise</span>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className={`w-2.5 h-2.5 rounded-full ${onlineStatus ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-red-500'}`}></span>
+                    <span className={`w-2.5 h-2.5 rounded-full ${onlineStatus ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-red-500'}`} title={onlineStatus ? "Conectado a la nube" : "Sin conexión a internet"}></span>
                     <span className="text-xs text-slate-400 font-medium">Perfil: <strong className="text-amber-400">{userSession.rol}</strong></span>
                     <button onClick={() => setHasEntered(false)} className="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1.5 rounded-lg font-bold">Cerrar Sesión</button>
                   </div>
@@ -205,7 +207,7 @@
                     <div className="flex justify-between items-center bg-slate-900 border border-slate-800 p-5 rounded-2xl">
                       <div>
                         <h2 className="text-xl font-bold text-white">Directorio Central de Trabajadores</h2>
-                        <p className="text-xs text-slate-400 mt-0.5">Sincronización activa con la base de datos en la nube.</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Sincronización bidireccional activa con Cloud Firestore.</p>
                       </div>
                       <button onClick={() => { setCurrentEmployee(null); setIsModalOpen(true); }} className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl shadow-md">
                         + Nuevo Trabajador
@@ -213,7 +215,7 @@
                     </div>
 
                     {loading ? (
-                      <div className="text-center py-20 text-slate-500">Cargando registros centralizados...</div>
+                      <div className="text-center py-20 text-slate-500">Sincronizando registros centralizados...</div>
                     ) : (
                       <div className="grid grid-cols-1 gap-3">
                         {filtered.map(emp => (
@@ -233,7 +235,7 @@
                 </main>
               </div>
 
-              {/* MODAL NUEVO / EDITAR */}
+              {/* MODAL GESTIÓN DE TRABAJADOR */}
               {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
@@ -271,7 +273,7 @@
                     const root = ReactDOM.createRoot(container);
                     root.render(<App />);
                 } catch (e) {
-                    console.error("Error crítico en renderizado React:", e);
+                    console.error("Error crítico de renderizado React:", e);
                     container.innerHTML = '<div style="color:white; padding:40px; text-align:center;">Error al iniciar la interfaz. Compruebe la consola.</div>';
                 }
             }
