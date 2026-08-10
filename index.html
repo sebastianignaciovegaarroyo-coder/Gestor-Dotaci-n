@@ -100,7 +100,7 @@
             downloadAnchor.remove();
           };
 
-          // CARGA INTELIGENTE Y SEGURA: EVITA DUPLICADOS VERIFICANDO EL RUT
+          // CARGA INTELIGENTE Y DETECCIÓN EXHAUSTIVA DE CONTACTO DE EMERGENCIA (EVITA DUPLICADOS POR RUT)
           const handleUploadExcel = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -116,9 +116,10 @@
 
                 if (jsonSheet.length > 0) {
                   let addedCount = 0;
-                  let existingRuts = new Set(employees.map(emp => (emp.rut || '').trim().toLowerCase()));
+                  // Limpiamos y normalizamos los RUTs existentes para prevenir duplicados exactos
+                  let existingRuts = new Set(employees.map(emp => (emp.rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '')));
 
-                  if (confirm(`Se leyeron ${jsonSheet.length} filas. ¿Deseas sincronizar y agregar solo los registros faltantes sin duplicar?`)) {
+                  if (confirm(`Se leyeron ${jsonSheet.length} filas del archivo. ¿Deseas importar y agregar solo los registros faltantes sin duplicar?`)) {
                     for (let row of jsonSheet) {
                       const keys = Object.keys(row);
                       const findVal = (terms) => {
@@ -128,16 +129,20 @@
                         }
                         return '';
                       };
+
                       const nombre = findVal(['nombre', 'personal', 'trabajador', 'empleado']);
                       const rut = findVal(['rut', 'dni', 'cedula']);
                       const cargo = findVal(['cargo', 'rol', 'puesto', 'faena']);
                       const ciudad = findVal(['ciudad', 'comuna', 'ubicacion']) || 'Valdivia';
                       const telefono = findVal(['telefono', 'fono', 'celular', 'contacto', 'sms']);
                       const correo = findVal(['correo', 'email', 'mail']);
-                      const emergenciaNombre = findVal(['emergencia', 'contacto_emergencia', 'avisar_a']);
-                      const emergenciaFono = findVal(['fono_emergencia', 'telefono_emergencia', 'emergencia_fono']);
+                      
+                      // Detección mejorada de campos de emergencia en cualquier columna del Excel
+                      const emergenciaNombre = findVal(['emergencia', 'contacto_emergencia', 'avisar', 'familiar', 'parentesco']);
+                      const emergenciaFono = findVal(['fono_emergencia', 'telefono_emergencia', 'emergencia_fono', 'cel_emergencia', 'tel_emergencia']);
 
-                      const cleanRut = rut.toLowerCase();
+                      const cleanRut = (rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '');
+
                       if ((nombre || rut) && cleanRut && !existingRuts.has(cleanRut)) {
                         await db.collection('employees').add({
                           nombre: nombre || 'Sin Nombre',
@@ -155,7 +160,7 @@
                         addedCount++;
                       }
                     }
-                    alert(`¡Sincronización completada! Se añadieron ${addedCount} registros nuevos. Se omitieron los duplicados.`);
+                    alert(`¡Importación completada! Se agregaron ${addedCount} nuevos trabajadores (se omitieron los duplicados).`);
                   }
                 }
               } catch (err) {
@@ -285,7 +290,7 @@
               return true;
             });
 
-            return list.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+            return list.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' }));
           }, [employees, searchTerm, activeFilter, citiesList]);
 
           const kpis = useMemo(() => {
@@ -346,8 +351,8 @@
                     value={userSession.rol} 
                     onChange={e => {
                       const rol = e.target.value;
-                      let nombre = "Juan Pérez (Supervisor)";
-                      if(rol === "Administrativo") nombre = "María Gómez (RRHH / Admin)";
+                      let nombre = "Administrador / RRHH";
+                      if(rol === "Supervisor") nombre = "Juan Pérez (Supervisor)";
                       if(rol === "Prevencionista") nombre = "Carlos Ruiz (Prevención)";
                       setUserSession({ nombre, rol });
                     }} 
