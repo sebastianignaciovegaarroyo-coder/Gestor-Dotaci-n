@@ -51,7 +51,7 @@
 
           const [selectedPhone, setSelectedPhone] = useState(null);
           
-          // Perfil activo principal en la cabecera
+          // ESTADO DE SESIÓN ÚNICO Y CONTROLADO PARA LOS 4 PERFILES
           const [userSession, setUserSession] = useState({
             rol: "Administrativo"
           });
@@ -61,7 +61,7 @@
             documentos: { contrato: true, induccion: true, examenes: true, epp: true }
           });
 
-          // Lista de supervisores extraídos de la dotación
+          // Extracción estricta de nombres de supervisores de la dotación
           const supervisorsList = useMemo(() => {
             const list = employees
               .filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR'))
@@ -83,7 +83,7 @@
             rolBitacora: 'Administrativo'
           });
 
-          // Sincronización estricta y limpia del autor según el rol activo
+          // SINCRONIZACIÓN ESTRICTA DE LA BITÁCORA SEGÚN EL PERFIL SELECCIONADO
           useEffect(() => {
             if (userSession.rol === 'Administrativo') {
               setLogForm(prev => ({ ...prev, autorBitacora: 'Administrativo / RRHH', rolBitacora: 'Administrativo' }));
@@ -429,7 +429,7 @@
                 {onlineStatus ? '🟢 Conectado a la Nube (Tiempo Real)' : '🔴 Sin Conexión'}
               </div>
 
-              {/* CABECERA */}
+              {/* CABECERA CON LOS 4 PERFILES EXACTOS */}
               <header className="px-4 pt-4 pb-2 space-y-3 max-w-7xl mx-auto">
                 <div className="flex items-center gap-3">
                   <div className="bg-amber-600 px-3 py-2.5 rounded-2xl text-white font-black text-xs shadow-md">
@@ -851,7 +851,7 @@
                 </div>
               )}
 
-              {/* MODAL BITÁCORA / HOJA DE VIDA CON AISLAMIENTO ESTRICTO DE PERFILES (SUPERVISORES CON DESPLEGABLE, OTROS ÚNICOS SIN NOMBRE) */}
+              {/* MODAL BITÁCORA / HOJA DE VIDA CON AISLAMIENTO ESTRICTO DE PERFILES (SUPERVISORES CON DESPLEGABLE, LOS DEMÁS ÚNICOS SIN NOMBRE) */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-lg border border-slate-800 space-y-3 my-auto max-h-[90vh] overflow-y-auto">
@@ -910,9 +910,9 @@
                     <form onSubmit={handleAddLog} className="space-y-2.5 text-xs pt-3 border-t border-slate-800">
                       <div className="text-[11px] font-bold text-amber-400">Agregar Evento a la Hoja de Vida:</div>
                       
-                      {/* AISLAMIENTO ESTRICTO DE PERFILES EN LA BITÁCORA */}
+                      {/* CADA PERFIL APARECE DONDE CORRESPONDE SIN NOMBRES FICTICIOS EXTRANJEROS */}
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Perfil Activo)</label>
+                        <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Según perfil activo)</label>
                         {userSession.rol === 'Supervisor' ? (
                           <select 
                             value={logForm.autorBitacora} 
