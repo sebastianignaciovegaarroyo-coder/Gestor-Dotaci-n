@@ -89,7 +89,7 @@
             downloadAnchor.remove();
           };
 
-          // 📤 CARGA ROBUSTA DE EXCEL (.xlsx, .xls)
+          // 📤 LECTOR UNIVERSAL DE EXCEL (.xlsx, .xls, .csv)
           const handleUploadExcel = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -105,9 +105,8 @@
                 const jsonSheet = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
                 if (jsonSheet.length > 0) {
-                  if (confirm(`Se detectaron ${jsonSheet.length} filas en el archivo. ¿Deseas importarlas a la nube?`)) {
+                  if (confirm(`Se detectaron ${jsonSheet.length} filas en el Excel. ¿Deseas importarlas a la nube?`)) {
                     for (let row of jsonSheet) {
-                      // Buscar dinámicamente las propiedades sin importar cómo se llamen las columnas en el Excel
                       const keys = Object.keys(row);
                       const findVal = (terms) => {
                         for (let t of terms) {
@@ -201,7 +200,7 @@
                 });
               }
             });
-            return logs.sort((a, b) => new Date(b.fechaInicio) - new Date(a.fechaInicio));
+            return logs.sort((a, b) => new Date(b.fechaInicio) - new Date(b.fechaTermino));
           }, [employees]);
 
           return (
@@ -293,7 +292,7 @@
                           />
                         </div>
 
-                        {/* 4 BOTONES EXACTOS */}
+                        {/* 4 BOTONES EXACTOS CON FILTRO LIBRE DE EXCEL */}
                         <div className="grid grid-cols-2 gap-2">
                           <button 
                             onClick={() => setIsGlobalHistoryOpen(true)} 
@@ -308,7 +307,8 @@
                             <i data-lucide="download" className="w-4 h-4"></i> Descargar Excel
                           </button>
                           
-                          <input type="file" ref={fileInputRef} onChange={handleUploadExcel} accept=".xlsx, .xls, .csv, .json" className="hidden" />
+                          {/* Acepta sin restricciones cualquier extensión de Excel o archivo general */}
+                          <input type="file" ref={fileInputRef} onChange={handleUploadExcel} accept=".xlsx, .xls, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" className="hidden" />
                           <button 
                             onClick={() => fileInputRef.current.click()} 
                             className="bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 py-3 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all"
