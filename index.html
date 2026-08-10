@@ -3,26 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAMAQ - Gestor Enterprise Master Cloud</title>
-    <!-- Tailwind CSS -->
+    <title>BRAMAQ - Gestor Master Cloud</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React y ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans pb-12">
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans pb-16">
     <div id="root"></div>
-
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
-
         const firebaseConfig = {
           apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9V...",
           authDomain: "bramaqcloud.firebaseapp.com",
@@ -31,19 +24,11 @@
           messagingSenderId: "369713509600",
           appId: "1:369713509600:web:b6d878c..."
         };
-
         let db;
         try {
-          if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-          }
+          if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();
-          db.enablePersistence().catch((err) => {
-            console.warn("Persistencia offline no disponible:", err.code);
-          });
-        } catch (error) {
-          console.error("Error inicializando Firebase:", error);
-        }
+        } catch (e) { console.error(e); }
 
         function App() {
           const [employees, setEmployees] = useState([]);
@@ -52,328 +37,157 @@
           const [searchTerm, setSearchTerm] = useState('');
           const [activeFilter, setActiveFilter] = useState('TODOS');
           const [activeTab, setActiveTab] = useState('directorio');
-          
+          const [citiesList, setCitiesList] = useState(['Valdivia', 'Lanco', 'Loncoche', 'San José de la Mariquina']);
+          const [newCityInput, setNewCityInput] = useState('');
           const [isModalOpen, setIsModalOpen] = useState(false);
           const [currentEmployee, setCurrentEmployee] = useState(null);
           const [formError, setFormError] = useState('');
           const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
           const [selectedEmpForHistory, setSelectedEmpForHistory] = useState(null);
-          
-          const [userSession, setUserSession] = useState({
-            nombre: "Administrador General",
-            rol: "Administrativo"
-          });
-
-          const [formData, setFormData] = useState({
-            nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''
-          });
-
-          const [newLog, setNewLog] = useState({
-            tipo: 'Licencia Médica',
-            fechaInicio: new Date().toISOString().split('T')[0],
-            fechaTermino: new Date().toISOString().split('T')[0],
-            nota: ''
-          });
+          const [userSession, setUserSession] = useState({ nombre: "Admin General", rol: "Administrativo" });
+          const [formData, setFormData] = useState({ nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '' });
+          const [newLog, setNewLog] = useState({ tipo: 'Licencia Médica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], nota: '' });
 
           useEffect(() => {
-            const handleOnline = () => setOnlineStatus(true);
-            const handleOffline = () => setOnlineStatus(false);
-            window.addEventListener('online', handleOnline);
-            window.addEventListener('offline', handleOffline);
-
-            if (!db) {
-              setLoading(false);
-              return;
-            }
-
-            const unsubscribe = db.collection('employees').onSnapshot((snapshot) => {
+            const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
+            window.addEventListener('online', on); window.addEventListener('offline', off);
+            if (!db) { setLoading(false); return; }
+            const unsub = db.collection('employees').onSnapshot(snap => {
               const items = [];
-              snapshot.forEach((doc) => {
-                items.push({ id: doc.id, ...doc.data() });
-              });
-              setEmployees(items);
-              setLoading(false);
-            }, (error) => {
-              console.error("Error al sincronizar en tiempo real:", error);
-              setFormError("Error de sincronización con la nube.");
-              setLoading(false);
-            });
-
-            return () => {
-              unsubscribe();
-              window.removeEventListener('online', handleOnline);
-              window.removeEventListener('offline', handleOffline);
-            };
+              snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
+              setEmployees(items); setLoading(false);
+            }, () => setLoading(false));
+            return () => { unsub(); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
           }, []);
 
-          useEffect(() => {
-            if (window.lucide) window.lucide.createIcons();
-          });
+          useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
 
-          const handleSaveEmployee = async (e) => {
+          const handleSave = async (e) => {
             e.preventDefault();
-            setFormError('');
-
-            if (!formData.nombre || !formData.rut) {
-              setFormError("El Nombre y el RUT son obligatorios.");
-              return;
-            }
-
+            if (!formData.nombre || !formData.rut) { setFormError("Nombre y RUT obligatorios."); return; }
             try {
               if (currentEmployee) {
-                await db.collection('employees').doc(currentEmployee.id).update({
-                  ...formData,
-                  updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                await db.collection('employees').doc(currentEmployee.id).update(formData);
               } else {
-                await db.collection('employees').add({
-                  ...formData,
-                  historial: [],
-                  createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                await db.collection('employees').add({ ...formData, historial: [] });
               }
-              setIsModalOpen(false);
-              setCurrentEmployee(null);
-            } catch (error) {
-              setFormError("Error al guardar en la nube: " + error.message);
-            }
+              setIsModalOpen(false); setCurrentEmployee(null);
+            } catch (err) { setFormError("Error: " + err.message); }
           };
 
-          const handleDeleteEmployee = async (id) => {
-            if (userSession.rol !== 'Administrativo') {
-              alert("No cuenta con permisos de Administrador para eliminar registros.");
-              return;
-            }
-            if (confirm("¿Está seguro de eliminar este trabajador?")) {
-              try {
-                await db.collection('employees').doc(id).delete();
-              } catch (error) {
-                alert("Error al eliminar: " + error.message);
-              }
-            }
+          const handleDelete = async (id) => {
+            if (userSession.rol !== 'Administrativo') { alert("Sin permisos de Administrador."); return; }
+            if (confirm("¿Eliminar trabajador?")) await db.collection('employees').doc(id).delete();
           };
 
-          const handleAddLog = async (e) => {
+          const handleLog = async (e) => {
             e.preventDefault();
             if (!selectedEmpForHistory) return;
-
-            const logEntry = {
-              id: Date.now().toString(),
-              tipo: newLog.tipo,
-              fechaInicio: newLog.fechaInicio,
-              fechaTermino: newLog.fechaTermino,
-              nota: newLog.nota,
-              autor: userSession.nombre,
-              rolAutor: userSession.rol,
-              createdAt: new Date().toISOString()
-            };
-
-            try {
-              const updatedHistorial = [...(selectedEmpForHistory.historial || []), logEntry];
-              await db.collection('employees').doc(selectedEmpForHistory.id).update({
-                historial: updatedHistorial
-              });
-              
-              setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
-              setNewLog({ tipo: 'Licencia Médica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], nota: '' });
-              alert("Evento agregado correctamente.");
-            } catch (error) {
-              alert("Error al registrar evento: " + error.message);
-            }
+            const log = { id: Date.now().toString(), ...newLog, autor: userSession.nombre, rolAutor: userSession.rol };
+            const hist = [...(selectedEmpForHistory.historial || []), log];
+            await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: hist });
+            setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: hist });
+            setNewLog({ tipo: 'Licencia Médica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], nota: '' });
           };
 
-          const filteredEmployees = useMemo(() => {
-            return employees.filter(emp => {
-              const matchesSearch = (emp.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                    (emp.rut || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                    (emp.cargo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                    (emp.ciudad || '').toLowerCase().includes(searchTerm.toLowerCase());
-              
-              if (activeFilter === 'INCOMPLETOS') return matchesSearch && (!emp.telefono || !emp.correo || !emp.emergenciaNombre);
-              if (activeFilter === 'SUPERVISORES') return matchesSearch && (emp.cargo || '').toUpperCase().includes('SUPERVISOR');
-              if (activeFilter === 'PREVENCION') return matchesSearch && (emp.cargo || '').toUpperCase().includes('PREVENCION');
-              return matchesSearch;
-            }).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-          }, [employees, searchTerm, activeFilter]);
+          const filtered = useMemo(() => employees.filter(emp => {
+            const s = searchTerm.toLowerCase();
+            const match = (emp.nombre||'').toLowerCase().includes(s) || (emp.rut||'').toLowerCase().includes(s) || (emp.cargo||'').toLowerCase().includes(s) || (emp.ciudad||'').toLowerCase().includes(s);
+            if (activeFilter === 'INCOMPLETOS') return match && (!emp.telefono || !emp.emergenciaNombre);
+            if (activeFilter === 'SUPERVISORES') return match && (emp.cargo||'').toUpperCase().includes('SUPERVISOR');
+            if (activeFilter === 'PREVENCION') return match && (emp.cargo||'').toUpperCase().includes('PREVENCION');
+            return match;
+          }), [employees, searchTerm, activeFilter]);
 
-          const kpis = useMemo(() => {
-            const total = employees.length;
-            const supervisores = employees.filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR')).length;
-            const prevencionistas = employees.filter(e => (e.cargo || '').toUpperCase().includes('PREVENCION')).length;
-            const incompletos = employees.filter(e => !e.telefono || !e.emergenciaNombre).length;
-            return { total, supervisores, prevencionistas, incompletos };
-          }, [employees]);
+          const kpis = useMemo(() => ({
+            total: employees.length,
+            supervisores: employees.filter(e => (e.cargo||'').toUpperCase().includes('SUPERVISOR')).length,
+            prevencionistas: employees.filter(e => (e.cargo||'').toUpperCase().includes('PREVENCION')).length,
+            incompletos: employees.filter(e => !e.telefono || !e.emergenciaNombre).length
+          }), [employees]);
 
           return (
-            <div className="min-h-screen bg-slate-950 text-slate-100">
-              <div className={`text-center text-xs py-1 font-bold ${onlineStatus ? 'bg-emerald-950 text-emerald-400 border-b border-emerald-900' : 'bg-red-950 text-red-400 border-b border-red-950 animate-pulse'}`}>
-                {onlineStatus ? '🟢 Conectado a la Nube (Tiempo Real Activo)' : '🔴 Sin Conexión - Modo Local Activo'}
+            <div className="min-h-screen bg-slate-950 text-slate-100 pb-20">
+              <div className={`text-center text-xs py-1.5 font-bold ${onlineStatus ? 'bg-emerald-950 text-emerald-400' : 'bg-red-950 text-red-400 animate-pulse'}`}>
+                {onlineStatus ? '🟢 Conectado a la Nube (Tiempo Real)' : '🔴 Sin Conexión'}
               </div>
-
-              <nav className="bg-slate-900 border-b border-slate-800 sticky top-0 z-20 shadow-xl">
-                <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-amber-600 p-2.5 rounded-xl text-white font-black text-sm shadow">🏗️ BRAMAQ CLOUD</div>
-                    <div>
-                      <h1 className="font-bold text-lg text-white leading-tight">Gestor Enterprise Master</h1>
-                      <span className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Base de Datos: bramaqcloud</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700 text-xs">
-                    <span className="font-bold text-slate-300">Rol:</span>
-                    <select 
-                      value={userSession.rol} 
-                      onChange={(e) => setUserSession({ ...userSession, rol: e.target.value })} 
-                      className="bg-slate-950 font-bold text-amber-400 px-2 py-1 rounded border border-slate-700 outline-none cursor-pointer"
-                    >
-                      <option value="Administrativo">Administrador</option>
-                      <option value="Supervisor">Supervisor de Faena</option>
-                      <option value="Prevencionista">Prevencionista</option>
-                    </select>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === 'dashboard' ? 'bg-amber-600 text-white font-bold' : 'text-slate-300 hover:bg-slate-800'}`}>Panel</button>
-                    <button onClick={() => setActiveTab('directorio')} className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${activeTab === 'directorio' ? 'bg-amber-600 text-white font-bold' : 'text-slate-300 hover:bg-slate-800'}`}>Directorio en Vivo</button>
-                  </div>
+              <nav className="bg-slate-900 border-b border-slate-800 sticky top-0 z-20 p-4 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className="bg-amber-600 p-2 rounded-xl text-white font-bold text-xs">🏗️ BRAMAQ</span>
+                  <h1 className="font-bold text-sm">Gestor Master Cloud</h1>
+                </div>
+                <div className="flex gap-2">
+                  <select value={userSession.rol} onChange={e=>setUserSession({...userSession, rol: e.target.value})} className="bg-slate-950 text-amber-400 text-xs px-2 py-1 rounded border border-slate-700">
+                    <option value="Administrativo">Admin</option>
+                    <option value="Supervisor">Supervisor</option>
+                    <option value="Prevencionista">Prevención</option>
+                  </select>
+                  <button onClick={()=>setActiveTab('dashboard')} className={`px-3 py-1 rounded text-xs ${activeTab==='dashboard'?'bg-amber-600 text-white':'bg-slate-800'}`}>Panel</button>
+                  <button onClick={()=>setActiveTab('directorio')} className={`px-3 py-1 rounded text-xs ${activeTab==='directorio'?'bg-amber-600 text-white':'bg-slate-800'}`}>Directorio</button>
                 </div>
               </nav>
 
               <main className="max-w-7xl mx-auto px-4 mt-6">
-                {loading ? (
-                  <div className="flex justify-center items-center py-24">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
-                  </div>
-                ) : (
+                {loading ? <div className="text-center py-24">Cargando...</div> : (
                   <>
                     {activeTab === 'dashboard' && (
-                      <div className="space-y-6">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div onClick={() => setActiveFilter('TODOS')} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 cursor-pointer hover:border-amber-500 transition-all">
-                            <span className="text-slate-400 text-xs font-medium block">Total Dotación</span>
-                            <span className="text-3xl font-bold text-white mt-1 block">{kpis.total}</span>
-                          </div>
-                          <div onClick={() => setActiveFilter('SUPERVISORES')} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 cursor-pointer hover:border-amber-500 transition-all">
-                            <span className="text-slate-400 text-xs font-medium block">Supervisores</span>
-                            <span className="text-3xl font-bold text-indigo-400 mt-1 block">{kpis.supervisores}</span>
-                          </div>
-                          <div onClick={() => setActiveFilter('PREVENCION')} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 cursor-pointer hover:border-amber-500 transition-all">
-                            <span className="text-slate-400 text-xs font-medium block">Prevención</span>
-                            <span className="text-3xl font-bold text-emerald-400 mt-1 block">{kpis.prevencionistas}</span>
-                          </div>
-                          <div onClick={() => setActiveFilter('INCOMPLETOS')} className="bg-slate-900 p-5 rounded-2xl border border-red-950/40 cursor-pointer hover:border-red-500 transition-all">
-                            <span className="text-red-400 text-xs font-medium block">Datos Incompletos</span>
-                            <span className="text-3xl font-bold text-red-400 mt-1 block">{kpis.incompletos}</span>
-                          </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div onClick={()=>{setActiveFilter('TODOS');setActiveTab('directorio');}} className="bg-slate-900 p-4 rounded-xl border border-slate-800 cursor-pointer">
+                          <span className="text-slate-400 text-xs">Total Dotación</span>
+                          <span className="text-3xl font-bold text-white">{kpis.total}</span>
+                        </div>
+                        <div onClick={()=>{setActiveFilter('SUPERVISORES');setActiveTab('directorio');}} className="bg-slate-900 p-4 rounded-xl border border-slate-800 cursor-pointer">
+                          <span className="text-slate-400 text-xs">Supervisores</span>
+                          <span className="text-3xl font-bold text-indigo-400">{kpis.supervisores}</span>
+                        </div>
+                        <div onClick={()=>{setActiveFilter('PREVENCION');setActiveTab('directorio');}} className="bg-slate-900 p-4 rounded-xl border border-slate-800 cursor-pointer">
+                          <span className="text-slate-400 text-xs">Prevención</span>
+                          <span className="text-3xl font-bold text-emerald-400">{kpis.prevencionistas}</span>
+                        </div>
+                        <div onClick={()=>{setActiveFilter('INCOMPLETOS');setActiveTab('directorio');}} className="bg-slate-900 p-4 rounded-xl border border-red-950 cursor-pointer">
+                          <span className="text-red-400 text-xs">Incompletos</span>
+                          <span className="text-3xl font-bold text-red-400">{kpis.incompletos}</span>
                         </div>
                       </div>
                     )}
 
                     {activeTab === 'directorio' && (
-                      <div>
-                        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-                          <div className="w-full md:w-1/3 relative">
-                            <i data-lucide="search" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400"></i>
-                            <input 
-                              type="text" 
-                              className="w-full pl-9 pr-4 py-2.5 bg-slate-900 border border-slate-800 text-white rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500" 
-                              placeholder="Buscar por nombre, RUT, cargo..." 
-                              value={searchTerm} 
-                              onChange={(e) => setSearchTerm(e.target.value)} 
-                            />
-                          </div>
-
-                          <div className="flex gap-3 w-full md:w-auto justify-end">
-                            {activeFilter !== 'TODOS' && (
-                              <button onClick={() => setActiveFilter('TODOS')} className="bg-slate-800 text-amber-400 px-3 py-2 rounded-xl text-xs font-bold border border-slate-700">
-                                Limpiar Filtro ({activeFilter})
-                              </button>
-                            )}
-                            <button 
-                              onClick={() => {
-                                setCurrentEmployee(null);
-                                setFormData({nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''});
-                                setIsModalOpen(true);
-                              }} 
-                              className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl shadow font-bold text-sm flex items-center transition-all"
-                            >
-                              <i data-lucide="user-plus" className="w-4 h-4 mr-2"></i> Nuevo Trabajador
-                            </button>
-                          </div>
+                      <div className="space-y-4">
+                        <div className="flex flex-col md:flex-row gap-3 justify-between">
+                          <input type="text" placeholder="Buscar trabajador..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full md:w-1/3 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm" />
+                          <button onClick={()=>{setCurrentEmployee(null);setFormData({nombre:'',rut:'',direccion:'',ciudad:citiesList[0],cargo:'',telefono:'',correo:'',emergenciaNombre:'',emergenciaFono:''});setIsModalOpen(true);}} className="bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Nuevo Trabajador</button>
                         </div>
-
-                        <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                              <thead>
-                                <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
-                                  <th className="p-4 font-semibold">Trabajador / RUT</th>
-                                  <th className="p-4 font-semibold">Cargo y Ciudad</th>
-                                  <th className="p-4 font-semibold">Contacto</th>
-                                  <th className="p-4 font-semibold">Emergencia</th>
-                                  <th className="p-4 font-semibold text-center">Hoja de Vida</th>
-                                  <th className="p-4 font-semibold text-right">Acciones</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-800/60">
-                                {filteredEmployees.length === 0 ? (
-                                  <tr>
-                                    <td colSpan="6" className="p-8 text-center text-slate-500 text-sm">No hay registros en la base de datos. Agrega el primero.</td>
-                                  </tr>
-                                ) : (
-                                  filteredEmployees.map(emp => (
-                                    <tr key={emp.id} className="hover:bg-slate-800/30 transition-colors">
-                                      <td className="p-4">
-                                        <div className="font-bold text-white">{emp.nombre}</div>
-                                        <div className="text-xs text-slate-400 font-mono mt-0.5">{emp.rut}</div>
-                                      </td>
-                                      <td className="p-4">
-                                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-950/60 text-amber-300 border border-amber-900/50">{emp.cargo || 'Sin cargo'}</span>
-                                        <div className="text-xs text-slate-400 mt-1">{emp.ciudad}</div>
-                                      </td>
-                                      <td className="p-4 text-sm">
-                                        {emp.telefono ? (
-                                          <div className="flex flex-col gap-1">
-                                            <span className="text-slate-200 font-medium">{emp.telefono}</span>
-                                            <div className="flex gap-2 text-xs">
-                                              <a href={`tel:${emp.telefono}`} className="text-blue-400 bg-blue-950/40 px-2 py-0.5 rounded border border-blue-900">📞 Llamar</a>
-                                              <a href={`https://wa.me/${emp.telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-900">💬 WhatsApp</a>
-                                            </div>
-                                          </div>
-                                        ) : <span className="text-red-400 text-xs">Sin teléfono</span>}
-                                      </td>
-                                      <td className="p-4 text-sm">
-                                        <div className="font-medium text-slate-200">{emp.emergenciaNombre || 'No asignado'}</div>
-                                        <div className="text-xs text-slate-400">{emp.emergenciaFono}</div>
-                                      </td>
-                                      <td className="p-4 text-center">
-                                        <button 
-                                          onClick={() => { setSelectedEmpForHistory(emp); setIsHistoryModalOpen(true); }}
-                                          className="bg-slate-800 hover:bg-slate-700 text-amber-400 px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-1 mx-auto"
-                                        >
-                                          <i data-lucide="file-text" className="w-3.5 h-3.5"></i> 
-                                          <span>({emp.historial ? emp.historial.length : 0}) Eventos</span>
-                                        </button>
-                                      </td>
-                                      <td className="p-4 text-right">
-                                        <div className="flex justify-end gap-1">
-                                          <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="text-slate-400 hover:text-amber-400 p-2" title="Editar">
-                                            <i data-lucide="edit-3" className="w-4 h-4"></i>
-                                          </button>
-                                          {userSession.rol === 'Administrativo' && (
-                                            <button onClick={() => handleDeleteEmployee(emp.id)} className="text-slate-400 hover:text-red-400 p-2" title="Eliminar">
-                                              <i data-lucide="trash-2" className="w-4 h-4"></i>
-                                            </button>
-                                          )}
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  ))
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {filtered.map(emp => (
+                            <div key={emp.id} className="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-3">
+                              <div>
+                                <h3 className="font-bold text-base">{emp.nombre}</h3>
+                                <span className="text-xs text-slate-400 font-mono">{emp.rut}</span>
+                                <div className="mt-2 text-xs bg-slate-950 p-2 rounded-xl border border-slate-800">
+                                  <div><b>Cargo:</b> {emp.cargo || 'Sin cargo'}</div>
+                                  <div><b>Ciudad:</b> {emp.ciudad}</div>
+                                </div>
+                              </div>
+                              <div className="space-y-1 text-xs">
+                                <div className="flex justify-between items-center bg-slate-950 p-2 rounded-xl border border-slate-800">
+                                  <span>{emp.telefono || 'Sin teléfono'}</span>
+                                  {emp.telefono && (
+                                    <div className="flex gap-1">
+                                      <a href={`tel:${emp.telefono}`} className="bg-blue-950 text-blue-400 px-2 py-0.5 rounded text-[10px]">Llamar</a>
+                                      <a href={`https://wa.me/${emp.telefono.replace(/[^0-9]/g,'')}`} target="_blank" rel="noopener noreferrer" className="bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded text-[10px]">WhatsApp</a>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="pt-2 border-t border-slate-800 flex justify-between">
+                                <button onClick={()=>{setSelectedEmpForHistory(emp);setIsHistoryModalOpen(true);}} className="bg-slate-800 text-amber-400 px-2.5 py-1 rounded text-xs">Hoja de Vida ({emp.historial?.length || 0})</button>
+                                <div className="flex gap-1">
+                                  <button onClick={()=>{setCurrentEmployee(emp);setFormData(emp);setIsModalOpen(true);}} className="bg-slate-800 text-slate-300 px-2 py-1 rounded text-xs">Editar</button>
+                                  {userSession.rol === 'Administrativo' && <button onClick={()=>handleDelete(emp.id)} className="bg-slate-800 text-red-400 px-2 py-1 rounded text-xs">Eliminar</button>}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -381,119 +195,63 @@
                 )}
               </main>
 
-              {/* MODAL DE CREACIÓN / EDICIÓN */}
               {isModalOpen && (
-                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-                  <div className="bg-slate-900 rounded-3xl shadow-2xl w-full max-w-xl border border-slate-800 p-6">
-                    <div className="flex justify-between items-center pb-4 border-b border-slate-800 mb-4">
-                      <h3 className="text-lg font-bold text-white">{currentEmployee ? 'Editar Ficha' : 'Nuevo Trabajador'}</h3>
-                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white"><i data-lucide="x" className="w-5 h-5"></i></button>
-                    </div>
-                    {formError && <div className="mb-4 p-3 bg-red-950/80 text-red-400 text-xs rounded-xl border border-red-900">{formError}</div>}
-                    <form onSubmit={handleSaveEmployee} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs font-bold text-slate-300">Nombre Completo *</label>
-                        <input required type="text" value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="Ej: Juan Pérez" />
+                <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
+                  <div className="bg-slate-900 p-6 rounded-2xl w-full max-w-lg border border-slate-800 space-y-4">
+                    <h3 className="font-bold text-base">{currentEmployee ? 'Editar' : 'Nuevo'} Trabajador</h3>
+                    {formError && <div className="text-red-400 text-xs">{formError}</div>}
+                    <form onSubmit={handleSave} className="space-y-3 text-xs">
+                      <input required placeholder="Nombre completo" value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
+                      <input required placeholder="RUT" value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
+                      <input placeholder="Cargo" value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
+                      <select value={formData.ciudad} onChange={e=>setFormData({...formData, ciudad:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl">
+                        {citiesList.map(c=><option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <div className="flex gap-2">
+                        <input placeholder="Otra ciudad" value={newCityInput} onChange={e=>setNewCityInput(e.target.value)} className="w-full p-1 bg-slate-950 border border-slate-800 rounded-lg text-xs" />
+                        <button type="button" onClick={()=>{if(newCityInput){setCitiesList([...citiesList, newCityInput]);setFormData({...formData, ciudad:newCityInput});setNewCityInput('');}}} className="bg-slate-800 px-3 py-1 rounded text-xs">Añadir</button>
                       </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-300">RUT *</label>
-                        <input required type="text" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="12.345.678-9" />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-300">Cargo</label>
-                        <input type="text" value={formData.cargo} onChange={(e) => setFormData({...formData, cargo: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="Ej: OPERADOR" />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-300">Ciudad</label>
-                        <select value={formData.ciudad} onChange={(e) => setFormData({...formData, ciudad: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500">
-                          <option value="Valdivia">Valdivia</option>
-                          <option value="Lanco">Lanco</option>
-                          <option value="Loncoche">Loncoche</option>
-                          <option value="San José de la Mariquina">San José de la Mariquina</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-300">Teléfono</label>
-                        <input type="text" value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="+569..." />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-300">Correo</label>
-                        <input type="email" value={formData.correo} onChange={(e) => setFormData({...formData, correo: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="correo@mail.com" />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-300">Contacto Emergencia</label>
-                        <input type="text" value={formData.emergenciaNombre} onChange={(e) => setFormData({...formData, emergenciaNombre: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="Nombre" />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-300">Teléfono Emergencia</label>
-                        <input type="text" value={formData.emergenciaFono} onChange={(e) => setFormData({...formData, emergenciaFono: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none focus:border-amber-500" placeholder="+569..." />
-                      </div>
-                      <div className="md:col-span-2 flex justify-end gap-2 mt-4 pt-4 border-t border-slate-800">
-                        <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 rounded-xl">Cancelar</button>
-                        <button type="submit" className="px-5 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-lg">Guardar en Nube</button>
+                      <input placeholder="Teléfono" value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
+                      <input placeholder="Correo" value={formData.correo} onChange={e=>setFormData({...formData, correo:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
+                      <input placeholder="Emergencia (Nombre)" value={formData.emergenciaNombre} onChange={e=>setFormData({...formData, emergenciaNombre:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
+                      <input placeholder="Emergencia (Teléfono)" value={formData.emergenciaFono} onChange={e=>setFormData({...formData, emergenciaFono:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl" />
+                      <div className="flex justify-end gap-2 pt-2">
+                        <button type="button" onClick={()=>setIsModalOpen(false)} className="px-3 py-1 bg-slate-800 rounded">Cancelar</button>
+                        <button type="submit" className="px-4 py-1 bg-amber-600 text-white font-bold rounded">Guardar</button>
                       </div>
                     </form>
                   </div>
                 </div>
               )}
 
-              {/* MODAL DE HOJA DE VIDA */}
               {isHistoryModalOpen && selectedEmpForHistory && (
-                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-                  <div className="bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl border border-slate-800 p-6">
-                    <div className="flex justify-between items-center pb-4 border-b border-slate-800 mb-4">
-                      <div>
-                        <h3 className="text-lg font-bold text-white">Hoja de Vida: {selectedEmpForHistory.nombre}</h3>
-                        <span className="text-xs text-slate-400 font-mono">RUT: {selectedEmpForHistory.rut}</span>
-                      </div>
-                      <button onClick={() => setIsHistoryModalOpen(false)} className="text-slate-400 hover:text-white"><i data-lucide="x" className="w-5 h-5"></i></button>
-                    </div>
-
-                    <div className="space-y-4 max-h-64 overflow-y-auto pr-2 mb-6">
-                      {(!selectedEmpForHistory.historial || selectedEmpForHistory.historial.length === 0) ? (
-                        <p className="text-slate-500 text-sm text-center py-4">No hay eventos registrados en la hoja de vida.</p>
-                      ) : (
-                        selectedEmpForHistory.historial.map((log) => (
-                          <div key={log.id} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                            <div className="flex justify-between items-center">
-                              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-950 text-amber-300 border border-amber-900">{log.tipo}</span>
-                              <span className="text-xs text-slate-400 font-mono">{log.fechaInicio}</span>
-                            </div>
-                            <p className="text-sm text-slate-200 mt-2">{log.nota}</p>
-                            <div className="text-[10px] text-slate-400 text-right mt-1">Registrado por: {log.autor} ({log.rolAutor})</div>
+                <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
+                  <div className="bg-slate-900 p-6 rounded-2xl w-full max-w-lg border border-slate-800 space-y-4">
+                    <h3 className="font-bold text-base">Hoja de Vida: {selectedEmpForHistory.nombre}</h3>
+                    <div className="space-y-2 max-h-48 overflow-y-auto text-xs">
+                      {selectedEmpForHistory.historial?.length === 0 ? <p className="text-slate-500">Sin eventos registrados.</p> :
+                        selectedEmpForHistory.historial?.map(h=>(
+                          <div key={h.id} className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                            <span className="font-bold text-amber-400">{h.tipo}</span> ({h.fechaInicio})<p className="text-slate-300">{h.nota}</p>
                           </div>
                         ))
-                      )}
+                      }
                     </div>
-
-                    <form onSubmit={handleAddLog} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400">Agregar Evento / Comentario a Hoja de Vida</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400">Tipo</label>
-                          <select value={newLog.tipo} onChange={(e) => setNewLog({...newLog, tipo: e.target.value})} className="w-full mt-1 px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs">
-                            <option value="Licencia Médica">Licencia Médica</option>
-                            <option value="Permiso">Permiso</option>
-                            <option value="Incidente">Incidente</option>
-                            <option value="Felicitación">Felicitación</option>
-                            <option value="Observación">Observación</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400">Fecha Inicio</label>
-                          <input type="date" value={newLog.fechaInicio} onChange={(e) => setNewLog({...newLog, fechaInicio: e.target.value})} className="w-full mt-1 px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400">Fecha Término</label>
-                          <input type="date" value={newLog.fechaTermino} onChange={(e) => setNewLog({...newLog, fechaTermino: e.target.value})} className="w-full mt-1 px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs" />
-                        </div>
+                    <form onSubmit={handleLog} className="space-y-2 text-xs pt-2 border-t border-slate-800">
+                      <select value={newLog.tipo} onChange={e=>setNewLog({...newLog, tipo:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded">
+                        <option value="Licencia Médica">Licencia Médica</option>
+                        <option value="Permiso">Permiso</option>
+                        <option value="Incidente">Incidente</option>
+                        <option value="Felicitación">Felicitación</option>
+                      </select>
+                      <div className="flex gap-2">
+                        <input type="date" value={newLog.fechaInicio} onChange={e=>setNewLog({...newLog, fechaInicio:e.target.value})} className="w-1/2 p-1 bg-slate-950 border border-slate-800 rounded" />
+                        <input type="date" value={newLog.fechaTermino} onChange={e=>setNewLog({...newLog, fechaTermino:e.target.value})} className="w-1/2 p-1 bg-slate-950 border border-slate-800 rounded" />
                       </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400">Comentario / Detalle</label>
-                        <textarea required rows="2" value={newLog.nota} onChange={(e) => setNewLog({...newLog, nota: e.target.value})} className="w-full mt-1 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs outline-none focus:border-amber-500" placeholder="Detalle del evento..."></textarea>
-                      </div>
-                      <div className="flex justify-end">
-                        <button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow">Registrar en Nube</button>
+                      <textarea placeholder="Detalle..." value={newLog.nota} onChange={e=>setNewLog({...newLog, nota:e.target.value})} className="w-full p-2 bg-slate-950 border border-slate-800 rounded" rows="2"></textarea>
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={()=>setIsHistoryModalOpen(false)} className="px-3 py-1 bg-slate-800 rounded">Cerrar</button>
+                        <button type="submit" className="px-4 py-1 bg-amber-600 text-white font-bold rounded">Registrar</button>
                       </div>
                     </form>
                   </div>
@@ -502,7 +260,6 @@
             </div>
           );
         }
-
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
