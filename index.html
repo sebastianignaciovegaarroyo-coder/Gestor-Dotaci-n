@@ -100,7 +100,7 @@
             downloadAnchor.remove();
           };
 
-          // CARGA INTELIGENTE: VERIFICA POR RUT Y SOLO AGREGA LOS QUE FALTAN (NO REPITE)
+          // CARGA INTELIGENTE Y SEGURA: EVITA DUPLICADOS VERIFICANDO EL RUT
           const handleUploadExcel = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -118,7 +118,7 @@
                   let addedCount = 0;
                   let existingRuts = new Set(employees.map(emp => (emp.rut || '').trim().toLowerCase()));
 
-                  if (confirm(`Se leyeron ${jsonSheet.length} filas del archivo. ¿Deseas sincronizar y agregar solo los nuevos registros?`)) {
+                  if (confirm(`Se leyeron ${jsonSheet.length} filas. ¿Deseas sincronizar y agregar solo los registros faltantes sin duplicar?`)) {
                     for (let row of jsonSheet) {
                       const keys = Object.keys(row);
                       const findVal = (terms) => {
@@ -138,7 +138,7 @@
                       const emergenciaFono = findVal(['fono_emergencia', 'telefono_emergencia', 'emergencia_fono']);
 
                       const cleanRut = rut.toLowerCase();
-                      if ((nombre || rut) && !existingRuts.has(cleanRut)) {
+                      if ((nombre || rut) && cleanRut && !existingRuts.has(cleanRut)) {
                         await db.collection('employees').add({
                           nombre: nombre || 'Sin Nombre',
                           rut: rut || 'Sin RUT',
@@ -155,7 +155,7 @@
                         addedCount++;
                       }
                     }
-                    alert(`¡Sincronización finalizada! Se agregaron ${addedCount} nuevos trabajadores (se omitieron los repetidos).`);
+                    alert(`¡Sincronización completada! Se añadieron ${addedCount} registros nuevos. Se omitieron los duplicados.`);
                   }
                 }
               } catch (err) {
@@ -552,7 +552,7 @@
                                     </span>
                                   </div>
 
-                                  {/* CONTACTO DE EMERGENCIA */}
+                                  {/* CONTACTO DE EMERGENCIA CON MENÚ INTERACTIVO AL TOCAR */}
                                   <div className="bg-slate-950 px-3 py-2 rounded-xl border border-slate-800 text-[11px] flex justify-between items-center">
                                     <div>
                                       <span className="text-slate-400 font-semibold">Emergencia: </span>
