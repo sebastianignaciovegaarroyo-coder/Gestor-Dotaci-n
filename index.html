@@ -52,7 +52,7 @@
           const [selectedPhone, setSelectedPhone] = useState(null);
           
           const [userSession, setUserSession] = useState({
-            nombre: "María Gómez (Administrativo / RRHH)",
+            nombre: "Administrador / RRHH",
             rol: "Administrativo"
           });
 
@@ -71,7 +71,7 @@
             nota: '',
             archivoNombre: '',
             archivoUrl: '',
-            autorBitacora: 'Juan Pérez (Supervisor)',
+            autorBitacora: 'Briones Victor (Supervisor)',
             rolBitacora: 'Supervisor'
           });
 
@@ -268,8 +268,8 @@
                 nota: '',
                 archivoNombre: '',
                 archivoUrl: '',
-                autorBitacora: userSession.nombre,
-                rolBitacora: userSession.rol
+                autorBitacora: 'Briones Victor (Supervisor)',
+                rolBitacora: 'Supervisor'
               });
               alert("Bitácora registrada con éxito.");
             } catch (error) {
@@ -396,7 +396,7 @@
                     onChange={e => {
                       const rol = e.target.value;
                       let nombre = "Administrador / RRHH";
-                      if(rol === "Supervisor") nombre = "Juan Pérez (Supervisor)";
+                      if(rol === "Supervisor") nombre = "Briones Victor (Supervisor)";
                       if(rol === "Prevencionista") nombre = "Carlos Ruiz (Prevención)";
                       setUserSession({ nombre, rol });
                     }} 
@@ -594,7 +594,7 @@
                           </div>
                         )}
 
-                        {/* LISTADO DE TRABAJADORES ORDENADOS ALFABÉTICAMENTE A-Z SIN DUPLICADOS */}
+                        {/* LISTADO DE TRABAJADORES ORDENADOS ALFABÉTICAMENTE A-Z */}
                         <div className="space-y-3 mt-3">
                           {filtered.length === 0 ? (
                             <div className="p-8 text-center text-slate-500 text-xs bg-slate-900 rounded-2xl border border-slate-800">No se encontraron registros.</div>
@@ -724,13 +724,13 @@
                           onChange={e=>setFormData({...formData, cargo:e.target.value})} 
                           className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs outline-none focus:border-amber-500 font-medium"
                         >
-                          <option value="ADMINISTRADOR DE CONTRATO">ADMINISTRADOR DE CONTRATO</option>
-                          <option value="SUPERVISOR DE FAENA">SUPERVISOR DE FAENA</option>
-                          <option value="PREVENCIONISTA DE RIESGOS">PREVENCIONISTA DE RIESGOS</option>
-                          <option value="ADMINISTRATIVO / RRHH">ADMINISTRATIVO / RRHH</option>
-                          <option value="OPERADOR GRUA HORQUILLA">OPERADOR GRUA HORQUILLA</option>
                           <option value="OPERADOR CARGADOR FRONTAL">OPERADOR CARGADOR FRONTAL</option>
-                          <option value="MECANICO">MECÁNICO</option>
+                          <option value="OPERADOR GRUA HORQUILLA">OPERADOR GRUA HORQUILLA</option>
+                          <option value="SUPERVISOR TURNO">SUPERVISOR TURNO</option>
+                          <option value="MECANICO FAENA">MECÁNICO FAENA</option>
+                          <option value="ADMINISTRATIVO FAENA">ADMINISTRATIVO FAENA</option>
+                          <option value="ADMINISTRADOR DE CONTRATO">ADMINISTRADOR DE CONTRATO</option>
+                          <option value="PREVENCIONISTA DE RIESGOS">PREVENCIONISTA DE RIESGOS</option>
                         </select>
                       </div>
                       <div>
@@ -799,7 +799,7 @@
                 </div>
               )}
 
-              {/* MODAL BITÁCORA / HOJA DE VIDA CON SELECTOR DE QUIEN INGRESA LA OBSERVACIÓN (SUPERVISOR, ADMIN, PREVENCIÓN) */}
+              {/* MODAL BITÁCORA / HOJA DE VIDA CON SELECTOR ESTRICTO DE NOMBRES DE SUPERVISORES */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
                   <div className="bg-slate-900 p-5 rounded-3xl w-full max-w-lg border border-slate-800 space-y-3 my-auto max-h-[90vh] overflow-y-auto">
@@ -847,24 +847,25 @@
                     <form onSubmit={handleAddLog} className="space-y-2.5 text-xs pt-3 border-t border-slate-800">
                       <div className="text-[11px] font-bold text-amber-400">Agregar Evento a la Hoja de Vida:</div>
                       
-                      {/* DESPLEGABLE DE QUIEN INGRESA LA OBSERVACIÓN */}
+                      {/* DESPLEGABLE ESTRICTO CON NOMBRES DE SUPERVISORES Y OTROS RESPONSABLES */}
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Rol y Responsable)</label>
+                        <label className="text-[10px] text-slate-400 font-bold">Registrar observación como (Supervisor / Responsable)</label>
                         <select 
-                          value={logForm.rolBitacora} 
+                          value={logForm.autorBitacora} 
                           onChange={e => {
-                            const rol = e.target.value;
-                            let nombre = "Juan Pérez (Supervisor)";
-                            if (rol === "Administrativo") nombre = "María Gómez (Administrativo / RRHH)";
-                            if (rol === "Prevencionista") nombre = "Carlos Ruiz (Prevencionista)";
-                            if (rol === "Supervisor") nombre = "Juan Pérez (Supervisor de Faena)";
-                            setLogForm({...logForm, rolBitacora: rol, autorBitacora: nombre});
+                            const val = e.target.value;
+                            let rol = "Supervisor";
+                            if (val.includes("Administrativo")) rol = "Administrativo";
+                            if (val.includes("Prevención")) rol = "Prevencionista";
+                            setLogForm({...logForm, autorBitacora: val, rolBitacora: rol});
                           }} 
                           className="w-full mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-bold text-xs"
                         >
-                          <option value="Supervisor">Supervisor de Faena</option>
-                          <option value="Administrativo">Administrativo / RRHH</option>
-                          <option value="Prevencionista">Prevencionista de Riesgos</option>
+                          <option value="Briones Victor (Supervisor)">Briones Victor (Supervisor)</option>
+                          <option value="Nahuelpan Nahuelpan Reinaldo Patricio (Supervisor)">Nahuelpan Nahuelpan Reinaldo Patricio (Supervisor)</option>
+                          <option value="Rubilar Rubilar Daniel Joel (Supervisor)">Rubilar Rubilar Daniel Joel (Supervisor)</option>
+                          <option value="María Gómez (Administrativo / RRHH)">María Gómez (Administrativo / RRHH)</option>
+                          <option value="Carlos Ruiz (Prevención de Riesgos)">Carlos Ruiz (Prevención de Riesgos)</option>
                         </select>
                       </div>
 
