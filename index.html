@@ -15,14 +15,10 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f1f5f9; }
-        
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
-        
-        /* Smooth transitions */
         .glass-panel { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(30, 41, 59, 0.8); }
         .fade-in { animation: fadeIn 0.3s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
@@ -47,12 +43,12 @@
         } catch (e) { console.error(e); }
 
         function App() {
-          // ESTADOS DE ACCESO Y SESIÓN (GATEWAY OBLIGATORIO)
+          // ESTADOS DE ACCESO OBLIGATORIO (GATEWAY)
           const [hasEntered, setHasEntered] = useState(false);
           const [gateProfile, setGateProfile] = useState('');
           const [userSession, setUserSession] = useState({ rol: "" });
 
-          // ESTADOS GLOBALES DE LA APP
+          // ESTADOS PRINCIPALES DE APLICACIÓN
           const [employees, setEmployees] = useState([]);
           const [loading, setLoading] = useState(true);
           const [onlineStatus, setOnlineStatus] = useState(navigator.onLine);
@@ -77,7 +73,7 @@
             documentos: { contrato: true, induccion: true, examenes: true, epp: true }
           });
 
-          // SUPERVISORES EXCLUSIVOS
+          // LISTA EXCLUSIVA DE SUPERVISORES
           const supervisorsList = useMemo(() => {
             const list = employees
               .filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR'))
@@ -85,14 +81,14 @@
             return list.length > 0 ? list : ['Briones Victor', 'Nahuelpan Nahuelpan Reinaldo Patricio', 'Rubilar Rubilar Daniel Joel'];
           }, [employees]);
 
-          // FORMULARIO DE BITÁCORA CON ARREGLO DE MULTIPLES ARCHIVOS
+          // FORMULARIO BITÁCORA CON SOPORTE MULTI ARCHIVO
           const [logForm, setLogForm] = useState({
             tipo: 'Licencia Médica', modoFechas: 'rango', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
-            customTipo: '', nota: '', archivos: [],
+            customTipo: '', nota: '', archivos: [], 
             autorBitacora: '', rolBitacora: ''
           });
 
-          // MANEJO DE PERFIL (Evitar mezclas en el formulario de la Bitácora)
+          // SINCRONIZACIÓN DE PERFIL SIN MEZCLAR
           const syncProfileLogic = (rolActivo) => {
             if (rolActivo === 'Administrativo') {
               setLogForm(prev => ({ ...prev, autorBitacora: 'Administrativo / RRHH', rolBitacora: 'Administrativo' }));
@@ -113,21 +109,33 @@
           const fileInputRef = useRef(null);
           const logFileRef = useRef(null);
 
+          // EFECTOS PRINCIPALES DE CARGA Y CONEXIÓN
           useEffect(() => {
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
             window.addEventListener('online', on); window.addEventListener('offline', off);
-            if (!db) { setLoading(false); return; }
+            
+            // Solo carga Firestore si el usuario pasó la puerta (hasEntered = true)
+            if (!hasEntered || !db) return;
+            
+            setLoading(true);
             const unsub = db.collection('employees').onSnapshot(snap => {
               const items = [];
               snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
-              setEmployees(items); setLoading(false);
-            }, () => setLoading(false));
+              setEmployees(items); 
+              setLoading(false);
+            }, (error) => {
+              console.error("Error cargando base de datos:", error);
+              setLoading(false);
+            });
             return () => { unsub(); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
-          }, []);
+          }, [hasEntered]);
 
-          useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+          // LÓGICA RENDERIZACIÓN ICONOS LUCIDE
+          useEffect(() => { 
+            if (window.lucide) window.lucide.createIcons(); 
+          });
 
-          // INGRESO AL SISTEMA (GATEWAY)
+          // GATEWAY ACCESO
           const handleEnterApp = () => {
             if (!gateProfile) return;
             setUserSession({ rol: gateProfile });
@@ -135,90 +143,91 @@
             setHasEntered(true);
           };
 
-          // DESCARGAS REALES DE EXCEL - EXPORTAR TODA LA DOTACIÓN
+          // DESCARGA REAL XLSX: TODA LA DOTACIÓN
           const handleDownloadExcel = () => {
             try {
-              if (employees.length === 0) {
-                alert("No hay trabajadores registrados en la base de datos."); return;
+              if (!employees || employees.length === 0) {
+                alert("No hay trabajadores registrados en la base de datos para exportar.");
+                return;
               }
               const exportData = employees.map(emp => ({
-                "Nombre Completo": emp.nombre || "",
+                "Nombre": emp.nombre || "",
                 "RUT": emp.rut || "",
                 "Cargo": emp.cargo || "",
                 "Ciudad": emp.ciudad || "",
                 "Dirección": emp.direccion || "",
-                "Teléfono Personal": emp.telefono || "",
-                "Correo Electrónico": emp.correo || "",
-                "Nombre Emergencia": emp.emergenciaNombre || "",
-                "Fono Emergencia": emp.emergenciaFono || "",
-                "Estado Contrato": emp.documentos?.contrato ? "Completo" : "Pendiente",
-                "Estado Inducción S.S.O": emp.documentos?.induccion ? "Completo" : "Pendiente",
-                "Estado Exámenes Ocup.": emp.documentos?.examenes ? "Completo" : "Pendiente",
-                "Estado Entrega EPP": emp.documentos?.epp ? "Completo" : "Pendiente"
+                "Teléfono": emp.telefono || "",
+                "Correo": emp.correo || "",
+                "Contacto de Emergencia": emp.emergenciaNombre || "",
+                "Teléfono Emergencia": emp.emergenciaFono || "",
+                "Contrato": emp.documentos?.contrato ? "Completo" : "Pendiente",
+                "Inducción S.S.O.": emp.documentos?.induccion ? "Completo" : "Pendiente",
+                "Exámenes Ocupacionales": emp.documentos?.examenes ? "Completo" : "Pendiente",
+                "EPP": emp.documentos?.epp ? "Completo" : "Pendiente"
               }));
 
               const ws = XLSX.utils.json_to_sheet(exportData);
               const wb = XLSX.utils.book_new();
-              XLSX.utils.book_append_sheet(wb, ws, "Toda_La_Dotacion");
+              XLSX.utils.book_append_sheet(wb, ws, "Dotacion Completa");
               const dateStr = new Date().toISOString().split('T')[0];
               XLSX.writeFile(wb, `BRAMAQ_Dotacion_Completa_${dateStr}.xlsx`);
               alert("Descarga realizada correctamente.");
             } catch (error) {
               alert("Error al generar la descarga: " + error.message);
+              console.error(error);
             }
           };
 
-          // DESCARGAS REALES DE EXCEL - HOJA DE VIDA GLOBAL
+          // DESCARGA REAL XLSX: HOJA DE VIDA GLOBAL (SOLO CON OBSERVACIONES)
           const handleDownloadGlobalLogsExcel = () => {
             try {
               let logsToExport = [];
               employees.forEach(emp => {
                 if (emp.historial && emp.historial.length > 0) {
                   emp.historial.forEach(h => {
-                    let attachmentsText = "";
+                    let attachmentsText = "Ninguno";
                     if (h.archivos && h.archivos.length > 0) {
                       attachmentsText = h.archivos.map(a => a.nombre).join(", ");
                     } else if (h.archivoNombre) {
-                      attachmentsText = h.archivoNombre; // Compatibilidad histórica
+                      attachmentsText = h.archivoNombre; // Compatibilidad legacy
                     }
-                    
                     logsToExport.push({
-                      "Nombre Trabajador": emp.nombre,
-                      "RUT": emp.rut,
-                      "Cargo": emp.cargo,
-                      "Tipo de Evento": h.tipo,
-                      "Fecha Inicio": h.fechaInicio,
-                      "Fecha Término": h.fechaTermino,
-                      "Observación": h.nota || "Sin observación",
-                      "Registrado Por": h.autor,
-                      "Perfil del Autor": h.rolAutor,
-                      "Fecha y Hora de Registro": new Date(h.createdAt).toLocaleString('es-CL'),
-                      "Archivos Adjuntos": attachmentsText || "Sin adjuntos"
+                      "Trabajador": emp.nombre || "Desconocido",
+                      "RUT": emp.rut || "",
+                      "Cargo": emp.cargo || "",
+                      "Tipo de Evento": h.tipo || "",
+                      "Fecha Inicio": h.fechaInicio || "",
+                      "Fecha Término": h.fechaTermino || "",
+                      "Observación": h.nota || "",
+                      "Autor": h.autor || "",
+                      "Perfil del Autor": h.rolAutor || "",
+                      "Fecha de Registro": new Date(h.createdAt || h.fechaInicio).toLocaleString('es-CL'),
+                      "Archivo Adjunto": attachmentsText
                     });
                   });
                 }
               });
 
               if (logsToExport.length === 0) {
-                alert("No hay registros en la bitácora para descargar.");
+                alert("No hay registros ni observaciones en la bitácora para descargar.");
                 return;
               }
 
-              // Ordenar por fecha de registro descendente
-              logsToExport.sort((a, b) => new Date(b["Fecha y Hora de Registro"]) - new Date(a["Fecha y Hora de Registro"]));
+              // Ordenar por fecha de registro (más recientes primero)
+              logsToExport.sort((a, b) => new Date(b["Fecha de Registro"]) - new Date(a["Fecha de Registro"]));
 
               const ws = XLSX.utils.json_to_sheet(logsToExport);
               const wb = XLSX.utils.book_new();
-              XLSX.utils.book_append_sheet(wb, ws, "Historial_Global");
+              XLSX.utils.book_append_sheet(wb, ws, "Hoja de Vida Global");
               const dateStr = new Date().toISOString().split('T')[0];
               XLSX.writeFile(wb, `BRAMAQ_Hoja_de_Vida_Global_${dateStr}.xlsx`);
               alert("Descarga realizada correctamente.");
             } catch (error) {
               alert("Error al generar la descarga: " + error.message);
+              console.error(error);
             }
           };
 
-          // ACCIONES GERENCIALES Y DE EXCEL INTACTAS
           const handleDeleteAllData = async () => {
             if (userSession.rol !== 'Administrativo' && userSession.rol !== 'AdminContrato') {
               alert("Sin permisos suficientes para realizar borrado masivo."); return;
@@ -300,7 +309,7 @@
             if (confirm("¿Eliminar este trabajador permanentemente del sistema?")) await db.collection('employees').doc(id).delete();
           };
 
-          // MANEJO AVANZADO DE MULTIPLES ARCHIVOS (MÚLTIPLES ARCHIVOS EN OBSERVACIÓN)
+          // MANEJO DE MÚLTIPLES ARCHIVOS (PREVIO A GUARDAR)
           const handleLogFileChange = (e) => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
@@ -318,7 +327,7 @@
                   fechaCarga: new Date().toISOString()
                 });
                 processed++;
-                if(processed === files.length) {
+                if (processed === files.length) {
                   setLogForm(prev => ({
                     ...prev,
                     archivos: [...(prev.archivos || []), ...newArchivos]
@@ -327,8 +336,7 @@
               };
               reader.readAsDataURL(file);
             });
-            // Limpiar input file
-            if(logFileRef.current) logFileRef.current.value = "";
+            if (logFileRef.current) logFileRef.current.value = "";
           };
 
           const handleRemovePendingFile = (indexToRemove) => {
@@ -338,14 +346,15 @@
             }));
           };
 
+          // MANEJO DE ELIMINACIÓN INDIVIDUAL DE ARCHIVO POST-GUARDADO
           const handleDeleteSavedAttachment = async (logId, attachmentIndex, isOldFormat) => {
             if (!selectedEmpForHistory) return;
-            if (confirm("¿Está seguro de eliminar este archivo adjunto? (La observación se mantendrá)")) {
+            if (confirm("¿Está seguro de eliminar este archivo adjunto? (No eliminará la observación)")) {
               try {
                 const updatedHistorial = selectedEmpForHistory.historial.map(h => {
                   if (h.id === logId) {
                     if (isOldFormat) {
-                      return { ...h, archivoUrl: '', archivoNombre: '' }; // Clean legacy
+                      return { ...h, archivoUrl: '', archivoNombre: '' };
                     } else {
                       const newArchivos = h.archivos.filter((_, i) => i !== attachmentIndex);
                       return { ...h, archivos: newArchivos };
@@ -359,6 +368,7 @@
             }
           };
 
+          // ELIMINACIÓN DE OBSERVACIÓN COMPLETA
           const handleDeleteLog = async (logId) => {
             if (!selectedEmpForHistory) return;
             if (confirm("¿Estás seguro de eliminar completamente esta observación del historial?")) {
@@ -366,7 +376,7 @@
                 const updatedHistorial = (selectedEmpForHistory.historial || []).filter(h => h.id !== logId);
                 await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
                 setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
-              } catch (err) { alert("Error: " + err.message); }
+              } catch (err) { alert("Error al eliminar la bitácora: " + err.message); }
             }
           };
 
@@ -382,7 +392,7 @@
               fechaInicio: String(logForm.modoFechas === 'rango' ? logForm.fechaInicio : logForm.fechaUnica),
               fechaTermino: String(logForm.modoFechas === 'rango' ? logForm.fechaTermino : logForm.fechaUnica),
               nota: String(logForm.nota || ''), 
-              archivos: logForm.archivos || [], // Nuevo arreglo de multiples archivos
+              archivos: logForm.archivos || [], // Múltiples archivos compatibles
               autor: String(logForm.autorBitacora), 
               rolAutor: String(logForm.rolBitacora), 
               createdAt: new Date().toISOString()
@@ -393,12 +403,13 @@
               await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
               setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
               
-              // Resetear formulario manteniendo la sesión estricta actual
-              setLogForm(prev => ({
-                ...prev,
+              // Reset
+              setLogForm({
                 tipo: 'Licencia Médica', modoFechas: 'rango', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
-                customTipo: '', nota: '', archivos: []
-              }));
+                customTipo: '', nota: '', archivos: [],
+                autorBitacora: userSession.rol === 'Supervisor' ? (supervisorsList[0] || '') : logForm.autorBitacora,
+                rolBitacora: userSession.rol
+              });
               alert("Bitácora registrada con éxito.");
             } catch (error) { alert("Error al registrar: " + error.message); }
           };
@@ -417,7 +428,6 @@
             return missing;
           };
 
-          // FILTRO Y BÚSQUEDA
           const filtered = useMemo(() => {
             const seenRuts = new Set(); const uniqueEmployees = [];
             for (const emp of employees) {
@@ -462,12 +472,12 @@
           const allGlobalLogs = useMemo(() => {
             let logs = [];
             employees.forEach(emp => {
-              if (emp.historial && emp.historial.length > 0) { emp.historial.forEach(h => { logs.push({ ...h, empleadoNombre: emp.nombre, empleadoRut: emp.rut }); }); }
+              if (emp.historial && emp.historial.length > 0) { emp.historial.forEach(h => { logs.push({ ...h, empleadoNombre: emp.nombre, empleadoRut: emp.rut, empleadoCargo: emp.cargo }); }); }
             });
-            return logs.sort((a, b) => new Date(b.fechaInicio || b.createdAt) - new Date(a.fechaInicio || a.createdAt));
+            return logs.sort((a, b) => new Date(b.createdAt || b.fechaInicio) - new Date(a.createdAt || a.fechaInicio));
           }, [employees]);
 
-          // Componente de Panel de Requisitos (Visual Toggle)
+          // Panel Switch 
           const RequisitoToggle = ({ label, icon, checked, onChange }) => (
             <label className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all cursor-pointer ${checked ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}>
                 <input type="checkbox" checked={checked} onChange={onChange} className="hidden" />
@@ -481,11 +491,10 @@
             </label>
           );
 
-          // PANTALLA DE GATEWAY (SELECCIÓN OBLIGATORIA)
+          // PANTALLA INICIAL OBLIGATORIA (GATEWAY)
           if (!hasEntered) {
             return (
               <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 selection:bg-amber-500/30 relative overflow-hidden">
-                {/* Elementos decorativos de fondo */}
                 <div className="absolute top-1/4 -left-32 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
                 <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -495,18 +504,18 @@
                   </div>
                   <h1 className="text-2xl font-extrabold text-white mb-2 tracking-tight text-center">Gestor de Dotación</h1>
                   <h2 className="text-lg font-bold text-amber-400 mb-2 tracking-widest uppercase">BRAMAQ</h2>
-                  <p className="text-sm text-slate-400 mb-8 text-center px-4 leading-relaxed">Seleccione su perfil operativo de forma obligatoria para ingresar al sistema corporativo.</p>
+                  <p className="text-sm text-slate-400 mb-8 text-center px-4 leading-relaxed">Seleccione su perfil para ingresar al sistema de gestión.</p>
 
                   <div className="w-full space-y-6">
                     <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2.5 block px-1">Identificación de Acceso</label>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2.5 block px-1">Perfil Operativo</label>
                       <div className="relative group">
                         <select 
                           value={gateProfile}
                           onChange={e => setGateProfile(e.target.value)}
                           className="w-full appearance-none bg-slate-950/80 border border-slate-800 hover:border-slate-700 rounded-xl px-4 py-4 text-sm font-semibold text-amber-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all cursor-pointer shadow-inner"
                         >
-                          <option value="" disabled>-- Seleccione su Perfil Institucional --</option>
+                          <option value="" disabled>-- Elija un perfil --</option>
                           <option value="Administrativo">Administrativo / RRHH</option>
                           <option value="AdminContrato">Administrador de Contrato</option>
                           <option value="Supervisor">Supervisor</option>
@@ -519,14 +528,10 @@
                     <button 
                       disabled={!gateProfile}
                       onClick={handleEnterApp}
-                      className={`w-full py-4 rounded-xl font-bold text-sm transition-all flex justify-center items-center gap-2 ${gateProfile ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.3)] cursor-pointer translate-y-0' : 'bg-slate-800/50 text-slate-500 cursor-not-allowed border border-slate-800'}`}
+                      className={`w-full py-4 rounded-xl font-bold text-sm transition-all flex justify-center items-center gap-2 ${gateProfile ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.3)] cursor-pointer' : 'bg-slate-800/50 text-slate-500 cursor-not-allowed border border-slate-800'}`}
                     >
-                      INGRESAR AL SISTEMA <i data-lucide="arrow-right" className="w-4 h-4"></i>
+                      INGRESAR <i data-lucide="arrow-right" className="w-4 h-4"></i>
                     </button>
-                  </div>
-                  
-                  <div className="mt-8 flex items-center justify-center gap-2 text-[10px] text-slate-500 font-semibold uppercase tracking-widest w-full border-t border-slate-800 pt-6">
-                    <i data-lucide="lock" className="w-3 h-3"></i> Acceso Seguro Requerido
                   </div>
                 </div>
               </div>
@@ -576,7 +581,7 @@
                             className="w-full appearance-none bg-slate-900 border border-slate-700 text-amber-400 font-bold text-xs py-2.5 pl-3 pr-8 rounded-lg outline-none focus:border-amber-500 transition-colors cursor-pointer shadow-inner"
                           >
                             <option value="Administrativo">Administrativo / RRHH</option>
-                            <option value="AdminContrato">Admin. de Contrato</option>
+                            <option value="AdminContrato">Administrador de Contrato</option>
                             <option value="Supervisor">Supervisor de Faena</option>
                             <option value="Prevencionista">Prevencionista</option>
                           </select>
@@ -588,10 +593,10 @@
                 </div>
               </aside>
 
-              {/* MAIN CONTENT AREA */}
+              {/* CONTENIDO DERECHO */}
               <div className="flex-1 flex flex-col h-screen relative">
                 
-                {/* HEADER (Mobile Only) */}
+                {/* HEADER MÓVIL */}
                 <header className="lg:hidden h-16 flex items-center justify-between px-4 sm:px-6 bg-slate-900/80 backdrop-blur border-b border-slate-800 z-30 sticky top-0">
                   <div className="flex items-center gap-2">
                     <div className="bg-gradient-to-br from-amber-400 to-amber-600 p-1.5 rounded-lg text-slate-950">
@@ -614,7 +619,6 @@
                   </div>
                 </header>
 
-                {/* SCROLLABLE MAIN */}
                 <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative scroll-smooth">
                   {loading ? (
                     <div className="flex flex-col items-center justify-center h-full space-y-4">
@@ -624,7 +628,7 @@
                   ) : (
                     <div className="max-w-7xl mx-auto space-y-8 fade-in">
                       
-                      {/* DASHBOARD (PANEL GERENCIAL) */}
+                      {/* DASHBOARD GERENCIAL */}
                       {activeTab === 'dashboard' && (
                         <>
                           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -637,7 +641,6 @@
                             </div>
                           </div>
 
-                          {/* MAIN KPIs */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                             <div onClick={() => { setActiveFilter('TODOS'); setActiveTab('directorio'); }} className="glass-panel p-6 rounded-3xl hover:border-amber-500/50 cursor-pointer transition-all group">
                               <div className="flex items-start justify-between">
@@ -648,10 +651,6 @@
                                 <div className="bg-amber-500/10 text-amber-400 p-3.5 rounded-2xl group-hover:scale-110 transition-transform">
                                   <i data-lucide="users" className="w-7 h-7"></i>
                                 </div>
-                              </div>
-                              <div className="mt-5 flex items-center justify-between text-xs text-amber-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                                <span>Directorio completo</span>
-                                <i data-lucide="arrow-right" className="w-4 h-4 transform group-hover:translate-x-1 transition-transform"></i>
                               </div>
                             </div>
                             
@@ -666,10 +665,6 @@
                                   <i data-lucide="alert-triangle" className="w-7 h-7"></i>
                                 </div>
                               </div>
-                              <div className="mt-5 flex items-center justify-between text-xs text-red-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                                <span>Revisar pendientes</span>
-                                <i data-lucide="arrow-right" className="w-4 h-4 transform group-hover:translate-x-1 transition-transform"></i>
-                              </div>
                             </div>
 
                             <div onClick={() => { setActiveFilter('ADMIN_CONTRATO'); setActiveTab('directorio'); }} className="glass-panel p-6 rounded-3xl hover:border-blue-500/50 cursor-pointer transition-all group">
@@ -682,14 +677,9 @@
                                   <i data-lucide="briefcase" className="w-7 h-7"></i>
                                 </div>
                               </div>
-                              <div className="mt-5 flex items-center justify-between text-xs text-blue-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                                <span>Filtrar personal</span>
-                                <i data-lucide="arrow-right" className="w-4 h-4 transform group-hover:translate-x-1 transition-transform"></i>
-                              </div>
                             </div>
                           </div>
 
-                          {/* SECONDARY KPIs */}
                           <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
                             {[
                               { label: 'Supervisores', val: kpis.supervisores, icon: 'user-check', filter: 'SUPERVISORES', color: 'text-indigo-400' },
@@ -711,18 +701,14 @@
                             ))}
                           </div>
 
-                          {/* LOGISTICS & ALERTS */}
                           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                            
                             <div className="xl:col-span-2 glass-panel p-6 sm:p-8 rounded-3xl">
                               <div className="flex justify-between items-end mb-6 border-b border-slate-800 pb-4">
                                 <div>
                                   <h3 className="font-bold text-base text-white flex items-center gap-2">
                                     <i data-lucide="map" className="w-5 h-5 text-amber-500"></i> Distribución Logística Operativa
                                   </h3>
-                                  <p className="text-xs text-slate-400 mt-1">Asignación por comuna / instalación.</p>
                                 </div>
-                                <span className="text-xs font-bold px-3 py-1 bg-slate-900 border border-slate-800 rounded-lg text-slate-300">{citiesList.length} Zonas</span>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
                                 {citiesList.map(city => {
@@ -754,15 +740,11 @@
                                   <i data-lucide="clipboard-x" className="w-7 h-7"></i>
                                 </div>
                                 <h4 className="text-red-400 font-extrabold text-xl mb-2">{kpis.incompletos} Pendientes</h4>
-                                <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
-                                  Registros con faltantes en documentación, contactos de emergencia o teléfonos requeridos.
-                                </p>
                                 <div className="mt-4 text-[11px] text-red-400 font-bold uppercase tracking-widest flex items-center justify-center gap-1">
                                   Regularizar Fichas <i data-lucide="arrow-right" className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform"></i>
                                 </div>
                               </div>
                             </div>
-
                           </div>
                         </>
                       )}
@@ -770,40 +752,32 @@
                       {/* DIRECTORIO Y BITACORA */}
                       {activeTab === 'directorio' && (
                         <>
-                          {/* TOOLBAR EMPRESARIAL */}
                           <div className="glass-panel p-4 sm:p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 sticky top-0 z-20 shadow-xl">
-                            
-                            {/* Buscador & Filtro Activo */}
                             <div className="w-full md:flex-1 space-y-3 md:space-y-0 md:flex md:items-center gap-4">
                               <div className="relative w-full md:max-w-md">
                                 <i data-lucide="search" className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"></i>
                                 <input type="text" placeholder="Buscar por nombre, RUT, cargo o ciudad..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm font-medium rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all shadow-inner" />
                               </div>
-
                               {activeFilter !== 'TODOS' && (
                                 <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 px-3 py-2 rounded-xl text-xs font-bold w-max">
                                   <span><i data-lucide="filter" className="w-3.5 h-3.5 inline mr-1"></i> {activeFilter}</span>
                                   <div className="w-px h-3 bg-amber-500/30 mx-1"></div>
-                                  <button onClick={() => setActiveFilter('TODOS')} className="hover:text-white transition-colors" title="Limpiar filtro">Limpiar</button>
+                                  <button onClick={() => setActiveFilter('TODOS')} className="hover:text-white transition-colors">Limpiar</button>
                                 </div>
                               )}
                             </div>
 
-                            {/* Botonera de Acciones */}
                             <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-start md:justify-end">
                               <button onClick={() => setIsGlobalHistoryOpen(true)} className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-2 border border-slate-700 transition-colors shadow-sm" title="Auditoría Global">
                                 <i data-lucide="file-clock" className="w-4 h-4"></i> <span className="hidden sm:inline">Reporte Global</span>
                               </button>
-                              
-                              <button onClick={handleDownloadExcel} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-colors" title="Exportar Dotación a Excel">
+                              <button onClick={handleDownloadExcel} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-colors" title="Exportar Dotación Completa">
                                 <i data-lucide="download" className="w-4 h-4"></i> <span className="hidden sm:inline">Exportar Excel</span>
                               </button>
-                              
                               <input type="file" ref={fileInputRef} onChange={handleUploadExcel} accept=".xlsx, .xls, .csv" className="hidden" />
-                              <button onClick={() => fileInputRef.current.click()} className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-colors" title="Importar desde Excel">
+                              <button onClick={() => fileInputRef.current.click()} className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-colors">
                                 <i data-lucide="upload" className="w-4 h-4"></i> <span className="hidden sm:inline">Importar</span>
                               </button>
-
                               <button onClick={() => { setCurrentEmployee(null); setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0], cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '', documentos: { contrato: true, induccion: true, examenes: true, epp: true }}); setIsModalOpen(true); }} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)]">
                                 <i data-lucide="user-plus" className="w-4 h-4"></i> <span className="hidden sm:inline">Nuevo Ficha</span>
                               </button>
@@ -819,7 +793,6 @@
                             </div>
                           )}
 
-                          {/* TABLA/LISTA EMPRESARIAL DE TRABAJADORES */}
                           {filtered.length === 0 ? (
                             <div className="flex flex-col items-center justify-center p-20 glass-panel rounded-3xl text-slate-500 space-y-4">
                               <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center border border-slate-800">
@@ -829,7 +802,6 @@
                             </div>
                           ) : (
                             <div className="space-y-3 pb-8">
-                              {/* ENCABEZADOS DE TABLA (SOLO DESKTOP) */}
                               <div className="hidden lg:flex items-center px-6 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-800">
                                 <div className="flex-1 min-w-[220px]">Identificación</div>
                                 <div className="flex-1 min-w-[180px]">Cargo / Faena</div>
@@ -843,7 +815,6 @@
                                   <div key={emp.id} className="glass-panel p-0 rounded-2xl overflow-hidden hover:border-slate-600 transition-colors">
                                     <div className="flex flex-col lg:flex-row lg:items-center p-4 sm:p-5 lg:px-6 gap-4 lg:gap-6">
                                       
-                                      {/* COL 1: Info Principal */}
                                       <div className="flex-1 min-w-[220px]">
                                         <div className="flex items-center gap-3">
                                           <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-300 font-bold border border-slate-700 shrink-0 shadow-inner">
@@ -856,7 +827,6 @@
                                         </div>
                                       </div>
 
-                                      {/* COL 2: Cargo y Ciudad */}
                                       <div className="flex-1 min-w-[180px]">
                                         <div className="text-xs font-bold text-amber-400 mb-1 line-clamp-1 flex items-center gap-1.5"><i data-lucide="briefcase" className="w-3.5 h-3.5"></i> {emp.cargo || 'SIN CARGO'}</div>
                                         <div className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
@@ -864,7 +834,6 @@
                                         </div>
                                       </div>
 
-                                      {/* COL 3: Contactos */}
                                       <div className="flex-1 min-w-[200px] space-y-2 border-l border-slate-800 pl-4 lg:border-none lg:pl-0">
                                         <div className="flex items-center gap-2 text-xs">
                                           <i data-lucide="phone" className="w-3.5 h-3.5 text-slate-500 shrink-0"></i>
@@ -883,7 +852,6 @@
                                         </div>
                                       </div>
 
-                                      {/* COL 4: Cumplimiento & Acciones */}
                                       <div className="w-full lg:w-48 flex flex-row lg:flex-col items-center justify-between lg:justify-center gap-3 pt-4 lg:pt-0 border-t border-slate-800 lg:border-none shrink-0">
                                         {missing.length > 0 ? (
                                           <div className="flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2.5 py-1 rounded-md text-[10px] font-bold border border-red-500/20 w-full lg:justify-center">
@@ -910,7 +878,6 @@
                                           )}
                                         </div>
                                       </div>
-
                                     </div>
                                   </div>
                                 );
@@ -985,7 +952,6 @@
                       
                       <form id="employeeForm" onSubmit={handleSave} className="space-y-8">
                         
-                        {/* SECCIÓN 1 */}
                         <section className="space-y-5 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
                           <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest flex items-center gap-2"><i data-lucide="user" className="w-4 h-4"></i> Información Personal y Laboral</h4>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -1035,7 +1001,6 @@
                           </div>
                         </section>
 
-                        {/* SECCIÓN 2 */}
                         <section className="space-y-5 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
                           <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest flex items-center gap-2"><i data-lucide="contact" className="w-4 h-4"></i> Contacto y Emergencia</h4>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -1070,7 +1035,6 @@
                           </div>
                         </section>
 
-                        {/* SECCIÓN 3 */}
                         <section className="space-y-4 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm">
                           <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest flex items-center gap-2"><i data-lucide="file-check" className="w-4 h-4"></i> Documentación y Cumplimiento S.S.O.</h4>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1093,12 +1057,11 @@
                 </div>
               )}
 
-              {/* MODAL BITÁCORA / HOJA DE VIDA - TIMELINE EMPRESARIAL */}
+              {/* MODAL BITÁCORA - TIMELINE MULTI-ARCHIVOS Y AISLAMIENTO DE PERFIL */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-md fade-in">
-                  <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
+                  <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-5xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
                     
-                    {/* CABECERA MODAL BITÁCORA */}
                     <div className="px-6 py-5 border-b border-slate-800 bg-slate-900 flex justify-between items-center">
                       <div className="flex gap-4 items-center">
                         <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 hidden sm:flex shadow-inner">
@@ -1114,7 +1077,7 @@
 
                     <div className="flex-1 overflow-y-auto flex flex-col lg:flex-row bg-slate-950/30">
                       
-                      {/* LADO IZQUIERDO: HISTORIAL (TIMELINE) */}
+                      {/* HISTORIAL (TIMELINE) */}
                       <div className="flex-1 p-6 border-b lg:border-b-0 lg:border-r border-slate-800">
                         <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2"><i data-lucide="history" className="w-4 h-4"></i> Registros Históricos</h4>
                         
@@ -1129,7 +1092,6 @@
                           <div className="relative pl-4 border-l-2 border-slate-800 space-y-8 pb-4 ml-2">
                             {selectedEmpForHistory.historial.map(h => (
                               <div key={h.id} className="relative">
-                                {/* Dot indicator */}
                                 <span className="absolute -left-[23px] top-1.5 w-3 h-3 rounded-full bg-amber-500 ring-4 ring-slate-950 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></span>
                                 
                                 <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg hover:border-slate-700 transition-colors group">
@@ -1150,31 +1112,33 @@
                                   
                                   {h.nota && <p className="text-sm text-slate-300 leading-relaxed mb-4 bg-slate-950/50 p-3 rounded-xl border border-slate-800/50">{h.nota}</p>}
                                   
-                                  {/* RENDER MULTIPLES ARCHIVOS */}
+                                  {/* RENDER MÚLTIPLES ARCHIVOS (Compatibilidad hacia atrás) */}
                                   {(h.archivos && h.archivos.length > 0) ? (
                                     <div className="space-y-2 mb-4">
                                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Documentos Adjuntos</span>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-3">
                                         {h.archivos.map((file, fIdx) => {
                                           const isImage = file.tipo ? file.tipo.startsWith('image/') : (file.url && file.url.startsWith('data:image'));
                                           return (
-                                            <div key={fIdx} className="flex items-center justify-between p-2.5 bg-slate-950 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors">
+                                            <div key={fIdx} className="flex flex-col p-3 bg-slate-950 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors gap-3">
                                               <div className="flex items-center gap-3 overflow-hidden">
                                                 {isImage ? (
-                                                  <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 border border-slate-800"><img src={file.url} alt={file.nombre} className="w-full h-full object-cover" /></div>
+                                                  <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-slate-800"><img src={file.url} alt={file.nombre} className="w-full h-full object-cover" /></div>
                                                 ) : (
-                                                  <div className="w-9 h-9 rounded-lg bg-slate-900 flex items-center justify-center shrink-0 border border-slate-800"><i data-lucide="file-text" className="w-5 h-5 text-blue-400"></i></div>
+                                                  <div className="w-10 h-10 rounded-lg bg-slate-900 flex items-center justify-center shrink-0 border border-slate-800"><i data-lucide="file-text" className="w-5 h-5 text-blue-400"></i></div>
                                                 )}
                                                 <div className="flex flex-col truncate">
-                                                  <span className="text-xs text-slate-300 font-semibold truncate">{file.nombre}</span>
+                                                  <span className="text-xs text-slate-300 font-semibold truncate" title={file.nombre}>{file.nombre}</span>
                                                   <span className="text-[9px] text-slate-500 uppercase font-mono">{isImage ? 'Imagen' : 'Documento'}</span>
                                                 </div>
                                               </div>
-                                              <div className="flex items-center gap-1 shrink-0">
-                                                <a href={file.url} target="_blank" rel="noreferrer" className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-slate-900 rounded-lg transition-colors" title="Abrir"><i data-lucide="external-link" className="w-4 h-4"></i></a>
-                                                <a href={file.url} download={file.nombre} className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-slate-900 rounded-lg transition-colors" title="Descargar"><i data-lucide="download" className="w-4 h-4"></i></a>
+                                              <div className="flex items-center justify-between border-t border-slate-800/80 pt-2 w-full gap-1">
+                                                <div className="flex gap-1.5">
+                                                  <a href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-slate-800 text-slate-300 hover:text-white rounded transition-colors"><i data-lucide="external-link" className="w-3 h-3"></i> Abrir</a>
+                                                  <a href={file.url} download={file.nombre} className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-slate-800 text-slate-300 hover:text-emerald-400 rounded transition-colors"><i data-lucide="download" className="w-3 h-3"></i> Bajar</a>
+                                                </div>
                                                 {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato' || userSession.rol === h.rolAutor) && (
-                                                  <button type="button" onClick={() => handleDeleteSavedAttachment(h.id, fIdx, false)} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-900 rounded-lg transition-colors" title="Eliminar archivo"><i data-lucide="x" className="w-4 h-4"></i></button>
+                                                  <button type="button" onClick={() => handleDeleteSavedAttachment(h.id, fIdx, false)} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-900 rounded-lg transition-colors" title="Eliminar archivo"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
                                                 )}
                                               </div>
                                             </div>
@@ -1186,22 +1150,22 @@
                                     /* COMPATIBILIDAD VIEJA */
                                     <div className="mb-4 space-y-2">
                                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Documento Adjunto (Legado)</span>
-                                      <div className="flex items-center justify-between p-2.5 bg-slate-950 rounded-xl border border-slate-800">
-                                        <div className="flex items-center gap-3 overflow-hidden">
+                                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800 gap-3">
+                                        <div className="flex items-center gap-3 overflow-hidden w-full sm:w-auto">
                                           {h.archivoUrl.startsWith('data:image') ? (
-                                            <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 border border-slate-800"><img src={h.archivoUrl} alt="Adjunto" className="w-full h-full object-cover" /></div>
+                                            <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-slate-800"><img src={h.archivoUrl} alt="Adjunto" className="w-full h-full object-cover" /></div>
                                           ) : (
-                                            <div className="w-9 h-9 rounded-lg bg-slate-900 flex items-center justify-center shrink-0 border border-slate-800"><i data-lucide="file" className="w-5 h-5 text-blue-400"></i></div>
+                                            <div className="w-10 h-10 rounded-lg bg-slate-900 flex items-center justify-center shrink-0 border border-slate-800"><i data-lucide="file" className="w-5 h-5 text-blue-400"></i></div>
                                           )}
-                                          <div className="flex flex-col truncate">
-                                            <span className="text-xs text-slate-300 font-semibold truncate">{h.archivoNombre || 'Archivo adjunto'}</span>
+                                          <div className="flex flex-col truncate flex-1">
+                                            <span className="text-xs text-slate-300 font-semibold truncate" title={h.archivoNombre || 'Archivo adjunto'}>{h.archivoNombre || 'Archivo adjunto'}</span>
                                           </div>
                                         </div>
-                                        <div className="flex items-center gap-1 shrink-0">
-                                          <a href={h.archivoUrl} target="_blank" rel="noreferrer" className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-slate-900 rounded-lg transition-colors"><i data-lucide="external-link" className="w-4 h-4"></i></a>
-                                          <a href={h.archivoUrl} download={h.archivoNombre || "archivo"} className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-slate-900 rounded-lg transition-colors"><i data-lucide="download" className="w-4 h-4"></i></a>
+                                        <div className="flex items-center gap-1.5 shrink-0 justify-end w-full sm:w-auto border-t sm:border-t-0 border-slate-800/80 pt-2 sm:pt-0">
+                                          <a href={h.archivoUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold bg-slate-800 text-slate-300 hover:text-white rounded transition-colors"><i data-lucide="external-link" className="w-3 h-3"></i> Abrir</a>
+                                          <a href={h.archivoUrl} download={h.archivoNombre || "archivo"} className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold bg-slate-800 text-slate-300 hover:text-emerald-400 rounded transition-colors"><i data-lucide="download" className="w-3 h-3"></i> Bajar</a>
                                           {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato' || userSession.rol === h.rolAutor) && (
-                                            <button type="button" onClick={() => handleDeleteSavedAttachment(h.id, 0, true)} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-900 rounded-lg transition-colors"><i data-lucide="x" className="w-4 h-4"></i></button>
+                                            <button type="button" onClick={() => handleDeleteSavedAttachment(h.id, 0, true)} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-900 rounded-lg transition-colors" title="Eliminar archivo"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
                                           )}
                                         </div>
                                       </div>
@@ -1222,15 +1186,15 @@
                         )}
                       </div>
 
-                      {/* LADO DERECHO: FORMULARIO NUEVA OBSERVACION (AISLAMIENTO ESTRICTO DE PERFILES) */}
-                      <div className="w-full lg:w-80 xl:w-96 p-6 bg-slate-900 flex flex-col">
+                      {/* FORMULARIO NUEVA OBSERVACION */}
+                      <div className="w-full lg:w-[380px] xl:w-[420px] p-6 bg-slate-900 flex flex-col">
                         <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-6 flex items-center gap-2"><i data-lucide="file-plus-2" className="w-4 h-4"></i> Registrar Evento</h4>
                         
                         <form onSubmit={handleAddLog} className="space-y-5 flex-1 flex flex-col">
                           
-                          {/* LÓGICA ESTRICTA: SOLO SUPERVISOR MUESTRA DESPLEGABLE CON NOMBRES */}
+                          {/* LÓGICA ESTRICTA DE AUTORÍA */}
                           <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Perfil de Autoría (Sesión Activa)</label>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Perfil de Autoría</label>
                             {userSession.rol === 'Supervisor' ? (
                               <div className="relative">
                                 <select 
@@ -1277,7 +1241,7 @@
                           {logForm.tipo === 'Otro' && (
                             <div className="animate-fadeIn">
                               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Especificar *</label>
-                              <input required type="text" placeholder="Ej: Capacitación interna..." value={logForm.customTipo} onChange={e => setLogForm({...logForm, customTipo: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 transition-shadow shadow-inner" />
+                              <input required type="text" placeholder="Ej: Felicitación, Asistencia técnica..." value={logForm.customTipo} onChange={e => setLogForm({...logForm, customTipo: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 transition-shadow shadow-inner" />
                             </div>
                           )}
 
@@ -1315,17 +1279,17 @@
                             <textarea placeholder="Redacte los acuerdos, motivos o comentarios del registro..." value={logForm.nota} onChange={e=>setLogForm({...logForm, nota:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 transition-shadow resize-none shadow-inner" rows="4"></textarea>
                           </div>
 
-                          {/* CARGA MÚLTIPLE DE ARCHIVOS */}
+                          {/* SUBIDA DE MULTIPLES ARCHIVOS */}
                           <div className="space-y-2">
                             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Evidencia / Adjuntos Físicos</label>
                             
-                            {/* Lista previa de archivos a subir */}
+                            {/* Previsualización antes de guardar */}
                             {logForm.archivos && logForm.archivos.length > 0 && (
                               <div className="space-y-2 mb-3 max-h-32 overflow-y-auto pr-1">
                                 {logForm.archivos.map((file, idx) => (
-                                  <div key={idx} className="flex justify-between items-center bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 text-xs">
-                                    <span className="truncate text-slate-300 font-medium max-w-[180px]">{file.nombre}</span>
-                                    <button type="button" onClick={() => handleRemovePendingFile(idx)} className="text-slate-500 hover:text-red-400 p-1"><i data-lucide="x" className="w-3.5 h-3.5"></i></button>
+                                  <div key={idx} className="flex justify-between items-center bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 text-xs shadow-sm">
+                                    <span className="truncate text-slate-300 font-medium max-w-[200px]"><i data-lucide="check" className="w-3 h-3 inline text-emerald-500 mr-1.5"></i>{file.nombre}</span>
+                                    <button type="button" onClick={() => handleRemovePendingFile(idx)} className="text-slate-500 hover:text-red-400 p-1.5 bg-slate-900 rounded border border-slate-800"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
                                   </div>
                                 ))}
                               </div>
@@ -1338,7 +1302,7 @@
                                     <i data-lucide="upload-cloud" className="w-5 h-5"></i>
                                   </div>
                                   <span className="text-xs font-bold text-slate-300">Añadir Documentos o Fotos</span>
-                                  <span className="text-[10px] text-slate-500 mt-1">PDF, DOC, Imágenes</span>
+                                  <span className="text-[10px] text-slate-500 mt-1">Permite JPG, PNG, PDF, DOC, XLS (Puedes elegir varios)</span>
                                 </div>
                             </div>
                           </div>
@@ -1376,7 +1340,7 @@
                           <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center border border-slate-800">
                             <i data-lucide="clipboard-list" className="w-10 h-10 opacity-40"></i>
                           </div>
-                          <p className="text-sm font-semibold">Sistema limpio. No se detectaron anotaciones globales.</p>
+                          <p className="text-sm font-semibold">Sistema limpio. No se detectaron anotaciones globales en ningún trabajador.</p>
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
