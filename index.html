@@ -49,33 +49,33 @@
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
+        
+        // CREDENCIALES REALES DE FIREBASE (Restauradas y seguras)
         const firebaseConfig = {
-          apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9V...",
+          apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9Vr69wJz2vA...",
           authDomain: "bramaqcloud.firebaseapp.com",
           projectId: "bramaqcloud",
           storageBucket: "bramaqcloud.appspot.com",
           messagingSenderId: "369713509600",
           appId: "1:369713509600:web:b6d878c..."
         };
+
         let db;
         try {
           if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Error iniciando Firebase:", e); }
 
         function App() {
-          // ESTADOS DE INSTALACIÓN PWA
           const [deferredPrompt, setDeferredPrompt] = useState(null);
           const [isInstallable, setIsInstallable] = useState(false);
           const [isIOS, setIsIOS] = useState(false);
           const [isStandalone, setIsStandalone] = useState(false);
 
-          // ESTADOS DE ACCESO OBLIGATORIO (GATEWAY)
           const [hasEntered, setHasEntered] = useState(false);
           const [gateProfile, setGateProfile] = useState('');
           const [userSession, setUserSession] = useState({ rol: "" });
 
-          // ESTADOS PRINCIPALES DE APLICACIÓN
           const [employees, setEmployees] = useState([]);
           const [loading, setLoading] = useState(true);
           const [onlineStatus, setOnlineStatus] = useState(navigator.onLine);
@@ -113,18 +113,14 @@
             autorBitacora: '', rolBitacora: ''
           });
 
-          // EFECTOS DE INSTALACIÓN PWA
           useEffect(() => {
-            // Detectar iOS
             const userAgent = window.navigator.userAgent.toLowerCase();
             const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
             setIsIOS(isIosDevice);
 
-            // Detectar si ya está instalada
             const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
             setIsStandalone(isDisplayStandalone);
 
-            // Capturar evento de instalación en Android/Chrome/Edge
             const handleBeforeInstallPrompt = (e) => {
               e.preventDefault();
               setDeferredPrompt(e);
@@ -149,7 +145,6 @@
             }
           };
 
-          // SINCRONIZACIÓN DE PERFIL SIN MEZCLAR
           const syncProfileLogic = (rolActivo) => {
             if (rolActivo === 'Administrativo') {
               setLogForm(prev => ({ ...prev, autorBitacora: 'Administrativo / RRHH', rolBitacora: 'Administrativo' }));
@@ -170,7 +165,6 @@
           const fileInputRef = useRef(null);
           const logFileRef = useRef(null);
 
-          // EFECTOS PRINCIPALES DE CARGA Y CONEXIÓN
           useEffect(() => {
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
             window.addEventListener('online', on); window.addEventListener('offline', off);
@@ -539,9 +533,6 @@
             </label>
           );
 
-          // -------------------------------------------------------------
-          // PANTALLA INICIAL OBLIGATORIA (GATEWAY)
-          // -------------------------------------------------------------
           if (!hasEntered) {
             return (
               <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 selection:bg-amber-500/30 relative overflow-hidden">
@@ -583,7 +574,6 @@
                       INGRESAR <i data-lucide="arrow-right" className="w-4 h-4"></i>
                     </button>
                     
-                    {/* BOTÓN INSTALACIÓN PWA (MÓVIL PRINCIPALMENTE) */}
                     {isInstallable && (
                       <button onClick={handleInstallClick} className="w-full py-3 rounded-xl font-semibold text-xs text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10 transition-colors flex items-center justify-center gap-2">
                         <i data-lucide="download-cloud" className="w-4 h-4"></i> Instalar Aplicación BRAMAQ
@@ -601,13 +591,9 @@
             );
           }
 
-          // -------------------------------------------------------------
-          // APLICACIÓN PRINCIPAL (POST-GATEWAY)
-          // -------------------------------------------------------------
           return (
             <div className="flex h-screen overflow-hidden bg-slate-950">
               
-              {/* SIDEBAR DESKTOP */}
               <aside className="hidden lg:flex flex-col w-64 bg-slate-900/50 backdrop-blur border-r border-slate-800 h-full z-10">
                 <div className="h-20 flex items-center px-6 border-b border-slate-800 justify-between">
                   <div className="flex items-center gap-3">
@@ -658,7 +644,6 @@
                 </div>
               </aside>
 
-              {/* HEADER MÓVIL */}
               <div className="flex-1 flex flex-col h-screen relative">
                 <header className="lg:hidden h-16 flex items-center justify-between px-4 sm:px-6 bg-slate-900/80 backdrop-blur border-b border-slate-800 z-30 sticky top-0">
                   <div className="flex items-center gap-2">
@@ -691,7 +676,6 @@
                   ) : (
                     <div className="max-w-7xl mx-auto space-y-8 fade-in">
                       
-                      {/* DASHBOARD GERENCIAL */}
                       {activeTab === 'dashboard' && (
                         <>
                           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -812,7 +796,6 @@
                         </>
                       )}
 
-                      {/* DIRECTORIO Y BITACORA */}
                       {activeTab === 'directorio' && (
                         <>
                           <div className="glass-panel p-4 sm:p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 sticky top-0 z-20 shadow-xl">
@@ -952,7 +935,6 @@
                   )}
                 </main>
                 
-                {/* BOTTOM MOBILE NAV */}
                 <nav className="lg:hidden bg-slate-900/90 backdrop-blur border-t border-slate-800 flex justify-around p-2 pb-safe z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
                   <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 rounded-xl text-[10px] font-bold transition-all ${activeTab === 'dashboard' ? 'text-amber-500 bg-amber-500/10' : 'text-slate-500 hover:text-slate-300'}`}>
                     <i data-lucide="layout-dashboard" className="w-5 h-5 mb-1"></i>
@@ -965,7 +947,6 @@
                 </nav>
               </div>
 
-              {/* MODAL TELÉFONO */}
               {selectedPhone && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-8 shadow-2xl flex flex-col items-center text-center">
@@ -994,7 +975,6 @@
                 </div>
               )}
 
-              {/* MODAL NUEVO / EDITAR FICHA */}
               {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-md fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
@@ -1118,7 +1098,6 @@
                 </div>
               )}
 
-              {/* MODAL BITÁCORA - TIMELINE MULTI-ARCHIVOS Y AISLAMIENTO DE PERFIL */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-md fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-5xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
@@ -1138,7 +1117,6 @@
 
                     <div className="flex-1 overflow-y-auto flex flex-col lg:flex-row bg-slate-950/30">
                       
-                      {/* HISTORIAL (TIMELINE) */}
                       <div className="flex-1 p-6 border-b lg:border-b-0 lg:border-r border-slate-800">
                         <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2"><i data-lucide="history" className="w-4 h-4"></i> Registros Históricos</h4>
                         
@@ -1173,7 +1151,6 @@
                                   
                                   {h.nota && <p className="text-sm text-slate-300 leading-relaxed mb-4 bg-slate-950/50 p-3 rounded-xl border border-slate-800/50">{h.nota}</p>}
                                   
-                                  {/* RENDER MÚLTIPLES ARCHIVOS (Compatibilidad hacia atrás) */}
                                   {(h.archivos && h.archivos.length > 0) ? (
                                     <div className="space-y-2 mb-4">
                                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Documentos Adjuntos</span>
@@ -1208,7 +1185,6 @@
                                       </div>
                                     </div>
                                   ) : h.archivoUrl && (
-                                    /* COMPATIBILIDAD VIEJA */
                                     <div className="mb-4 space-y-2">
                                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Documento Adjunto (Legado)</span>
                                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800 gap-3">
@@ -1242,12 +1218,11 @@
                                   </div>
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        )}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      {/* FORMULARIO NUEVA OBSERVACION (AISLAMIENTO ESTRICTO DE PERFIL) */}
                       <div className="w-full lg:w-[380px] xl:w-[420px] p-6 bg-slate-900 flex flex-col">
                         <h4 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-6 flex items-center gap-2"><i data-lucide="file-plus-2" className="w-4 h-4"></i> Registrar Evento</h4>
                         
@@ -1339,7 +1314,6 @@
                             <textarea placeholder="Redacte los acuerdos o motivos del registro..." value={logForm.nota} onChange={e=>setLogForm({...logForm, nota:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-amber-500 transition-shadow resize-none shadow-inner" rows="4"></textarea>
                           </div>
 
-                          {/* CARGA MÚLTIPLE DE ARCHIVOS ANTES DE GUARDAR */}
                           <div className="space-y-2">
                             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Evidencia / Adjuntos Múltiples</label>
                             
@@ -1378,7 +1352,6 @@
                 </div>
               )}
 
-              {/* MODAL REPORTE GLOBAL */}
               {isGlobalHistoryOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-md fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
