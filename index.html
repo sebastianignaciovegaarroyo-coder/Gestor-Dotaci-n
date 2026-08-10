@@ -17,15 +17,13 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f1f5f9; margin: 0; }
         .glass-panel { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(30, 41, 59, 0.8); }
-        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         #root { min-height: 100vh; }
     </style>
 </head>
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect, useMemo } = React;
         const firebaseConfig = {
           apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9Vr69wJz2vA...",
           authDomain: "bramaqcloud.firebaseapp.com",
@@ -40,14 +38,12 @@
         function App() {
             const [hasEntered, setHasEntered] = useState(false);
             const [gateProfile, setGateProfile] = useState('');
-            const [loading, setLoading] = useState(false);
+            const [userSession, setUserSession] = useState({ rol: "" });
             const [employees, setEmployees] = useState([]);
-
-            const handleEnter = () => { if(gateProfile) setHasEntered(true); };
+            const [loading, setLoading] = useState(true);
 
             useEffect(() => {
                 if(hasEntered) {
-                    setLoading(true);
                     return db.collection('employees').onSnapshot(snap => {
                         const items = [];
                         snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
@@ -62,24 +58,32 @@
                     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 p-6">
                         <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-sm shadow-2xl">
                             <h1 className="text-2xl font-bold text-white mb-6 text-center">BRAMAQ Acceso</h1>
-                            <select value={gateProfile} onChange={e => setGateProfile(e.target.value)} className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl mb-4 text-amber-400 font-bold">
-                                <option value="">Seleccione Perfil</option>
-                                <option value="Administrativo">Administrativo</option>
+                            <select value={gateProfile} onChange={e => setGateProfile(e.target.value)} className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl mb-6 text-amber-400 font-bold">
+                                <option value="">-- Elige perfil --</option>
+                                <option value="Administrativo">Administrativo / RRHH</option>
+                                <option value="AdminContrato">Admin. de Contrato</option>
                                 <option value="Supervisor">Supervisor</option>
+                                <option value="Prevencionista">Prevencionista</option>
                             </select>
-                            <button onClick={handleEnter} className="w-full bg-amber-500 text-black font-bold py-4 rounded-xl">INGRESAR</button>
+                            <button onClick={() => { setUserSession({rol: gateProfile}); setHasEntered(true); }} className="w-full bg-amber-500 text-black font-bold py-4 rounded-xl mb-4">INGRESAR</button>
                         </div>
                     </div>
                 );
             }
 
             return (
-                <div className="p-4 bg-slate-950 min-h-screen">
-                    <h1 className="text-white font-bold text-xl mb-4">Panel de Control</h1>
-                    {loading ? <p>Cargando datos...</p> : (
-                        <div className="space-y-2">
+                <div className="p-6 bg-slate-950 min-h-screen">
+                    <div className="flex justify-between items-center mb-6">
+                        <h1 className="text-xl font-bold text-amber-400">Dashboard BRAMAQ ({userSession.rol})</h1>
+                        <button onClick={() => setHasEntered(false)} className="text-xs bg-slate-800 px-3 py-1 rounded">Salir</button>
+                    </div>
+                    {loading ? <p className="text-slate-500">Cargando...</p> : (
+                        <div className="grid gap-4">
                             {employees.map(e => (
-                                <div key={e.id} className="bg-slate-900 p-4 rounded-lg border border-slate-800">{e.nombre}</div>
+                                <div key={e.id} className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                    <h4 className="font-bold">{e.nombre}</h4>
+                                    <p className="text-sm text-slate-400">{e.cargo}</p>
+                                </div>
                             ))}
                         </div>
                     )}
