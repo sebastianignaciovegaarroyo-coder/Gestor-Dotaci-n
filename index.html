@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/Gestor-Dotaci-n/">
     
-    <!-- PWA & Mobile Optimization -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#020617">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,7 +14,6 @@
     
     <title>Gestor de Dotación BRAMAQ - Enterprise Cloud</title>
     
-    <!-- CDNs Empresariales -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -23,12 +21,9 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     
-    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
     
-    <!-- REGISTRO SERVICE WORKER -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -63,6 +58,27 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
         
+        // SISTEMA ANTI-COLAPSO DE ÍCONOS (Evita Pantalla Azul)
+        const Ico = ({ i, c, title }) => (
+            <span title={title || ''} className="inline-flex items-center justify-center" dangerouslySetInnerHTML={{ __html: `<i data-lucide="${i}" class="${c || ''}"></i>` }} />
+        );
+
+        // ESCUDO ANTI-COLAPSO GENERAL DE REACT
+        class ErrorBoundary extends React.Component {
+            constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+            static getDerivedStateFromError(error) { return { hasError: true, error }; }
+            render() {
+                if (this.state.hasError) {
+                    return <div style={{padding: '50px', color: '#f87171', textAlign: 'center', fontFamily: 'sans-serif'}}>
+                        <h2 style={{fontSize: '24px', fontWeight: 'bold', marginBottom: '10px'}}>El sistema detuvo un colapso.</h2>
+                        <p style={{fontSize: '12px', background: '#000', padding: '15px', borderRadius: '8px'}}>{this.state.error.toString()}</p>
+                        <button onClick={()=>window.location.reload()} style={{marginTop: '20px', padding: '10px 20px', background: '#f59e0b', color: 'black', borderRadius: '8px', fontWeight: 'bold'}}>Recargar Aplicación</button>
+                    </div>;
+                }
+                return this.props.children;
+            }
+        }
+        
         // CONFIGURACIÓN CENTRAL FIREBASE
         const firebaseConfig = {
           apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9Vr69wJz2vA...",
@@ -73,15 +89,14 @@
           appId: "1:369713509600:web:b6d878c..."
         };
 
-        let db, storage;
+        let db;
         try {
           if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();
           db.enablePersistence({ synchronizeTabs: true }).catch(() => console.warn('Caché offline limitada'));
-          storage = null; 
         } catch (e) { console.error("Error iniciando base de datos:", e); }
 
-        function App() {
+        function GestorApp() {
           const [deferredPrompt, setDeferredPrompt] = useState(null);
           const [isInstallable, setIsInstallable] = useState(false);
           const [isIOS, setIsIOS] = useState(false);
@@ -93,7 +108,7 @@
           const [userSession, setUserSession] = useState({ rol: "", autor: "" });
 
           const [employees, setEmployees] = useState([]);
-          const [loading, setLoading] = useState(false); // Cambiado a false para no bloquear entrada
+          const [loading, setLoading] = useState(true);
           const [onlineStatus, setOnlineStatus] = useState(navigator.onLine);
           const [searchTerm, setSearchTerm] = useState('');
           const [activeTab, setActiveTab] = useState('dashboard');
@@ -126,6 +141,11 @@
               if (loader) loader.style.display = 'none';
           }, []);
 
+          // Renderizar iconos de forma segura
+          useEffect(() => {
+              if (window.lucide) window.lucide.createIcons();
+          });
+
           // PWA Install Logic
           useEffect(() => {
             setIsIOS(/iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase()));
@@ -145,14 +165,14 @@
             }
           };
 
-          // REAL-TIME SYNC FIREBASE
+          // REAL-TIME SYNC FIREBASE (SE EJECUTA SIEMPRE AL INICIAR PARA CARGAR SUPERVISORES)
           useEffect(() => {
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
             window.addEventListener('online', on); window.addEventListener('offline', off);
             
-            if (!hasEntered || !db) return;
-            setLoading(true);
+            if (!db) return; // Ya no requiere hasEntered, carga directo en el login
             
+            setLoading(true);
             const unsub = db.collection('employees').onSnapshot(snap => {
               const items = [];
               const cities = new Set(['Valdivia', 'Loncoche', 'San José de la Mariquina', 'Lanco', 'Panguipulli']);
@@ -167,9 +187,7 @@
             }, (error) => { console.error("Error DB:", error); setLoading(false); });
             
             return () => { unsub(); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
-          }, [hasEntered]);
-
-          useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+          }, []);
 
           const supervisorsList = useMemo(() => {
             return employees.filter(e => String(e.cargo || '').toUpperCase().includes('SUPERVISOR')).map(e => String(e.nombre || 'Sin Nombre')).sort();
@@ -485,8 +503,8 @@
           const RequisitoToggle = ({ label, icon, checked, onChange }) => (
             <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${checked ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/60 border-slate-800'}`}>
                 <input type="checkbox" checked={checked} onChange={onChange} className="hidden" />
-                <div className={`w-4 h-4 rounded flex items-center justify-center ${checked ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 border border-slate-700'}`}>{checked && <i data-lucide="check" className="w-3 h-3"></i>}</div>
-                <div className="flex items-center gap-2"><i data-lucide={icon} className={`w-4 h-4 ${checked ? 'text-emerald-400' : 'text-slate-500'}`}></i><span className={`text-xs font-medium ${checked ? 'text-emerald-400' : 'text-slate-400'}`}>{label}</span></div>
+                <div className={`w-4 h-4 rounded flex items-center justify-center ${checked ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 border border-slate-700'}`}>{checked && <Ico i="check" c="w-3 h-3" />}</div>
+                <div className="flex items-center gap-2"><Ico i={icon} c={`w-4 h-4 ${checked ? 'text-emerald-400' : 'text-slate-500'}`} /><span className={`text-xs font-medium ${checked ? 'text-emerald-400' : 'text-slate-400'}`}>{label}</span></div>
             </label>
           );
 
@@ -495,7 +513,7 @@
             return (
               <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
                 <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-md shadow-2xl flex flex-col items-center fade-in">
-                  <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center text-slate-950 mb-4"><i data-lucide="shield-check" className="w-10 h-10"></i></div>
+                  <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center text-slate-950 mb-4"><Ico i="shield-check" c="w-10 h-10" /></div>
                   <h1 className="text-xl font-extrabold text-white">Gestor de Dotación</h1>
                   <h2 className="text-sm font-bold text-amber-400 mb-8 uppercase tracking-widest">BRAMAQ Enterprise</h2>
 
@@ -524,7 +542,7 @@
                     </button>
 
                     {isInstallable && (
-                      <button onClick={handleInstallClick} className="w-full py-3 mt-2 rounded-xl font-bold text-xs text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-2 hover:bg-emerald-500/10"><i data-lucide="download-cloud" className="w-4 h-4"></i> Instalar Aplicación</button>
+                      <button onClick={handleInstallClick} className="w-full py-3 mt-2 rounded-xl font-bold text-xs text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-2 hover:bg-emerald-500/10"><Ico i="download-cloud" c="w-4 h-4" /> Instalar Aplicación</button>
                     )}
                     {showInstallHelp && (
                       <div className="w-full py-3 px-4 rounded-xl text-xs text-slate-300 border border-slate-800 bg-slate-950 text-center fade-in mt-2">
@@ -544,12 +562,12 @@
               {/* Sidebar Desktop */}
               <aside className="hidden lg:flex flex-col w-64 bg-slate-900 border-r border-slate-800 h-full">
                 <div className="h-20 flex items-center px-6 border-b border-slate-800 gap-3">
-                  <div className="bg-amber-500 p-2 rounded-xl text-slate-950"><i data-lucide="hard-hat" className="w-5 h-5"></i></div>
+                  <div className="bg-amber-500 p-2 rounded-xl text-slate-950"><Ico i="hard-hat" c="w-5 h-5" /></div>
                   <div><div className="font-bold text-white">BRAMAQ</div><div className="text-[9px] text-amber-500 uppercase font-bold">Enterprise</div></div>
                 </div>
                 <div className="p-4 space-y-2 flex-1">
-                  <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold ${activeTab === 'dashboard' ? 'bg-amber-500/10 text-amber-400' : 'text-slate-400 hover:text-white'}`}><i data-lucide="layout-dashboard" className="w-4 h-4"></i> Panel Gerencial</button>
-                  <button onClick={() => setActiveTab('directorio')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold ${activeTab === 'directorio' ? 'bg-amber-500/10 text-amber-400' : 'text-slate-400 hover:text-white'}`}><i data-lucide="users" className="w-4 h-4"></i> Directorio y Fichas</button>
+                  <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold ${activeTab === 'dashboard' ? 'bg-amber-500/10 text-amber-400' : 'text-slate-400 hover:text-white'}`}><Ico i="layout-dashboard" c="w-4 h-4" /> Panel Gerencial</button>
+                  <button onClick={() => setActiveTab('directorio')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold ${activeTab === 'directorio' ? 'bg-amber-500/10 text-amber-400' : 'text-slate-400 hover:text-white'}`}><Ico i="users" c="w-4 h-4" /> Directorio y Fichas</button>
                   
                   <div className="mt-8 pt-6 border-t border-slate-800">
                     <div className="flex items-center gap-2 px-2 mb-4">
@@ -568,7 +586,7 @@
               <div className="flex-1 flex flex-col h-screen relative">
                 {/* Header Mobile */}
                 <header className="lg:hidden h-16 flex items-center justify-between px-4 bg-slate-900 border-b border-slate-800 z-30">
-                  <div className="flex items-center gap-2 text-white font-bold"><i data-lucide="hard-hat" className="text-amber-500 w-5 h-5"></i> BRAMAQ</div>
+                  <div className="flex items-center gap-2 text-white font-bold"><Ico i="hard-hat" c="text-amber-500 w-5 h-5" /> BRAMAQ</div>
                   <div className="flex items-center gap-3">
                     <span className={`w-2 h-2 rounded-full ${onlineStatus ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
                     <button onClick={() => setHasEntered(false)} className="text-xs bg-slate-800 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700">Salir</button>
@@ -576,7 +594,7 @@
                 </header>
 
                 <main className="flex-1 overflow-y-auto p-4 sm:p-6 relative">
-                  {loading ? <div className="text-center py-20 text-amber-500"><i data-lucide="loader-2" className="w-10 h-10 animate-spin mx-auto"></i><p className="mt-2 text-xs text-slate-400">Sincronizando información en tiempo real...</p></div> : (
+                  {loading ? <div className="text-center py-20 text-amber-500"><Ico i="loader-2" c="w-10 h-10 animate-spin mx-auto" /><p className="mt-2 text-xs text-slate-400">Sincronizando información en tiempo real...</p></div> : (
                     <div className="max-w-7xl mx-auto space-y-6 fade-in pb-20">
                       
                       {/* ======================= DASHBOARD ======================= */}
@@ -614,7 +632,7 @@
                               { label: 'Mecánicos', val: kpis.mecanicos, filter: 'MECANICOS', icon: 'wrench', color: 'text-stone-400' }
                             ].map(item => item.val > 0 && (
                               <div key={item.label} onClick={() => { setActiveFilter(item.filter); setActiveTab('directorio'); }} className="glass-panel p-4 rounded-xl cursor-pointer text-center hover:bg-slate-800">
-                                <i data-lucide={item.icon} className={`w-5 h-5 mx-auto mb-1 ${item.color}`}></i>
+                                <div className="mb-1"><Ico i={item.icon} c={`w-5 h-5 mx-auto ${item.color}`} /></div>
                                 <div className="text-[9px] text-slate-400 font-bold uppercase">{item.label}</div>
                                 <div className={`text-xl font-extrabold ${item.color}`}>{item.val}</div>
                               </div>
@@ -627,7 +645,7 @@
                               {citiesList.map(city => kpis.porCiudad[city] > 0 && (
                                 <div key={city} onClick={() => { setActiveFilter(city); setActiveTab('directorio'); }} className="cursor-pointer hover:opacity-80">
                                   <div className="flex justify-between text-xs mb-1 text-slate-300"><span>{city}</span><span className="font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800">{kpis.porCiudad[city]} Pers.</span></div>
-                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden"><div className="bg-amber-500 h-full" style={{ width: `${(kpis.porCiudad[city] / kpis.total) * 100}%` }}></div></div>
+                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden"><div className="bg-amber-500 h-full" style={{ width: `${kpis.total > 0 ? (kpis.porCiudad[city] / kpis.total) * 100 : 0}%` }}></div></div>
                                 </div>
                               ))}
                             </div>
@@ -641,35 +659,35 @@
                           <div className="glass-panel p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-3 sticky top-0 z-20 shadow-xl">
                             <div className="flex items-center gap-2 w-full md:w-auto flex-1">
                               <div className="relative w-full max-w-md">
-                                <i data-lucide="search" className="absolute left-3 top-2.5 w-4 h-4 text-slate-500"></i>
+                                <Ico i="search" c="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
                                 <input type="text" placeholder="Buscar empleado por nombre, RUT, cargo o ciudad..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-950 border border-slate-700 text-white text-sm rounded-lg pl-9 pr-3 py-2 outline-none focus:border-amber-500" />
                               </div>
                               {activeFilter !== 'TODOS' && <button onClick={() => setActiveFilter('TODOS')} className="bg-amber-500/10 border border-amber-500/20 text-amber-400 px-3 py-2 rounded-lg text-[10px] font-bold shrink-0 uppercase tracking-widest">Limpiar Filtros</button>}
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-                              <button onClick={() => setIsGlobalHistoryOpen(true)} className="bg-indigo-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1 hover:bg-indigo-500"><i data-lucide="file-clock" className="w-3.5 h-3.5"></i> Ver Hoja Global</button>
-                              <button onClick={handleDownloadExcel} className="bg-emerald-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1 hover:bg-emerald-500"><i data-lucide="download" className="w-3.5 h-3.5"></i> Exportar Todo</button>
+                              <button onClick={() => setIsGlobalHistoryOpen(true)} className="bg-indigo-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1 hover:bg-indigo-500"><Ico i="file-clock" c="w-3.5 h-3.5" /> Ver Hoja Global</button>
+                              <button onClick={handleDownloadExcel} className="bg-emerald-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1 hover:bg-emerald-500"><Ico i="download" c="w-3.5 h-3.5" /> Exportar Todo</button>
                               
                               {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
                                 <>
                                   <input type="file" ref={fileInputRef} onChange={handleUploadExcel} accept=".xlsx, .xls, .csv" className="hidden" />
-                                  <button onClick={() => fileInputRef.current.click()} className="bg-slate-800 border border-slate-700 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1 hover:bg-slate-700"><i data-lucide="upload" className="w-3.5 h-3.5"></i> Carga Masiva (Excel)</button>
+                                  <button onClick={() => fileInputRef.current.click()} className="bg-slate-800 border border-slate-700 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1 hover:bg-slate-700"><Ico i="upload" c="w-3.5 h-3.5" /> Carga Masiva (Excel)</button>
                                 </>
                               )}
                               
-                              <button onClick={() => { setCurrentEmployee(null); setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0] || 'Valdivia', cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '', documentos: { contrato: true, induccion: true, examenes: true, epp: true }}); setIsModalOpen(true); }} className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-1 shadow-lg"><i data-lucide="user-plus" className="w-4 h-4"></i> Crear Ficha</button>
+                              <button onClick={() => { setCurrentEmployee(null); setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0] || 'Valdivia', cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '', documentos: { contrato: true, induccion: true, examenes: true, epp: true }}); setIsModalOpen(true); }} className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-1 shadow-lg"><Ico i="user-plus" c="w-4 h-4" /> Crear Ficha</button>
                             </div>
                           </div>
 
                           {userSession.rol === 'Administrativo' && (
                             <div className="flex justify-end">
-                              <button onClick={handleDeleteAllData} className="text-[10px] text-red-500 font-bold flex items-center gap-1 bg-red-500/10 border border-red-500/20 px-2 py-1 rounded hover:bg-red-500/20"><i data-lucide="alert-triangle" className="w-3 h-3"></i> VACIAR TODA LA BASE DE DATOS</button>
+                              <button onClick={handleDeleteAllData} className="text-[10px] text-red-500 font-bold flex items-center gap-1 bg-red-500/10 border border-red-500/20 px-2 py-1 rounded hover:bg-red-500/20"><Ico i="alert-triangle" c="w-3 h-3" /> VACIAR TODA LA BASE DE DATOS</button>
                             </div>
                           )}
 
                           <div className="space-y-3">
-                            {filtered.length === 0 && <div className="text-center bg-slate-900 border border-slate-800 rounded-2xl py-20"><i data-lucide="search-x" className="w-10 h-10 text-slate-600 mx-auto mb-2"></i><p className="text-slate-500 text-sm">No se encontraron trabajadores con ese criterio.</p></div>}
+                            {filtered.length === 0 && <div className="text-center bg-slate-900 border border-slate-800 rounded-2xl py-20"><Ico i="search-x" c="w-10 h-10 text-slate-600 mx-auto mb-2" /><p className="text-slate-500 text-sm mt-2">No se encontraron trabajadores con ese criterio.</p></div>}
                             
                             {filtered.map(emp => (
                               <div key={emp.id} className="glass-panel p-4 rounded-xl flex flex-col lg:flex-row gap-4 hover:border-slate-600 transition-colors">
@@ -681,8 +699,8 @@
                                       <p className="text-[11px] text-slate-400 font-mono bg-slate-950 inline-block px-1.5 rounded mt-0.5 border border-slate-800">RUT: {emp.rut || 'Sin RUT'}</p>
                                     </div>
                                   </div>
-                                  <div className="text-xs text-amber-400 font-bold mb-1 pl-15"><i data-lucide="briefcase" className="w-3 h-3 inline mr-1"></i> {emp.cargo || 'Sin Cargo Definido'}</div>
-                                  <div className="text-[11px] text-slate-400 pl-15"><i data-lucide="map-pin" className="w-3 h-3 inline mr-1"></i> {emp.ciudad || 'Sin Ciudad'} {emp.direccion ? `| ${emp.direccion}` : ''}</div>
+                                  <div className="text-xs text-amber-400 font-bold mb-1 pl-15"><Ico i="briefcase" c="w-3 h-3 mr-1" /> {emp.cargo || 'Sin Cargo Definido'}</div>
+                                  <div className="text-[11px] text-slate-400 pl-15"><Ico i="map-pin" c="w-3 h-3 mr-1" /> {emp.ciudad || 'Sin Ciudad'} {emp.direccion ? `| ${emp.direccion}` : ''}</div>
                                 </div>
 
                                 {/* CONTACTOS Y ACCIONES RÁPIDAS (LLAMADA, WA, SMS) NORMALIZADAS */}
@@ -691,12 +709,12 @@
                                     <div className="flex items-center justify-between">
                                       <div className="flex flex-col">
                                         <span className="text-[9px] text-slate-500 uppercase font-bold">Teléfono Personal</span>
-                                        <button onClick={()=>setSelectedPhone(normalizePhone(emp.telefono))} className="text-xs text-slate-200 font-mono hover:text-amber-400 text-left truncate"><i data-lucide="smartphone" className="w-3 h-3 inline text-slate-500 mr-1"></i>{normalizePhone(emp.telefono)}</button>
+                                        <button onClick={()=>setSelectedPhone(normalizePhone(emp.telefono))} className="text-xs text-slate-200 font-mono hover:text-amber-400 text-left truncate"><Ico i="smartphone" c="w-3 h-3 text-slate-500 mr-1" />{normalizePhone(emp.telefono)}</button>
                                       </div>
                                       <div className="flex gap-1 shrink-0">
-                                        <a href={`tel:${normalizePhone(emp.telefono).replace('+', '')}`} className="bg-blue-600/20 text-blue-400 border border-blue-500/20 p-1.5 rounded hover:bg-blue-600/40" title="Llamar"><i data-lucide="phone" className="w-3.5 h-3.5"></i></a>
-                                        <a href={`https://wa.me/${normalizePhone(emp.telefono).replace('+', '')}`} target="_blank" className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 p-1.5 rounded hover:bg-emerald-600/40" title="WhatsApp"><i data-lucide="message-circle" className="w-3.5 h-3.5"></i></a>
-                                        <a href={`sms:${normalizePhone(emp.telefono).replace('+', '')}`} className="bg-slate-700 text-slate-300 border border-slate-600 p-1.5 rounded hover:bg-slate-600" title="SMS"><i data-lucide="message-square" className="w-3.5 h-3.5"></i></a>
+                                        <a href={`tel:${normalizePhone(emp.telefono).replace('+', '')}`} className="bg-blue-600/20 text-blue-400 border border-blue-500/20 p-1.5 rounded hover:bg-blue-600/40" title="Llamar"><Ico i="phone" c="w-3.5 h-3.5" /></a>
+                                        <a href={`https://wa.me/${normalizePhone(emp.telefono).replace('+', '')}`} target="_blank" className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 p-1.5 rounded hover:bg-emerald-600/40" title="WhatsApp"><Ico i="message-circle" c="w-3.5 h-3.5" /></a>
+                                        <a href={`sms:${normalizePhone(emp.telefono).replace('+', '')}`} className="bg-slate-700 text-slate-300 border border-slate-600 p-1.5 rounded hover:bg-slate-600" title="SMS"><Ico i="message-square" c="w-3.5 h-3.5" /></a>
                                       </div>
                                     </div>
                                   ) : <div className="text-[10px] text-slate-500 italic py-1">Sin teléfono personal registrado</div>}
@@ -708,10 +726,10 @@
                                       <div className="flex flex-col truncate pr-2">
                                         <span className="text-[9px] text-red-400 uppercase font-bold">Aviso de Emergencia</span>
                                         <button onClick={()=>setSelectedPhone(normalizePhone(emp.emergenciaFono))} className="text-[11px] text-red-300 font-mono hover:text-red-400 text-left truncate">
-                                          <i data-lucide="shield-alert" className="w-3 h-3 inline text-red-500 mr-1"></i>{emp.emergenciaNombre}: {normalizePhone(emp.emergenciaFono)}
+                                          <Ico i="shield-alert" c="w-3 h-3 text-red-500 mr-1" />{emp.emergenciaNombre}: {normalizePhone(emp.emergenciaFono)}
                                         </button>
                                       </div>
-                                      <a href={`tel:${normalizePhone(emp.emergenciaFono).replace('+', '')}`} className="bg-red-600/20 text-red-400 border border-red-500/20 p-1.5 rounded hover:bg-red-600/40 shrink-0" title="Llamar a Emergencia"><i data-lucide="phone-call" className="w-3.5 h-3.5"></i></a>
+                                      <a href={`tel:${normalizePhone(emp.emergenciaFono).replace('+', '')}`} className="bg-red-600/20 text-red-400 border border-red-500/20 p-1.5 rounded hover:bg-red-600/40 shrink-0" title="Llamar a Emergencia"><Ico i="phone-call" c="w-3.5 h-3.5" /></a>
                                     </div>
                                   ) : <div className="text-[10px] text-slate-500 italic py-1">Sin contacto de emergencia registrado</div>}
                                 </div>
@@ -719,19 +737,19 @@
                                 {/* ESTADOS Y BOTONES DE GESTIÓN */}
                                 <div className="flex flex-row lg:flex-col justify-end lg:justify-center gap-2 items-center lg:w-40 border-t border-slate-800 lg:border-none pt-3 lg:pt-0 shrink-0">
                                   {getMissingDataList(emp).length > 0 ? (
-                                    <div className="bg-red-500/10 text-red-400 px-2 py-1 rounded text-[10px] font-bold border border-red-500/20 w-full text-center flex items-center justify-center gap-1"><i data-lucide="alert-circle" className="w-3 h-3"></i> Faltan Datos</div>
+                                    <div className="bg-red-500/10 text-red-400 px-2 py-1 rounded text-[10px] font-bold border border-red-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="alert-circle" c="w-3 h-3" /> Faltan Datos</div>
                                   ) : (
-                                    <div className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-[10px] font-bold border border-emerald-500/20 w-full text-center flex items-center justify-center gap-1"><i data-lucide="check-circle" className="w-3 h-3"></i> Todo en orden</div>
+                                    <div className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-[10px] font-bold border border-emerald-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="check-circle" c="w-3 h-3" /> Todo en orden</div>
                                   )}
                                   
                                   <div className="flex gap-1.5 w-full justify-center mt-1">
                                     <button onClick={() => { setSelectedEmpForHistory(emp); setIsHistoryModalOpen(true); }} className="bg-slate-800 border border-slate-700 p-2 rounded-lg text-amber-400 relative hover:bg-slate-700 flex-1 flex justify-center" title="Abrir Bitácora y Observaciones">
-                                      <i data-lucide="book-open" className="w-4 h-4"></i>
+                                      <Ico i="book-open" c="w-4 h-4" />
                                       {emp.historial?.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-amber-500 text-black text-[9px] font-bold rounded-full flex items-center justify-center shadow-lg border border-slate-900">{emp.historial.length}</span>}
                                     </button>
-                                    <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="bg-slate-800 border border-slate-700 p-2 rounded-lg text-white hover:bg-slate-700 flex-1 flex justify-center" title="Editar Ficha"><i data-lucide="edit-2" className="w-4 h-4"></i></button>
+                                    <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="bg-slate-800 border border-slate-700 p-2 rounded-lg text-white hover:bg-slate-700 flex-1 flex justify-center" title="Editar Ficha"><Ico i="edit-2" c="w-4 h-4" /></button>
                                     {(userSession.rol === 'Administrativo') && (
-                                      <button onClick={() => handleDelete(emp.id)} className="bg-red-500/10 border border-red-500/20 text-red-500 p-2 rounded-lg hover:bg-red-500/20 flex-1 flex justify-center" title="Eliminar Trabajador"><i data-lucide="trash" className="w-4 h-4"></i></button>
+                                      <button onClick={() => handleDelete(emp.id)} className="bg-red-500/10 border border-red-500/20 text-red-500 p-2 rounded-lg hover:bg-red-500/20 flex-1 flex justify-center" title="Eliminar Trabajador"><Ico i="trash" c="w-4 h-4" /></button>
                                     )}
                                   </div>
                                 </div>
@@ -746,8 +764,8 @@
                 
                 {/* Navbar Mobile Flotante */}
                 <nav className="lg:hidden bg-slate-900/95 backdrop-blur border-t border-slate-800 flex justify-around p-2 pb-safe z-30 fixed bottom-0 w-full">
-                  <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 w-full text-[10px] font-bold ${activeTab === 'dashboard' ? 'text-amber-500 bg-slate-800 rounded-lg' : 'text-slate-500'}`}><i data-lucide="layout-dashboard" className="w-5 h-5 mb-1"></i> Resumen</button>
-                  <button onClick={() => setActiveTab('directorio')} className={`flex flex-col items-center p-2 w-full text-[10px] font-bold ${activeTab === 'directorio' ? 'text-amber-500 bg-slate-800 rounded-lg' : 'text-slate-500'}`}><i data-lucide="users" className="w-5 h-5 mb-1"></i> Directorio</button>
+                  <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 w-full text-[10px] font-bold ${activeTab === 'dashboard' ? 'text-amber-500 bg-slate-800 rounded-lg' : 'text-slate-500'}`}><Ico i="layout-dashboard" c="w-5 h-5 mb-1" /> Resumen</button>
+                  <button onClick={() => setActiveTab('directorio')} className={`flex flex-col items-center p-2 w-full text-[10px] font-bold ${activeTab === 'directorio' ? 'text-amber-500 bg-slate-800 rounded-lg' : 'text-slate-500'}`}><Ico i="users" c="w-5 h-5 mb-1" /> Directorio</button>
                 </nav>
               </div>
 
@@ -757,14 +775,14 @@
               {selectedPhone && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xs p-6 shadow-2xl text-center relative">
-                    <button onClick={() => setSelectedPhone(null)} className="absolute top-3 right-3 text-slate-500 hover:text-white"><i data-lucide="x" className="w-5 h-5"></i></button>
-                    <div className="w-16 h-16 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center text-amber-500 mx-auto mb-4"><i data-lucide="phone-call" className="w-8 h-8"></i></div>
+                    <button onClick={() => setSelectedPhone(null)} className="absolute top-3 right-3 text-slate-500 hover:text-white"><Ico i="x" c="w-5 h-5" /></button>
+                    <div className="w-16 h-16 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center text-amber-500 mx-auto mb-4"><Ico i="phone-call" c="w-8 h-8" /></div>
                     <h3 className="text-lg font-bold text-white mb-1">Comunicación Directa</h3>
                     <p className="text-xl font-mono text-amber-400 font-bold mb-6">{selectedPhone}</p>
                     <div className="space-y-3">
-                      <a href={`tel:${selectedPhone.replace('+', '')}`} className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20"><i data-lucide="phone" className="w-5 h-5"></i> Llamada Telefónica</a>
-                      <a href={`https://wa.me/${selectedPhone.replace('+', '')}`} target="_blank" className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/20"><i data-lucide="message-circle" className="w-5 h-5"></i> Enviar WhatsApp</a>
-                      <a href={`sms:${selectedPhone.replace('+', '')}`} className="w-full flex items-center justify-center gap-2 py-3 bg-slate-800 border border-slate-700 text-white rounded-xl text-sm font-bold"><i data-lucide="message-square" className="w-5 h-5"></i> Mensaje de Texto (SMS)</a>
+                      <a href={`tel:${selectedPhone.replace('+', '')}`} className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20"><Ico i="phone" c="w-5 h-5" /> Llamada Telefónica</a>
+                      <a href={`https://wa.me/${selectedPhone.replace('+', '')}`} target="_blank" className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/20"><Ico i="message-circle" c="w-5 h-5" /> Enviar WhatsApp</a>
+                      <a href={`sms:${selectedPhone.replace('+', '')}`} className="w-full flex items-center justify-center gap-2 py-3 bg-slate-800 border border-slate-700 text-white rounded-xl text-sm font-bold"><Ico i="message-square" c="w-5 h-5" /> Mensaje de Texto (SMS)</a>
                     </div>
                   </div>
                 </div>
@@ -775,11 +793,11 @@
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm fade-in overflow-y-auto">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl my-auto">
                     <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-2xl sticky top-0 z-10">
-                      <h3 className="font-bold text-white text-sm"><i data-lucide={currentEmployee ? "user-cog" : "user-plus"} className="w-4 h-4 inline mr-2 text-amber-500"></i>{currentEmployee ? 'Actualizar Expediente' : 'Crear Ficha de Ingreso'}</h3>
-                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1.5 rounded"><i data-lucide="x" className="w-4 h-4"></i></button>
+                      <h3 className="font-bold text-white text-sm"><Ico i={currentEmployee ? "user-cog" : "user-plus"} c="w-4 h-4 mr-2 text-amber-500" />{currentEmployee ? 'Actualizar Expediente' : 'Crear Ficha de Ingreso'}</h3>
+                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1.5 rounded"><Ico i="x" c="w-4 h-4" /></button>
                     </div>
                     <div className="p-5">
-                      {formError && <div className="mb-4 text-xs text-red-400 bg-red-500/10 p-3 rounded border border-red-500/20 font-medium"><i data-lucide="alert-octagon" className="w-4 h-4 inline mr-1"></i>{formError}</div>}
+                      {formError && <div className="mb-4 text-xs text-red-400 bg-red-500/10 p-3 rounded border border-red-500/20 font-medium"><Ico i="alert-octagon" c="w-4 h-4 mr-1" />{formError}</div>}
                       <form id="employeeForm" onSubmit={handleSave} className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div><label className="text-[10px] uppercase font-bold text-slate-500">Nombre Completo *</label><input required value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" placeholder="Ej: Juan Pérez"/></div>
@@ -792,13 +810,13 @@
 
                         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                           <div>
-                            <label className="text-[10px] uppercase font-bold text-blue-400"><i data-lucide="phone" className="w-3 h-3 inline mr-1"></i>Teléfono Personal</label>
+                            <label className="text-[10px] uppercase font-bold text-blue-400"><Ico i="phone" c="w-3 h-3 mr-1" />Teléfono Personal</label>
                             <input value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} placeholder="+56 9..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-mono outline-none focus:border-blue-500 mt-1" />
                           </div>
                           <div></div>
                           <div className="sm:col-span-2 border-t border-slate-800 my-1"></div>
                           <div>
-                            <label className="text-[10px] uppercase font-bold text-red-400"><i data-lucide="shield-alert" className="w-3 h-3 inline mr-1"></i>Familiar de Emergencia</label>
+                            <label className="text-[10px] uppercase font-bold text-red-400"><Ico i="shield-alert" c="w-3 h-3 mr-1" />Familiar de Emergencia</label>
                             <input value={formData.emergenciaNombre} onChange={e=>setFormData({...formData, emergenciaNombre:e.target.value})} placeholder="Nombre..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white mt-1 outline-none focus:border-red-500" />
                           </div>
                           <div>
@@ -819,7 +837,7 @@
 
                         <div className="flex justify-end gap-2 pt-5 mt-5 border-t border-slate-800">
                           <button type="button" onClick={() => setIsModalOpen(false)} className="bg-slate-800 border border-slate-700 px-5 py-2.5 rounded-xl text-xs font-bold text-white hover:bg-slate-700">Cancelar</button>
-                          <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-6 py-2.5 rounded-xl text-xs font-bold shadow-[0_0_15px_rgba(245,158,11,0.2)] flex items-center gap-2"><i data-lucide="cloud-upload" className="w-4 h-4"></i> Confirmar y Subir</button>
+                          <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-6 py-2.5 rounded-xl text-xs font-bold shadow-[0_0_15px_rgba(245,158,11,0.2)] flex items-center gap-2"><Ico i="cloud-upload" c="w-4 h-4" /> Confirmar y Subir</button>
                         </div>
                       </form>
                     </div>
@@ -833,23 +851,23 @@
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl h-[95vh] flex flex-col shadow-2xl overflow-hidden">
                     <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-2xl shrink-0">
                       <div className="flex items-center gap-3">
-                        <div className="bg-amber-500 p-2.5 rounded-xl text-slate-950 shadow-lg"><i data-lucide="book-open" className="w-5 h-5"></i></div>
+                        <div className="bg-amber-500 p-2.5 rounded-xl text-slate-950 shadow-lg"><Ico i="book-open" c="w-5 h-5" /></div>
                         <div><h3 className="font-bold text-white text-base">Hoja de Vida Operativa</h3><p className="text-[11px] text-slate-400 font-mono">{selectedEmpForHistory.nombre} | RUT: {selectedEmpForHistory.rut}</p></div>
                       </div>
-                      <button onClick={() => setIsHistoryModalOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg border border-slate-700"><i data-lucide="x" className="w-5 h-5"></i></button>
+                      <button onClick={() => setIsHistoryModalOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg border border-slate-700"><Ico i="x" c="w-5 h-5" /></button>
                     </div>
 
                     <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-slate-950/50">
                       {/* Lista de Eventos */}
                       <div className="flex-1 p-5 border-b lg:border-b-0 lg:border-r border-slate-800 overflow-y-auto">
-                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-5 flex items-center"><i data-lucide="history" className="w-3.5 h-3.5 mr-1.5"></i>Registros Históricos</h4>
-                        {!selectedEmpForHistory.historial?.length ? <div className="text-center text-slate-500 py-32 text-sm"><i data-lucide="folder-open" className="w-12 h-12 mx-auto mb-3 opacity-30"></i>Expediente limpio. No hay observaciones.</div> : (
+                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-5 flex items-center"><Ico i="history" c="w-3.5 h-3.5 mr-1.5" />Registros Históricos</h4>
+                        {!selectedEmpForHistory.historial?.length ? <div className="text-center text-slate-500 py-32 text-sm"><div className="mb-3 opacity-30"><Ico i="folder-open" c="w-12 h-12 mx-auto" /></div>Expediente limpio. No hay observaciones.</div> : (
                           <div className="space-y-5">
                             {[...(selectedEmpForHistory.historial||[])].sort((a,b) => new Date(b.createdAt||b.fechaInicio||0) - new Date(a.createdAt||a.fechaInicio||0)).map(h => (
                               <div key={h.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl relative group hover:border-slate-700 transition-colors">
                                 <div className="flex justify-between items-start mb-3">
                                   <span className="bg-slate-950 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2.5 py-1 rounded uppercase tracking-wider">{h.tipo || 'Evento'}</span>
-                                  <span className="text-[10px] text-slate-400 font-mono bg-slate-950 px-2 py-1 rounded border border-slate-800 flex items-center"><i data-lucide="calendar" className="w-3 h-3 mr-1.5"></i>{h.modoFechas === 'rango' ? `${h.fechaInicio} al ${h.fechaTermino}` : h.fechaInicio}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono bg-slate-950 px-2 py-1 rounded border border-slate-800 flex items-center"><Ico i="calendar" c="w-3 h-3 mr-1.5" />{h.modoFechas === 'rango' ? `${h.fechaInicio} al ${h.fechaTermino}` : h.fechaInicio}</span>
                                 </div>
                                 {h.nota && <p className="text-xs text-slate-300 mb-4 bg-slate-950/50 p-3 rounded-xl border border-slate-800/50 leading-relaxed">{h.nota}</p>}
                                 
@@ -857,18 +875,18 @@
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                                     {h.archivos.map((a, i) => (
                                       <div key={i} className="flex justify-between items-center bg-slate-950 p-2.5 rounded-lg border border-slate-800 group/file hover:border-slate-600">
-                                        <a href={a.url} target="_blank" className="text-[10px] text-blue-400 truncate w-3/4 flex items-center hover:underline"><i data-lucide={a.tipo?.includes('image') ? 'image' : 'file-text'} className="w-3.5 h-3.5 inline mr-1.5 text-slate-500"></i> {a.nombre}</a>
+                                        <a href={a.url} target="_blank" className="text-[10px] text-blue-400 truncate w-3/4 flex items-center hover:underline"><Ico i={a.tipo?.includes('image') ? 'image' : 'file-text'} c="w-3.5 h-3.5 mr-1.5 text-slate-500" /> {a.nombre}</a>
                                         {((userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') || userSession.autor === h.autor) && (
-                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
+                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo"><Ico i="trash-2" c="w-3.5 h-3.5" /></button>
                                         )}
                                       </div>
                                     ))}
                                   </div>
                                 )}
                                 <div className="flex justify-between items-center text-[10px] text-slate-500 border-t border-slate-800 pt-3">
-                                  <span className="flex items-center"><i data-lucide="user-check" className="w-3 h-3 mr-1"></i><strong className="text-slate-300 font-medium mr-1">{h.autor}</strong> ({h.rolAutor})</span>
+                                  <span className="flex items-center"><Ico i="user-check" c="w-3 h-3 mr-1" /><strong className="text-slate-300 font-medium mr-1">{h.autor}</strong> ({h.rolAutor})</span>
                                   {((userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') || userSession.autor === h.autor) && (
-                                    <button onClick={() => handleDeleteLog(h.id)} className="text-red-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity bg-red-500/10 px-2 py-1 rounded"><i data-lucide="trash" className="w-3 h-3 inline mr-1"></i>Eliminar Evento</button>
+                                    <button onClick={() => handleDeleteLog(h.id)} className="text-red-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity bg-red-500/10 px-2 py-1 rounded"><Ico i="trash" c="w-3 h-3 mr-1" />Eliminar Evento</button>
                                   )}
                                 </div>
                               </div>
@@ -879,7 +897,7 @@
 
                       {/* Formulario Crear Evento */}
                       <div className="w-full lg:w-[380px] p-5 bg-slate-900 overflow-y-auto flex flex-col">
-                        <h4 className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-5 flex items-center"><i data-lucide="plus-circle" className="w-3.5 h-3.5 mr-1.5"></i>Registrar Nuevo Evento</h4>
+                        <h4 className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-5 flex items-center"><Ico i="plus-circle" c="w-3.5 h-3.5 mr-1.5" />Registrar Nuevo Evento</h4>
                         
                         <form onSubmit={handleAddLog} className="space-y-4 flex-1 flex flex-col">
                           <div>
@@ -918,15 +936,15 @@
                           
                           <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
                             <input type="file" multiple ref={logFileRef} onChange={handleLogFileChange} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" />
-                            <button type="button" onClick={() => logFileRef.current.click()} className="w-full bg-slate-800 border border-slate-700 text-slate-300 py-2.5 rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors border-dashed"><i data-lucide="upload-cloud" className="w-4 h-4 inline mr-1"></i> Adjuntar Evidencias</button>
+                            <button type="button" onClick={() => logFileRef.current.click()} className="w-full bg-slate-800 border border-slate-700 text-slate-300 py-2.5 rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors border-dashed"><Ico i="upload-cloud" c="w-4 h-4 mr-1" /> Adjuntar Evidencias</button>
                             {logForm.archivos.length > 0 && <div className="mt-3 space-y-1.5 max-h-24 overflow-y-auto pr-1">
-                               {logForm.archivos.map((a,i) => <div key={i} className="text-[9px] bg-slate-900 p-2 rounded-lg flex justify-between items-center text-emerald-400 border border-emerald-500/20"><span className="truncate w-[85%]"><i data-lucide="check-circle" className="w-3 h-3 inline mr-1"></i>{a.nombre}</span><button type="button" onClick={()=>handleRemovePendingFile(i)} className="text-red-400 bg-red-500/10 p-1 rounded"><i data-lucide="x" className="w-3 h-3"></i></button></div>)}
+                               {logForm.archivos.map((a,i) => <div key={i} className="text-[9px] bg-slate-900 p-2 rounded-lg flex justify-between items-center text-emerald-400 border border-emerald-500/20"><span className="truncate w-[85%]"><Ico i="check-circle" c="w-3 h-3 mr-1" />{a.nombre}</span><button type="button" onClick={()=>handleRemovePendingFile(i)} className="text-red-400 bg-red-500/10 p-1 rounded"><Ico i="x" c="w-3 h-3" /></button></div>)}
                             </div>}
                           </div>
 
                           <div className="mt-auto pt-4 border-t border-slate-800">
                             <button type="submit" disabled={uploadingFiles} className={`w-full py-3.5 rounded-xl font-bold text-xs shadow-lg flex items-center justify-center gap-2 ${uploadingFiles ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-amber-500 hover:bg-amber-400 text-black'}`}>
-                              {uploadingFiles ? <><i data-lucide="loader-2" className="w-4 h-4 animate-spin"></i> Guardando Evento...</> : <><i data-lucide="save" className="w-4 h-4"></i> Confirmar y Guardar Registro</>}
+                              {uploadingFiles ? <><Ico i="loader-2" c="w-4 h-4 animate-spin" /> Guardando Evento...</> : <><Ico i="save" c="w-4 h-4" /> Confirmar y Guardar Registro</>}
                             </button>
                           </div>
                         </form>
@@ -941,12 +959,12 @@
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/90 backdrop-blur-sm fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl overflow-hidden">
                     <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-3xl shrink-0">
-                      <div className="flex items-center gap-3"><div className="bg-indigo-500/20 p-2 rounded-xl text-indigo-400"><i data-lucide="file-clock" className="w-5 h-5"></i></div><div><h3 className="font-bold text-white text-base">Consolidado Global de Bitácoras</h3><p className="text-[10px] text-slate-400">Todos los trabajadores con observaciones registradas.</p></div></div>
-                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg border border-slate-700"><i data-lucide="x" className="w-4 h-4"></i></button>
+                      <div className="flex items-center gap-3"><div className="bg-indigo-500/20 p-2 rounded-xl text-indigo-400"><Ico i="file-clock" c="w-5 h-5" /></div><div><h3 className="font-bold text-white text-base">Consolidado Global de Bitácoras</h3><p className="text-[10px] text-slate-400">Todos los trabajadores con observaciones registradas.</p></div></div>
+                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg border border-slate-700"><Ico i="x" c="w-4 h-4" /></button>
                     </div>
                     
                     <div className="flex-1 overflow-y-auto p-5 sm:p-8 bg-slate-950/50">
-                      {allGlobalLogs.length === 0 ? <div className="text-center py-32"><i data-lucide="clipboard-list" className="w-16 h-16 text-slate-700 mx-auto mb-4"></i><p className="text-slate-400 font-medium">El sistema no posee observaciones registradas a nivel global.</p></div> : (
+                      {allGlobalLogs.length === 0 ? <div className="text-center py-32"><div className="mb-4"><Ico i="clipboard-list" c="w-16 h-16 text-slate-700 mx-auto" /></div><p className="text-slate-400 font-medium">El sistema no posee observaciones registradas a nivel global.</p></div> : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                           {allGlobalLogs.map((log, i) => (
                             <div key={i} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 hover:border-slate-600 transition-colors flex flex-col h-full shadow-lg">
@@ -958,7 +976,7 @@
                                 {log.nota ? <p className="text-xs text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800/50 leading-relaxed italic">"{log.nota}"</p> : <p className="text-xs text-slate-500 italic">Sin observaciones.</p>}
                               </div>
                               <div className="text-[9px] text-slate-500 flex justify-between items-end border-t border-slate-800 pt-3">
-                                <span className="font-mono flex items-center bg-slate-950 px-2 py-1 rounded border border-slate-800"><i data-lucide="calendar" className="w-3 h-3 mr-1"></i>{log.fechaInicio}</span>
+                                <span className="font-mono flex items-center bg-slate-950 px-2 py-1 rounded border border-slate-800"><Ico i="calendar" c="w-3 h-3 mr-1" />{log.fechaInicio}</span>
                                 <div className="text-right"><span>Autorizado:</span><br/><strong className="text-slate-300">{log.autor}</strong></div>
                               </div>
                             </div>
@@ -968,7 +986,7 @@
                     </div>
                     
                     <div className="p-5 border-t border-slate-800 flex justify-end gap-3 bg-slate-900 rounded-b-3xl shrink-0">
-                      <button onClick={handleDownloadGlobalLogsExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold text-xs flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]"><i data-lucide="file-spreadsheet" className="w-4 h-4"></i> Generar Excel Consolidado</button>
+                      <button onClick={handleDownloadGlobalLogsExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold text-xs flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]"><Ico i="file-spreadsheet" c="w-4 h-4" /> Generar Excel Consolidado</button>
                     </div>
                   </div>
                 </div>
@@ -983,7 +1001,7 @@
         if (container) {
             try {
                 const root = ReactDOM.createRoot(container);
-                root.render(<App />);
+                root.render(<ErrorBoundary><App /></ErrorBoundary>);
             } catch (e) {
                 console.error("Fallo React DOM:", e);
                 container.innerHTML = '<div style="color:#ef4444; padding:50px; text-align:center; font-family:sans-serif; font-weight:bold;">Error crítico en el renderizado de la aplicación. Verifique la consola o contacte al administrador.</div>';
