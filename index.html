@@ -77,7 +77,10 @@
           if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();
           db.enablePersistence({ synchronizeTabs: true }).catch(() => console.warn('Caché offline limitada'));
-          storage = firebase.storage();
+          
+          // MODIFICACIÓN APLICADA: Se desactiva Storage para usar la base de datos gratuita
+          storage = null; 
+          
         } catch (e) { console.error("Error iniciando base de datos:", e); }
 
         function App() {
@@ -115,7 +118,7 @@
           });
 
           const [logForm, setLogForm] = useState({
-            tipo: 'Licencia', modoFechas: 'unica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
+            tipo: 'Licencia Médica', modoFechas: 'unica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
             customTipo: '', nota: '', archivos: []
           });
 
@@ -360,7 +363,6 @@
             if (!files.length) return;
             const newPending = [];
             files.forEach(file => {
-               // Guardamos el objeto File nativo para subirlo a Firebase Storage al guardar
                newPending.push({ fileObj: file, nombre: file.name, tipo: file.type });
             });
             setLogForm(prev => ({ ...prev, archivos: [...prev.archivos, ...newPending] }));
@@ -376,7 +378,6 @@
                 const targetLog = selectedEmpForHistory.historial.find(h => h.id === logId);
                 const fileToDelete = targetLog.archivos[fileIdx];
                 
-                // Si tiene path en Storage, lo eliminamos de allí también
                 if (fileToDelete.path && storage) {
                    await storage.ref(fileToDelete.path).delete().catch(e=>console.warn("Storage delete err:", e));
                 }
@@ -393,10 +394,9 @@
 
           const handleDeleteLog = async (logId) => {
             if (!selectedEmpForHistory) return;
-            if (confirm("⚠️ ¿Eliminar permanentemente esta observación de la bitácora?")) {
+            if (confirm("⚠️ ¿Eliminar permanentemente esta observación del historial?")) {
               try {
                 const targetLog = selectedEmpForHistory.historial.find(h => h.id === logId);
-                // Limpiar Storage si hay archivos
                 if (targetLog.archivos?.length > 0 && storage) {
                   targetLog.archivos.forEach(a => {
                     if (a.path) storage.ref(a.path).delete().catch(()=>{});
@@ -415,7 +415,6 @@
             setUploadingFiles(true);
 
             try {
-              // 1. Subir archivos a Firebase Storage si existe
               const finalFiles = [];
               for (const item of logForm.archivos) {
                  if (item.fileObj && storage) {
@@ -425,7 +424,6 @@
                      const url = await ref.getDownloadURL();
                      finalFiles.push({ nombre: item.nombre, tipo: item.tipo, url: url, path: path });
                  } else {
-                     // Fallback si Storage no está configurado (Convertir a Base64 rápido)
                      const reader = new FileReader();
                      const url = await new Promise((res) => { reader.onload = (ev) => res(ev.target.result); reader.readAsDataURL(item.fileObj); });
                      finalFiles.push({ nombre: item.nombre, tipo: item.tipo, url: url });
@@ -443,10 +441,10 @@
               const updatedHistorial = [...(selectedEmpForHistory.historial || []), logEntry];
               await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
               setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
-              setLogForm({ tipo: 'Licencia', modoFechas: 'unica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0], customTipo: '', nota: '', archivos: [] });
+              setLogForm({ tipo: 'Licencia Médica', modoFechas: 'unica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0], customTipo: '', nota: '', archivos: [] });
               setUploadingFiles(false);
             } catch (error) { 
-              alert("Error guardando observación. Verifique permisos de Storage. Detalle: " + error.message); 
+              alert("Error guardando observación. Detalle: " + error.message); 
               setUploadingFiles(false); 
             }
           };
@@ -894,7 +892,7 @@
                                       <div key={i} className="flex justify-between items-center bg-slate-950 p-2.5 rounded-lg border border-slate-800 group/file hover:border-slate-600">
                                         <a href={a.url} target="_blank" className="text-[10px] text-blue-400 truncate w-3/4 flex items-center hover:underline"><i data-lucide={a.tipo?.includes('image') ? 'image' : 'file-text'} className="w-3.5 h-3.5 inline mr-1.5 text-slate-500"></i> {a.nombre}</a>
                                         {((userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') || userSession.autor === h.autor) && (
-                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo de la nube"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
+                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo de la base de datos"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
                                         )}
                                       </div>
                                     ))}
@@ -961,7 +959,7 @@
 
                           <div className="mt-auto pt-4 border-t border-slate-800">
                             <button type="submit" disabled={uploadingFiles} className={`w-full py-3.5 rounded-xl font-bold text-xs shadow-lg flex items-center justify-center gap-2 ${uploadingFiles ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-amber-500 hover:bg-amber-400 text-black'}`}>
-                              {uploadingFiles ? <><i data-lucide="loader-2" className="w-4 h-4 animate-spin"></i> Subiendo a la Nube...</> : <><i data-lucide="save" className="w-4 h-4"></i> Confirmar y Guardar Registro</>}
+                              {uploadingFiles ? <><i data-lucide="loader-2" className="w-4 h-4 animate-spin"></i> Subiendo Archivos...</> : <><i data-lucide="save" className="w-4 h-4"></i> Confirmar y Guardar Registro</>}
                             </button>
                           </div>
                         </form>
