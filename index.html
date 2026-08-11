@@ -32,7 +32,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js').catch(() => console.warn('PWA modo app local.'));
+          navigator.serviceWorker.register('./sw.js').catch(() => console.warn('PWA SW offline.'));
         });
       }
     </script>
@@ -52,7 +52,7 @@
     </style>
 </head>
 <body class="antialiased selection:bg-amber-500/30 selection:text-amber-200" translate="no">
-    <!-- CARGADOR INICIAL RÁPIDO (Se oculta al montar React) -->
+    <!-- CARGADOR INICIAL -->
     <div id="loader-estatico" class="app-loader">
         <div style="font-size: 24px; margin-bottom: 10px;">BRAMAQ Enterprise</div>
         <div style="font-size: 14px; color: #94a3b8; font-weight: normal;">Cargando motor de gestión...</div>
@@ -78,8 +78,6 @@
           if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();
           db.enablePersistence({ synchronizeTabs: true }).catch(() => console.warn('Caché offline limitada'));
-          
-          // Desactivar Storage de pago para usar Firestore Base64 gratuito
           storage = null; 
         } catch (e) { console.error("Error iniciando base de datos:", e); }
 
@@ -95,7 +93,7 @@
           const [userSession, setUserSession] = useState({ rol: "", autor: "" });
 
           const [employees, setEmployees] = useState([]);
-          const [loading, setLoading] = useState(true);
+          const [loading, setLoading] = useState(false); // Cambiado a false para no bloquear entrada
           const [onlineStatus, setOnlineStatus] = useState(navigator.onLine);
           const [searchTerm, setSearchTerm] = useState('');
           const [activeTab, setActiveTab] = useState('dashboard');
@@ -122,7 +120,7 @@
             customTipo: '', nota: '', archivos: []
           });
 
-          // Ocultar el loader estático apenas React arranca
+          // Ocultar el loader estático
           useEffect(() => {
               const loader = document.getElementById('loader-estatico');
               if (loader) loader.style.display = 'none';
@@ -159,9 +157,9 @@
               const items = [];
               const cities = new Set(['Valdivia', 'Loncoche', 'San José de la Mariquina', 'Lanco', 'Panguipulli']);
               snap.forEach(doc => {
-                const data = doc.data();
+                const data = doc.data() || {};
                 items.push({ id: doc.id, ...data });
-                if (data.ciudad) cities.add(data.ciudad);
+                if (data.ciudad) cities.add(String(data.ciudad).trim());
               });
               setCitiesList(Array.from(cities).sort());
               setEmployees(items); 
@@ -174,7 +172,7 @@
           useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
 
           const supervisorsList = useMemo(() => {
-            return employees.filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR')).map(e => e.nombre).sort();
+            return employees.filter(e => String(e.cargo || '').toUpperCase().includes('SUPERVISOR')).map(e => String(e.nombre || 'Sin Nombre')).sort();
           }, [employees]);
 
           const handleEnterApp = () => {
@@ -189,7 +187,7 @@
             setHasEntered(true);
           };
 
-          // NORMALIZACIÓN DE TELÉFONO
+          // NORMALIZACIÓN SEGURA DE TELÉFONO
           const normalizePhone = (phone) => {
             if (!phone) return '';
             let p = String(phone).replace(/\D/g, '');
@@ -206,7 +204,7 @@
               if (employees.length === 0) { alert("Base de datos vacía."); return; }
               const exportData = employees.map(emp => {
                 const historialTxt = emp.historial?.length > 0 
-                  ? emp.historial.map(h => `[${h.fechaInicio}] ${h.tipo}: ${h.nota}`).join(" | ") 
+                  ? emp.historial.map(h => `[${h.fechaInicio || ''}] ${h.tipo || ''}: ${h.nota || ''}`).join(" | ") 
                   : "Sin registros";
                 
                 const row = {
@@ -238,19 +236,19 @@
             try {
               let logs = [];
               employees.forEach(emp => {
-                if (emp.historial?.length > 0) {
+                if (emp.historial && Array.isArray(emp.historial)) {
                   emp.historial.forEach(h => {
                     logs.push({
-                      "RUT": emp.rut, "Trabajador": emp.nombre, "Cargo": emp.cargo, "Tipo Evento": h.tipo,
-                      "Fecha": h.modoFechas === 'rango' ? `${h.fechaInicio} a ${h.fechaTermino}` : h.fechaInicio,
-                      "Observación": h.nota, "Autor": h.autor, "Perfil": h.rolAutor,
+                      "RUT": emp.rut || '', "Trabajador": emp.nombre || '', "Cargo": emp.cargo || '', "Tipo Evento": h.tipo || '',
+                      "Fecha": h.modoFechas === 'rango' ? `${h.fechaInicio || ''} a ${h.fechaTermino || ''}` : (h.fechaInicio || ''),
+                      "Observación": h.nota || '', "Autor": h.autor || '', "Perfil": h.rolAutor || '',
                       "Tiene Archivos": h.archivos?.length > 0 ? "SÍ" : "NO"
                     });
                   });
                 }
               });
               if (logs.length === 0) { alert("No hay bitácoras registradas."); return; }
-              logs.sort((a, b) => new Date(b["Fecha"]) - new Date(a["Fecha"]));
+              logs.sort((a, b) => new Date(b["Fecha"] || 0) - new Date(a["Fecha"] || 0));
               const ws = XLSX.utils.json_to_sheet(logs);
               const wb = XLSX.utils.book_new();
               XLSX.utils.book_append_sheet(wb, ws, "Bitacora Global");
@@ -299,7 +297,7 @@
                       const keys = Object.keys(row);
                       const findVal = (terms) => {
                         for (let t of terms) {
-                          const k = keys.find(key => key.toLowerCase().includes(t));
+                          const k = keys.find(key => String(key).toLowerCase().includes(t));
                           if (k && row[k] !== undefined && row[k] !== "") return String(row[k]).trim();
                         } return '';
                       };
@@ -311,7 +309,7 @@
                         if (!existingRuts.has(cRut)) {
                           let extras = {};
                           keys.forEach(k => {
-                            const kl = k.toLowerCase();
+                            const kl = String(k).toLowerCase();
                             if (!kl.includes('nombre') && !kl.includes('rut') && !kl.includes('direccion') && !kl.includes('ciudad') && !kl.includes('cargo') && !kl.includes('telefon') && !kl.includes('correo') && !kl.includes('emergencia')) {
                               if (row[k]) extras[k] = row[k];
                             }
@@ -434,30 +432,30 @@
 
           const filtered = useMemo(() => {
             return employees.filter(emp => {
-              const s = searchTerm.toLowerCase();
-              const matchSearch = (emp.nombre||'').toLowerCase().includes(s) || (emp.rut||'').toLowerCase().includes(s) || (emp.cargo||'').toLowerCase().includes(s) || (emp.ciudad||'').toLowerCase().includes(s);
+              const s = String(searchTerm || '').toLowerCase();
+              const matchSearch = String(emp.nombre||'').toLowerCase().includes(s) || String(emp.rut||'').toLowerCase().includes(s) || String(emp.cargo||'').toLowerCase().includes(s) || String(emp.ciudad||'').toLowerCase().includes(s);
               if (!matchSearch) return false;
               if (activeFilter === 'TODOS') return true;
               if (activeFilter === 'INCOMPLETOS') return getMissingDataList(emp).length > 0;
-              if (activeFilter === 'ADMIN_CONTRATO') return (emp.cargo||'').toUpperCase().includes('CONTRATO');
-              if (activeFilter === 'SUPERVISORES') return (emp.cargo||'').toUpperCase().includes('SUPERVISOR');
-              if (activeFilter === 'PREVENCIONISTAS') return (emp.cargo||'').toUpperCase().includes('PREVENCION');
-              if (activeFilter === 'ADMINISTRATIVOS') return (emp.cargo||'').toUpperCase().includes('ADMINISTRATIVO') && !(emp.cargo||'').toUpperCase().includes('CONTRATO');
-              if (activeFilter === 'OPERADORES_GRUA') return (emp.cargo||'').toUpperCase().includes('GRUA');
-              if (activeFilter === 'CARGADOR_FRONTAL') return (emp.cargo||'').toUpperCase().includes('CARGADOR FRONTAL');
-              if (activeFilter === 'MECANICOS') return (emp.cargo||'').toUpperCase().includes('MECANICO');
-              if (citiesList.includes(activeFilter)) return (emp.ciudad||'').toLowerCase() === activeFilter.toLowerCase();
+              if (activeFilter === 'ADMIN_CONTRATO') return String(emp.cargo||'').toUpperCase().includes('CONTRATO');
+              if (activeFilter === 'SUPERVISORES') return String(emp.cargo||'').toUpperCase().includes('SUPERVISOR');
+              if (activeFilter === 'PREVENCIONISTAS') return String(emp.cargo||'').toUpperCase().includes('PREVENCION');
+              if (activeFilter === 'ADMINISTRATIVOS') return String(emp.cargo||'').toUpperCase().includes('ADMINISTRATIVO') && !String(emp.cargo||'').toUpperCase().includes('CONTRATO');
+              if (activeFilter === 'OPERADORES_GRUA') return String(emp.cargo||'').toUpperCase().includes('GRUA');
+              if (activeFilter === 'CARGADOR_FRONTAL') return String(emp.cargo||'').toUpperCase().includes('CARGADOR FRONTAL');
+              if (activeFilter === 'MECANICOS') return String(emp.cargo||'').toUpperCase().includes('MECANICO');
+              if (citiesList.includes(activeFilter)) return String(emp.ciudad||'').toLowerCase() === String(activeFilter).toLowerCase();
               return true;
-            }).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' }));
+            }).sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }));
           }, [employees, searchTerm, activeFilter, citiesList]);
 
           const kpis = useMemo(() => {
-            const porCiudad = {}; citiesList.forEach(c => porCiudad[c] = employees.filter(e => (e.ciudad||'').toLowerCase() === c.toLowerCase()).length);
+            const porCiudad = {}; citiesList.forEach(c => porCiudad[c] = employees.filter(e => String(e.ciudad||'').toLowerCase() === String(c).toLowerCase()).length);
             let faltas = 0, incidentes = 0, licencias = 0;
             employees.forEach(emp => {
-               if(emp.historial) {
+               if(emp.historial && Array.isArray(emp.historial)) {
                    emp.historial.forEach(h => {
-                       const t = h.tipo.toLowerCase();
+                       const t = String(h.tipo || '').toLowerCase();
                        if(t.includes('falta')) faltas++;
                        if(t.includes('incidente')) incidentes++;
                        if(t.includes('licencia')) licencias++;
@@ -467,21 +465,21 @@
 
             return {
               total: employees.length, incompletos: employees.filter(e => getMissingDataList(e).length > 0).length,
-              supervisores: employees.filter(e => (e.cargo||'').toUpperCase().includes('SUPERVISOR')).length,
-              prevencionistas: employees.filter(e => (e.cargo||'').toUpperCase().includes('PREVENCION')).length,
-              administrativos: employees.filter(e => (e.cargo||'').toUpperCase().includes('ADMINISTRATIVO') && !(e.cargo||'').toUpperCase().includes('CONTRATO')).length,
-              adminContrato: employees.filter(e => (e.cargo||'').toUpperCase().includes('CONTRATO')).length,
-              operadoresGrua: employees.filter(e => (e.cargo||'').toUpperCase().includes('GRUA')).length,
-              cargadorFrontal: employees.filter(e => (e.cargo||'').toUpperCase().includes('CARGADOR FRONTAL')).length,
-              mecanicos: employees.filter(e => (e.cargo||'').toUpperCase().includes('MECANICO')).length,
+              supervisores: employees.filter(e => String(e.cargo||'').toUpperCase().includes('SUPERVISOR')).length,
+              prevencionistas: employees.filter(e => String(e.cargo||'').toUpperCase().includes('PREVENCION')).length,
+              administrativos: employees.filter(e => String(e.cargo||'').toUpperCase().includes('ADMINISTRATIVO') && !String(e.cargo||'').toUpperCase().includes('CONTRATO')).length,
+              adminContrato: employees.filter(e => String(e.cargo||'').toUpperCase().includes('CONTRATO')).length,
+              operadoresGrua: employees.filter(e => String(e.cargo||'').toUpperCase().includes('GRUA')).length,
+              cargadorFrontal: employees.filter(e => String(e.cargo||'').toUpperCase().includes('CARGADOR FRONTAL')).length,
+              mecanicos: employees.filter(e => String(e.cargo||'').toUpperCase().includes('MECANICO')).length,
               faltas, incidentes, licencias, porCiudad
             };
           }, [employees, citiesList]);
 
           const allGlobalLogs = useMemo(() => {
             let logs = [];
-            employees.forEach(emp => { if (emp.historial) emp.historial.forEach(h => logs.push({ ...h, empleadoNombre: emp.nombre, empleadoRut: emp.rut })); });
-            return logs.sort((a, b) => new Date(b.createdAt || b.fechaInicio) - new Date(a.createdAt || a.fechaInicio));
+            employees.forEach(emp => { if (emp.historial && Array.isArray(emp.historial)) emp.historial.forEach(h => logs.push({ ...h, empleadoNombre: emp.nombre || 'Desconocido', empleadoRut: emp.rut || '' })); });
+            return logs.sort((a, b) => new Date(b.createdAt || b.fechaInicio || 0) - new Date(a.createdAt || a.fechaInicio || 0));
           }, [employees]);
 
           const RequisitoToggle = ({ label, icon, checked, onChange }) => (
@@ -677,10 +675,10 @@
                               <div key={emp.id} className="glass-panel p-4 rounded-xl flex flex-col lg:flex-row gap-4 hover:border-slate-600 transition-colors">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-3 mb-2">
-                                    <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-white font-extrabold text-lg">{emp.nombre.charAt(0).toUpperCase()}</div>
+                                    <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-white font-extrabold text-lg">{String(emp.nombre || 'S').charAt(0).toUpperCase()}</div>
                                     <div>
-                                      <h4 className="font-bold text-white text-sm">{emp.nombre}</h4>
-                                      <p className="text-[11px] text-slate-400 font-mono bg-slate-950 inline-block px-1.5 rounded mt-0.5 border border-slate-800">RUT: {emp.rut}</p>
+                                      <h4 className="font-bold text-white text-sm">{emp.nombre || 'Sin Nombre'}</h4>
+                                      <p className="text-[11px] text-slate-400 font-mono bg-slate-950 inline-block px-1.5 rounded mt-0.5 border border-slate-800">RUT: {emp.rut || 'Sin RUT'}</p>
                                     </div>
                                   </div>
                                   <div className="text-xs text-amber-400 font-bold mb-1 pl-15"><i data-lucide="briefcase" className="w-3 h-3 inline mr-1"></i> {emp.cargo || 'Sin Cargo Definido'}</div>
@@ -778,7 +776,7 @@
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl my-auto">
                     <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-2xl sticky top-0 z-10">
                       <h3 className="font-bold text-white text-sm"><i data-lucide={currentEmployee ? "user-cog" : "user-plus"} className="w-4 h-4 inline mr-2 text-amber-500"></i>{currentEmployee ? 'Actualizar Expediente' : 'Crear Ficha de Ingreso'}</h3>
-                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white p-1"><i data-lucide="x" className="w-5 h-5"></i></button>
+                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1.5 rounded"><i data-lucide="x" className="w-4 h-4"></i></button>
                     </div>
                     <div className="p-5">
                       {formError && <div className="mb-4 text-xs text-red-400 bg-red-500/10 p-3 rounded border border-red-500/20 font-medium"><i data-lucide="alert-octagon" className="w-4 h-4 inline mr-1"></i>{formError}</div>}
@@ -847,10 +845,10 @@
                         <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-5 flex items-center"><i data-lucide="history" className="w-3.5 h-3.5 mr-1.5"></i>Registros Históricos</h4>
                         {!selectedEmpForHistory.historial?.length ? <div className="text-center text-slate-500 py-32 text-sm"><i data-lucide="folder-open" className="w-12 h-12 mx-auto mb-3 opacity-30"></i>Expediente limpio. No hay observaciones.</div> : (
                           <div className="space-y-5">
-                            {selectedEmpForHistory.historial.sort((a,b) => new Date(b.createdAt||b.fechaInicio) - new Date(a.createdAt||a.fechaInicio)).map(h => (
+                            {[...(selectedEmpForHistory.historial||[])].sort((a,b) => new Date(b.createdAt||b.fechaInicio||0) - new Date(a.createdAt||a.fechaInicio||0)).map(h => (
                               <div key={h.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl relative group hover:border-slate-700 transition-colors">
                                 <div className="flex justify-between items-start mb-3">
-                                  <span className="bg-slate-950 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2.5 py-1 rounded uppercase tracking-wider">{h.tipo}</span>
+                                  <span className="bg-slate-950 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2.5 py-1 rounded uppercase tracking-wider">{h.tipo || 'Evento'}</span>
                                   <span className="text-[10px] text-slate-400 font-mono bg-slate-950 px-2 py-1 rounded border border-slate-800 flex items-center"><i data-lucide="calendar" className="w-3 h-3 mr-1.5"></i>{h.modoFechas === 'rango' ? `${h.fechaInicio} al ${h.fechaTermino}` : h.fechaInicio}</span>
                                 </div>
                                 {h.nota && <p className="text-xs text-slate-300 mb-4 bg-slate-950/50 p-3 rounded-xl border border-slate-800/50 leading-relaxed">{h.nota}</p>}
@@ -861,7 +859,7 @@
                                       <div key={i} className="flex justify-between items-center bg-slate-950 p-2.5 rounded-lg border border-slate-800 group/file hover:border-slate-600">
                                         <a href={a.url} target="_blank" className="text-[10px] text-blue-400 truncate w-3/4 flex items-center hover:underline"><i data-lucide={a.tipo?.includes('image') ? 'image' : 'file-text'} className="w-3.5 h-3.5 inline mr-1.5 text-slate-500"></i> {a.nombre}</a>
                                         {((userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') || userSession.autor === h.autor) && (
-                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo de la base de datos"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
+                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo"><i data-lucide="trash-2" className="w-3.5 h-3.5"></i></button>
                                         )}
                                       </div>
                                     ))}
@@ -980,7 +978,7 @@
           );
         }
 
-        // CARGA DIRECTA Y SEGURA (Evita el problema de tiempos de Babel en Github Pages)
+        // CARGA DIRECTA Y SEGURA
         const container = document.getElementById('root');
         if (container) {
             try {
