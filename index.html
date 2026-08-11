@@ -23,7 +23,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     
-    <!-- Firebase (Firestore & Storage) -->
+    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
@@ -52,12 +52,13 @@
     </style>
 </head>
 <body class="antialiased selection:bg-amber-500/30 selection:text-amber-200" translate="no">
-    <div id="root">
-        <div class="app-loader">
-            <div style="font-size: 24px; margin-bottom: 10px;">BRAMAQ Enterprise</div>
-            <div style="font-size: 14px; color: #94a3b8; font-weight: normal;">Cargando motor de gestión en la nube...</div>
-        </div>
+    <!-- CARGADOR INICIAL RÁPIDO (Se oculta al montar React) -->
+    <div id="loader-estatico" class="app-loader">
+        <div style="font-size: 24px; margin-bottom: 10px;">BRAMAQ Enterprise</div>
+        <div style="font-size: 14px; color: #94a3b8; font-weight: normal;">Cargando motor de gestión...</div>
     </div>
+
+    <div id="root"></div>
     
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
@@ -78,9 +79,8 @@
           db = firebase.firestore();
           db.enablePersistence({ synchronizeTabs: true }).catch(() => console.warn('Caché offline limitada'));
           
-          // MODIFICACIÓN APLICADA: Se desactiva Storage para usar la base de datos gratuita
+          // Desactivar Storage de pago para usar Firestore Base64 gratuito
           storage = null; 
-          
         } catch (e) { console.error("Error iniciando base de datos:", e); }
 
         function App() {
@@ -122,6 +122,12 @@
             customTipo: '', nota: '', archivos: []
           });
 
+          // Ocultar el loader estático apenas React arranca
+          useEffect(() => {
+              const loader = document.getElementById('loader-estatico');
+              if (loader) loader.style.display = 'none';
+          }, []);
+
           // PWA Install Logic
           useEffect(() => {
             setIsIOS(/iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase()));
@@ -141,7 +147,7 @@
             }
           };
 
-          // REAL-TIME SYNC
+          // REAL-TIME SYNC FIREBASE
           useEffect(() => {
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
             window.addEventListener('online', on); window.addEventListener('offline', off);
@@ -192,10 +198,9 @@
             return '+' + p;
           };
 
-          // OBTENER RUT LIMPIO PARA DUPLICADOS
           const cleanRut = (rut) => String(rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '');
 
-          // EXPORTACIÓN TOTAL A EXCEL CON COLUMNAS DINÁMICAS Y BITÁCORA
+          // EXPORTACIÓN TOTAL A EXCEL
           const handleDownloadExcel = () => {
             try {
               if (employees.length === 0) { alert("Base de datos vacía."); return; }
@@ -204,25 +209,16 @@
                   ? emp.historial.map(h => `[${h.fechaInicio}] ${h.tipo}: ${h.nota}`).join(" | ") 
                   : "Sin registros";
                 
-                // Permitir columnas dinámicas copiando todo y forzando orden
                 const row = {
-                  "RUT": emp.rut || "",
-                  "Nombre": emp.nombre || "",
-                  "Cargo": emp.cargo || "",
-                  "Ciudad": emp.ciudad || "",
-                  "Dirección": emp.direccion || "",
-                  "Teléfono": emp.telefono ? normalizePhone(emp.telefono) : "",
-                  "Correo": emp.correo || "",
-                  "Contacto Emergencia": emp.emergenciaNombre || "",
+                  "RUT": emp.rut || "", "Nombre": emp.nombre || "", "Cargo": emp.cargo || "", "Ciudad": emp.ciudad || "",
+                  "Dirección": emp.direccion || "", "Teléfono": emp.telefono ? normalizePhone(emp.telefono) : "",
+                  "Correo": emp.correo || "", "Contacto Emergencia": emp.emergenciaNombre || "",
                   "Teléfono Emergencia": emp.emergenciaFono ? normalizePhone(emp.emergenciaFono) : "",
-                  "Contrato": emp.documentos?.contrato ? "Sí" : "No",
-                  "Inducción SSO": emp.documentos?.induccion ? "Sí" : "No",
-                  "Exámenes": emp.documentos?.examenes ? "Sí" : "No",
-                  "EPP": emp.documentos?.epp ? "Sí" : "No",
+                  "Contrato": emp.documentos?.contrato ? "Sí" : "No", "Inducción SSO": emp.documentos?.induccion ? "Sí" : "No",
+                  "Exámenes": emp.documentos?.examenes ? "Sí" : "No", "EPP": emp.documentos?.epp ? "Sí" : "No",
                   "Historial (Bitácora)": historialTxt
                 };
                 
-                // Añadir cualquier columna extra que haya llegado por Excel dinámico
                 Object.keys(emp).forEach(key => {
                   if (!['id', 'historial', 'documentos', 'rut', 'nombre', 'cargo', 'ciudad', 'direccion', 'telefono', 'correo', 'emergenciaNombre', 'emergenciaFono'].includes(key)) {
                     row[key] = emp[key];
@@ -286,15 +282,12 @@
               try {
                 const data = new Uint8Array(event.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
-                
-                // Encontrar encabezados dinámicamente ignorando filas vacías arriba
                 let rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
                 let headerIdx = 0;
                 for (let i = 0; i < rawData.length; i++) {
                   const rowStr = JSON.stringify(rawData[i]).toLowerCase();
                   if (rowStr.includes('nombre') || rowStr.includes('rut')) { headerIdx = i; break; }
                 }
-                
                 const jsonSheet = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { range: headerIdx, defval: "" });
 
                 if (jsonSheet.length > 0) {
@@ -312,11 +305,10 @@
                       };
                       
                       const nombre = findVal(['nombre']); const rut = findVal(['rut']); const direccion = findVal(['direccion', 'domicilio']); const ciudad = findVal(['ciudad', 'comuna']) || 'Valdivia'; const cargo = findVal(['cargo', 'funcion']); const telefono = findVal(['telefon', 'fono', 'celular']); const correo = findVal(['correo', 'email']); const emergenciaNombre = findVal(['emergencia nom', 'contacto emer']); const emergenciaFono = findVal(['emergencia fono', 'emergencia tel']);
-                      
                       const cRut = cleanRut(rut);
+                      
                       if ((nombre || rut) && cRut) {
                         if (!existingRuts.has(cRut)) {
-                          // Extraer columnas dinámicas no mapeadas
                           let extras = {};
                           keys.forEach(k => {
                             const kl = k.toLowerCase();
@@ -344,7 +336,7 @@
           // CRUD Trabajador
           const handleSave = async (e) => {
             e.preventDefault();
-            if (!formData.nombre || !formData.rut) { setFormError("Nombre y RUT son campos obligatorios."); return; }
+            if (!formData.nombre || !formData.rut) { setFormError("Nombre y RUT son obligatorios."); return; }
             try {
               if (currentEmployee) await db.collection('employees').doc(currentEmployee.id).update(formData);
               else await db.collection('employees').add({ ...formData, historial: [] });
@@ -353,18 +345,16 @@
           };
 
           const handleDelete = async (id) => {
-            if (userSession.rol !== 'Administrativo') { alert("Función de eliminación restringida a Administración."); return; }
+            if (userSession.rol !== 'Administrativo') { alert("Función restringida a Administración."); return; }
             if (confirm("⚠️ ¿Eliminar permanentemente este trabajador y toda su hoja de vida?")) await db.collection('employees').doc(id).delete();
           };
 
-          // MULTIARCHIVO BITÁCORA (STORAGE Y BASE64 FALLBACK)
+          // MULTIARCHIVO BITÁCORA
           const handleLogFileChange = (e) => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
             const newPending = [];
-            files.forEach(file => {
-               newPending.push({ fileObj: file, nombre: file.name, tipo: file.type });
-            });
+            files.forEach(file => newPending.push({ fileObj: file, nombre: file.name, tipo: file.type }));
             setLogForm(prev => ({ ...prev, archivos: [...prev.archivos, ...newPending] }));
             if (logFileRef.current) logFileRef.current.value = "";
           };
@@ -373,15 +363,8 @@
 
           const handleDeleteSavedAttachment = async (logId, fileIdx) => {
             if (!selectedEmpForHistory) return;
-            if (confirm("¿Estás seguro de eliminar este archivo adjunto de la nube?")) {
+            if (confirm("¿Estás seguro de eliminar este archivo adjunto?")) {
               try {
-                const targetLog = selectedEmpForHistory.historial.find(h => h.id === logId);
-                const fileToDelete = targetLog.archivos[fileIdx];
-                
-                if (fileToDelete.path && storage) {
-                   await storage.ref(fileToDelete.path).delete().catch(e=>console.warn("Storage delete err:", e));
-                }
-
                 const updatedHistorial = selectedEmpForHistory.historial.map(h => {
                   if (h.id === logId) return { ...h, archivos: h.archivos.filter((_, i) => i !== fileIdx) };
                   return h;
@@ -396,12 +379,6 @@
             if (!selectedEmpForHistory) return;
             if (confirm("⚠️ ¿Eliminar permanentemente esta observación del historial?")) {
               try {
-                const targetLog = selectedEmpForHistory.historial.find(h => h.id === logId);
-                if (targetLog.archivos?.length > 0 && storage) {
-                  targetLog.archivos.forEach(a => {
-                    if (a.path) storage.ref(a.path).delete().catch(()=>{});
-                  });
-                }
                 const updatedHistorial = selectedEmpForHistory.historial.filter(h => h.id !== logId);
                 await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
                 setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
@@ -417,17 +394,9 @@
             try {
               const finalFiles = [];
               for (const item of logForm.archivos) {
-                 if (item.fileObj && storage) {
-                     const path = `bitacora/${selectedEmpForHistory.id}/${Date.now()}_${item.nombre}`;
-                     const ref = storage.ref(path);
-                     await ref.put(item.fileObj);
-                     const url = await ref.getDownloadURL();
-                     finalFiles.push({ nombre: item.nombre, tipo: item.tipo, url: url, path: path });
-                 } else {
-                     const reader = new FileReader();
-                     const url = await new Promise((res) => { reader.onload = (ev) => res(ev.target.result); reader.readAsDataURL(item.fileObj); });
-                     finalFiles.push({ nombre: item.nombre, tipo: item.tipo, url: url });
-                 }
+                 const reader = new FileReader();
+                 const url = await new Promise((res) => { reader.onload = (ev) => res(ev.target.result); reader.readAsDataURL(item.fileObj); });
+                 finalFiles.push({ nombre: item.nombre, tipo: item.tipo, url: url });
               }
 
               const logEntry = {
@@ -444,7 +413,7 @@
               setLogForm({ tipo: 'Licencia Médica', modoFechas: 'unica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0], customTipo: '', nota: '', archivos: [] });
               setUploadingFiles(false);
             } catch (error) { 
-              alert("Error guardando observación. Detalle: " + error.message); 
+              alert("Error guardando observación: " + error.message); 
               setUploadingFiles(false); 
             }
           };
@@ -809,7 +778,7 @@
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl my-auto">
                     <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-2xl sticky top-0 z-10">
                       <h3 className="font-bold text-white text-sm"><i data-lucide={currentEmployee ? "user-cog" : "user-plus"} className="w-4 h-4 inline mr-2 text-amber-500"></i>{currentEmployee ? 'Actualizar Expediente' : 'Crear Ficha de Ingreso'}</h3>
-                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1.5 rounded"><i data-lucide="x" className="w-4 h-4"></i></button>
+                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white p-1"><i data-lucide="x" className="w-5 h-5"></i></button>
                     </div>
                     <div className="p-5">
                       {formError && <div className="mb-4 text-xs text-red-400 bg-red-500/10 p-3 rounded border border-red-500/20 font-medium"><i data-lucide="alert-octagon" className="w-4 h-4 inline mr-1"></i>{formError}</div>}
@@ -959,7 +928,7 @@
 
                           <div className="mt-auto pt-4 border-t border-slate-800">
                             <button type="submit" disabled={uploadingFiles} className={`w-full py-3.5 rounded-xl font-bold text-xs shadow-lg flex items-center justify-center gap-2 ${uploadingFiles ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-amber-500 hover:bg-amber-400 text-black'}`}>
-                              {uploadingFiles ? <><i data-lucide="loader-2" className="w-4 h-4 animate-spin"></i> Subiendo Archivos...</> : <><i data-lucide="save" className="w-4 h-4"></i> Confirmar y Guardar Registro</>}
+                              {uploadingFiles ? <><i data-lucide="loader-2" className="w-4 h-4 animate-spin"></i> Guardando Evento...</> : <><i data-lucide="save" className="w-4 h-4"></i> Confirmar y Guardar Registro</>}
                             </button>
                           </div>
                         </form>
@@ -1011,19 +980,17 @@
           );
         }
 
-        // CARGA SEGURA SIN PANTALLA AZUL O BLANCA
-        window.addEventListener('DOMContentLoaded', () => {
-            const container = document.getElementById('root');
-            if (container) {
-                try {
-                    const root = ReactDOM.createRoot(container);
-                    root.render(<App />);
-                } catch (e) {
-                    console.error("Fallo React DOM:", e);
-                    container.innerHTML = '<div style="color:#ef4444; padding:50px; text-align:center; font-family:sans-serif; font-weight:bold;">Error crítico en el renderizado de la aplicación. Verifique la consola o contacte al administrador.</div>';
-                }
+        // CARGA DIRECTA Y SEGURA (Evita el problema de tiempos de Babel en Github Pages)
+        const container = document.getElementById('root');
+        if (container) {
+            try {
+                const root = ReactDOM.createRoot(container);
+                root.render(<App />);
+            } catch (e) {
+                console.error("Fallo React DOM:", e);
+                container.innerHTML = '<div style="color:#ef4444; padding:50px; text-align:center; font-family:sans-serif; font-weight:bold;">Error crítico en el renderizado de la aplicación. Verifique la consola o contacte al administrador.</div>';
             }
-        });
+        }
     </script>
 </body>
 </html>
