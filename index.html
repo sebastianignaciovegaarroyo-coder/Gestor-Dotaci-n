@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- RUTA BASE PARA GITHUB PAGES -->
     <base href="/Gestor-Dotaci-n/">
     
-    <!-- ETIQUETAS PWA -->
+    <!-- PWA & SEO -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#020617">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,23 +16,21 @@
     
     <title>Gestor de Dotación BRAMAQ - Enterprise Cloud</title>
     
-    <!-- CDNs Empresariales -->
+    <!-- LIBRERÍAS EXTERNAS DE PRODUCCIÓN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     
-    <!-- REGISTRO SERVICE WORKER -->
+    <!-- SERVICE WORKER SEGURO -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('PWA: Service Worker Registrado.', reg.scope))
-            .catch(err => console.log('PWA: Error al registrar Service Worker.', err));
+          navigator.serviceWorker.register('./sw.js').catch(err => console.warn('PWA SW no esencial:', err));
         });
       }
     </script>
@@ -54,7 +53,7 @@
     <div id="root">
         <div class="app-loader">
             <div style="font-size: 24px; margin-bottom: 10px;">BRAMAQ Enterprise</div>
-            <div style="font-size: 14px; color: #94a3b8; font-weight: normal;">Cargando sistema de gestión...</div>
+            <div style="font-size: 14px; color: #94a3b8; font-weight: normal;">Cargando sistema en tiempo real...</div>
         </div>
     </div>
     
@@ -78,13 +77,16 @@
         } catch (e) { console.error("Error iniciando Firebase:", e); }
 
         function App() {
+          // ESTADOS DEL SISTEMA
           const [deferredPrompt, setDeferredPrompt] = useState(null);
           const [isInstallable, setIsInstallable] = useState(false);
           const [isIOS, setIsIOS] = useState(false);
+          const [showInstallHelp, setShowInstallHelp] = useState(false);
 
           const [hasEntered, setHasEntered] = useState(false);
-          const [gateProfile, setGateProfile] = useState('');
-          const [userSession, setUserSession] = useState({ rol: "" });
+          const [selectedRole, setSelectedRole] = useState('');
+          const [selectedSupName, setSelectedSupName] = useState('');
+          const [userSession, setUserSession] = useState({ rol: "", autor: "" });
 
           const [employees, setEmployees] = useState([]);
           const [loading, setLoading] = useState(true);
@@ -102,36 +104,28 @@
           const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
           const [selectedEmpForHistory, setSelectedEmpForHistory] = useState(null);
           const [isGlobalHistoryOpen, setIsGlobalHistoryOpen] = useState(false);
+          const [selectedPhone, setSelectedPhone] = useState(null);
 
           const [formData, setFormData] = useState({
             nombre: '', rut: '', direccion: '', ciudad: 'Valdivia', cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '',
             documentos: { contrato: true, induccion: true, examenes: true, epp: true }
           });
 
+          // OBTENCIÓN DINÁMICA DE SUPERVISORES
           const supervisorsList = useMemo(() => {
-            const list = employees
-              .filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR'))
-              .map(e => e.nombre);
-            return list.length > 0 ? list : ['Briones Victor', 'Nahuelpan Nahuelpan Reinaldo Patricio', 'Rubilar Rubilar Daniel Joel'];
+            const list = employees.filter(e => (e.cargo || '').toUpperCase().includes('SUPERVISOR')).map(e => e.nombre);
+            return list.length > 0 ? list : ['Briones Victor', 'Nahuelpan Reinaldo Patricio', 'Rubilar Daniel Joel'];
           }, [employees]);
 
           const [logForm, setLogForm] = useState({
             tipo: 'Licencia Médica', modoFechas: 'rango', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
-            customTipo: '', nota: '', archivos: [], 
-            autorBitacora: '', rolBitacora: ''
+            customTipo: '', nota: '', archivos: []
           });
 
-          // PWA Install Event
+          // PWA
           useEffect(() => {
-            const userAgent = window.navigator.userAgent.toLowerCase();
-            setIsIOS(/iphone|ipad|ipod/.test(userAgent));
-
-            const handleBeforeInstallPrompt = (e) => {
-              e.preventDefault();
-              setDeferredPrompt(e);
-              setIsInstallable(true);
-            };
-
+            setIsIOS(/iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase()));
+            const handleBeforeInstallPrompt = (e) => { e.preventDefault(); setDeferredPrompt(e); setIsInstallable(true); };
             window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
             return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
           }, []);
@@ -142,99 +136,67 @@
               const { outcome } = await deferredPrompt.userChoice;
               if (outcome === 'accepted') setIsInstallable(false);
               setDeferredPrompt(null);
-            } else if (isIOS) {
-              alert("En iOS: Toca 'Compartir' en la barra inferior y luego 'Agregar a Inicio'.");
+            } else {
+              setShowInstallHelp(true);
             }
           };
 
-          const syncProfileLogic = (rolActivo) => {
-            if (rolActivo === 'Administrativo') {
-              setLogForm(prev => ({ ...prev, autorBitacora: 'Administrativo / RRHH', rolBitacora: 'Administrativo' }));
-            } else if (rolActivo === 'AdminContrato') {
-              setLogForm(prev => ({ ...prev, autorBitacora: 'Administrador de Contrato', rolBitacora: 'AdminContrato' }));
-            } else if (rolActivo === 'Prevencionista') {
-              setLogForm(prev => ({ ...prev, autorBitacora: 'Prevencionista de Riesgos', rolBitacora: 'Prevencionista' }));
-            } else if (rolActivo === 'Supervisor') {
-              const defaultSup = supervisorsList[0] || 'Briones Victor';
-              setLogForm(prev => ({ ...prev, autorBitacora: defaultSup, rolBitacora: 'Supervisor' }));
-            }
-          };
-
-          useEffect(() => {
-            if (hasEntered) syncProfileLogic(userSession.rol);
-          }, [userSession.rol, supervisorsList, hasEntered]);
-
-          const fileInputRef = useRef(null);
-          const logFileRef = useRef(null);
-
-          // Sincronización Tiempo Real
+          // SINCRONIZACIÓN FIREBASE EN TIEMPO REAL
           useEffect(() => {
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
             window.addEventListener('online', on); window.addEventListener('offline', off);
             
             if (!hasEntered || !db) return;
-            
             setLoading(true);
             const unsub = db.collection('employees').onSnapshot(snap => {
               const items = [];
               snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
               setEmployees(items); 
               setLoading(false);
-            }, (error) => {
-              console.error("Error Firebase:", error);
-              setLoading(false);
-            });
+            }, (error) => { console.error("Error Firebase:", error); setLoading(false); });
             return () => { unsub(); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
           }, [hasEntered]);
 
           useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
 
           const handleEnterApp = () => {
-            if (!gateProfile) return;
-            setUserSession({ rol: gateProfile });
-            syncProfileLogic(gateProfile);
+            if (!selectedRole) return;
+            if (selectedRole === 'Supervisor' && !selectedSupName) return;
+            
+            let autorNombre = selectedRole;
+            if (selectedRole === 'Administrativo') autorNombre = 'Administrativo / RRHH';
+            if (selectedRole === 'AdminContrato') autorNombre = 'Administrador de Contrato';
+            if (selectedRole === 'Prevencionista') autorNombre = 'Prevencionista de Riesgos';
+            if (selectedRole === 'Supervisor') autorNombre = selectedSupName;
+
+            setUserSession({ rol: selectedRole, autor: autorNombre });
             setHasEntered(true);
           };
 
-          // EXPORTACIÓN REAL (INCLUYE BITÁCORA)
+          // DESCARGA TOTAL EXCEL
           const handleDownloadExcel = () => {
             try {
-              if (!employees || employees.length === 0) {
-                alert("No hay trabajadores para exportar.");
-                return;
-              }
+              if (!employees || employees.length === 0) { alert("No hay trabajadores."); return; }
               const exportData = employees.map(emp => {
                 const historialTxt = emp.historial && emp.historial.length > 0 
-                  ? emp.historial.map(h => `[${h.fechaInicio}] ${h.tipo} - ${h.nota}`).join(" | ") 
+                  ? emp.historial.map(h => `[${h.fechaInicio}] ${h.tipo} - ${h.nota} (Por: ${h.autor})`).join(" | ") 
                   : "Sin registros";
-
                 return {
-                  "Nombre": emp.nombre || "",
-                  "RUT": emp.rut || "",
-                  "Cargo": emp.cargo || "",
-                  "Ciudad": emp.ciudad || "",
-                  "Dirección": emp.direccion || "",
-                  "Teléfono": emp.telefono || "",
-                  "Correo": emp.correo || "",
-                  "Contacto de Emergencia": emp.emergenciaNombre || "",
-                  "Teléfono Emergencia": emp.emergenciaFono || "",
+                  "Nombre": emp.nombre || "", "RUT": emp.rut || "", "Cargo": emp.cargo || "", "Ciudad": emp.ciudad || "",
+                  "Dirección": emp.direccion || "", "Teléfono": emp.telefono || "", "Correo": emp.correo || "",
+                  "Contacto Emergencia": emp.emergenciaNombre || "", "Fono Emergencia": emp.emergenciaFono || "",
                   "Contrato": emp.documentos?.contrato ? "Completo" : "Pendiente",
-                  "Inducción S.S.O.": emp.documentos?.induccion ? "Completo" : "Pendiente",
-                  "Exámenes Ocupacionales": emp.documentos?.examenes ? "Completo" : "Pendiente",
+                  "Inducción": emp.documentos?.induccion ? "Completo" : "Pendiente",
+                  "Exámenes": emp.documentos?.examenes ? "Completo" : "Pendiente",
                   "EPP": emp.documentos?.epp ? "Completo" : "Pendiente",
                   "Historial / Bitácora": historialTxt
                 };
               });
-
               const ws = XLSX.utils.json_to_sheet(exportData);
               const wb = XLSX.utils.book_new();
-              XLSX.utils.book_append_sheet(wb, ws, "Dotacion Completa");
-              const dateStr = new Date().toISOString().split('T')[0];
-              XLSX.writeFile(wb, `BRAMAQ_Dotacion_Completa_${dateStr}.xlsx`);
-              alert("Descarga realizada correctamente.");
-            } catch (error) {
-              alert("Error al generar Excel: " + error.message);
-            }
+              XLSX.utils.book_append_sheet(wb, ws, "Dotacion Total");
+              XLSX.writeFile(wb, `BRAMAQ_Dotacion_Completa_${new Date().toISOString().split('T')[0]}.xlsx`);
+            } catch (error) { alert("Error al exportar: " + error.message); }
           };
 
           const handleDownloadGlobalLogsExcel = () => {
@@ -243,51 +205,39 @@
               employees.forEach(emp => {
                 if (emp.historial && emp.historial.length > 0) {
                   emp.historial.forEach(h => {
-                    let attachmentsText = "Ninguno";
-                    if (h.archivos && h.archivos.length > 0) attachmentsText = h.archivos.map(a => a.nombre).join(", ");
+                    let attach = h.archivos?.length > 0 ? h.archivos.map(a => a.nombre).join(", ") : (h.archivoNombre || "Ninguno");
                     logsToExport.push({
-                      "Trabajador": emp.nombre || "Desconocido",
-                      "RUT": emp.rut || "",
-                      "Cargo": emp.cargo || "",
-                      "Tipo de Evento": h.tipo || "",
-                      "Fecha Inicio": h.fechaInicio || "",
-                      "Fecha Término": h.fechaTermino || "",
-                      "Observación": h.nota || "",
-                      "Autor": h.autor || "",
-                      "Perfil": h.rolAutor || "",
-                      "Adjunto": attachmentsText
+                      "Trabajador": emp.nombre, "RUT": emp.rut, "Cargo": emp.cargo, "Evento": h.tipo,
+                      "Fecha": h.modoFechas === 'rango' ? `${h.fechaInicio} al ${h.fechaTermino}` : h.fechaInicio,
+                      "Observación": h.nota, "Autor": h.autor, "Perfil": h.rolAutor, "Adjuntos": attach
                     });
                   });
                 }
               });
-
-              if (logsToExport.length === 0) { alert("No hay registros en la bitácora."); return; }
-              logsToExport.sort((a, b) => new Date(b["Fecha Inicio"]) - new Date(a["Fecha Inicio"]));
+              if (logsToExport.length === 0) { alert("No hay observaciones en la bitácora."); return; }
+              logsToExport.sort((a, b) => new Date(b["Fecha"]) - new Date(a["Fecha"]));
               const ws = XLSX.utils.json_to_sheet(logsToExport);
               const wb = XLSX.utils.book_new();
-              XLSX.utils.book_append_sheet(wb, ws, "Hoja de Vida");
+              XLSX.utils.book_append_sheet(wb, ws, "Hoja de Vida Global");
               XLSX.writeFile(wb, `BRAMAQ_Bitacora_Global.xlsx`);
             } catch (error) { alert("Error Excel: " + error.message); }
           };
 
           const handleDeleteAllData = async () => {
-            if (userSession.rol !== 'Administrativo' && userSession.rol !== 'AdminContrato') {
-              alert("Sin permisos para borrado masivo."); return;
-            }
-            if (confirm("⚠️ ACCIÓN CRÍTICA: ¿Vaciar toda la base de datos?")) {
+            if (userSession.rol !== 'Administrativo' && userSession.rol !== 'AdminContrato') { alert("Sin permisos."); return; }
+            if (confirm("⚠️ ¿Estás seguro de vaciar toda la base de datos de trabajadores?")) {
               try {
-                const batchSize = 400;
-                let snapshot = await db.collection('employees').limit(batchSize).get();
-                while (!snapshot.empty) {
-                  const batch = db.batch();
-                  snapshot.docs.forEach(doc => batch.delete(doc.ref));
-                  await batch.commit();
-                  snapshot = await db.collection('employees').limit(batchSize).get();
-                }
+                const snapshot = await db.collection('employees').get();
+                const batch = db.batch();
+                snapshot.docs.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
                 alert("Base de datos vaciada.");
               } catch (err) { alert("Error: " + err.message); }
             }
           };
+
+          const fileInputRef = useRef(null);
+          const logFileRef = useRef(null);
 
           // IMPORTACIÓN EXCEL
           const handleUploadExcel = (e) => {
@@ -298,11 +248,9 @@
                 const data = new Uint8Array(event.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
                 const jsonSheet = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "", range: 1 });
-
                 if (jsonSheet.length > 0) {
                   let addedCount = 0; let duplicateCount = 0;
                   let existingRuts = new Set(employees.map(emp => (emp.rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '')));
-
                   if (confirm(`Se detectaron ${jsonSheet.length} registros. ¿Importar omitiendo duplicados por RUT?`)) {
                     for (let row of jsonSheet) {
                       const keys = Object.keys(row);
@@ -314,7 +262,6 @@
                       };
                       const nombre = findVal(['nombre']); const rut = findVal(['rut']); const direccion = findVal(['direccion']); const ciudad = findVal(['ciudad']) || 'Valdivia'; const cargo = findVal(['cargo']); const telefono = findVal(['telefon', 'fono', 'celular']); const correo = findVal(['correo', 'email']); const emergenciaNombre = findVal(['emergencia', 'contacto']); const emergenciaFono = findVal(['emergencia fono', 'emergencia tel']);
                       const cleanRut = (rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '');
-
                       if ((nombre || rut) && cleanRut) {
                         if (!existingRuts.has(cleanRut)) {
                           await db.collection('employees').add({
@@ -325,23 +272,20 @@
                         } else { duplicateCount++; }
                       }
                     }
-                    alert(`¡Importación completada!\nAgregados: ${addedCount}\nDuplicados omitidos: ${duplicateCount}`);
+                    alert(`¡Importación completada!\nNuevos: ${addedCount}\nDuplicados omitidos: ${duplicateCount}`);
                   }
                 }
               } catch (err) { alert("Error: " + err.message); }
             };
           };
 
-          // CRUD Trabajadores
+          // CRUD TRABAJADOR
           const handleSave = async (e) => {
             e.preventDefault();
             if (!formData.nombre || !formData.rut) { setFormError("Nombre y RUT obligatorios."); return; }
             try {
-              if (currentEmployee) {
-                await db.collection('employees').doc(currentEmployee.id).update(formData);
-              } else {
-                await db.collection('employees').add({ ...formData, historial: [] });
-              }
+              if (currentEmployee) await db.collection('employees').doc(currentEmployee.id).update(formData);
+              else await db.collection('employees').add({ ...formData, historial: [] });
               setIsModalOpen(false); setCurrentEmployee(null);
             } catch (err) { setFormError("Error: " + err.message); }
           };
@@ -351,7 +295,7 @@
             if (confirm("¿Eliminar este trabajador permanentemente?")) await db.collection('employees').doc(id).delete();
           };
 
-          // Bitácora Funciones
+          // MULTIARCHIVO BITÁCORA
           const handleLogFileChange = (e) => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
@@ -369,30 +313,30 @@
             if (logFileRef.current) logFileRef.current.value = "";
           };
 
-          const handleRemovePendingFile = (indexToRemove) => setLogForm(prev => ({ ...prev, archivos: prev.archivos.filter((_, idx) => idx !== indexToRemove) }));
+          const handleRemovePendingFile = (idx) => setLogForm(prev => ({ ...prev, archivos: prev.archivos.filter((_, i) => i !== idx) }));
 
-          const handleDeleteSavedAttachment = async (logId, attachmentIndex) => {
+          const handleDeleteSavedAttachment = async (logId, fileIdx) => {
             if (!selectedEmpForHistory) return;
-            if (confirm("¿Eliminar este archivo adjunto?")) {
+            if (confirm("¿Eliminar este archivo adjunto permanentemente?")) {
               try {
                 const updatedHistorial = selectedEmpForHistory.historial.map(h => {
-                  if (h.id === logId) return { ...h, archivos: h.archivos.filter((_, i) => i !== attachmentIndex) };
+                  if (h.id === logId) return { ...h, archivos: h.archivos.filter((_, i) => i !== fileIdx) };
                   return h;
                 });
                 await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
                 setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
-              } catch (err) { alert("Error al eliminar archivo: " + err.message); }
+              } catch (err) { alert("Error: " + err.message); }
             }
           };
 
           const handleDeleteLog = async (logId) => {
             if (!selectedEmpForHistory) return;
-            if (confirm("¿Eliminar completamente esta observación?")) {
+            if (confirm("¿Eliminar completamente esta observación del historial?")) {
               try {
                 const updatedHistorial = (selectedEmpForHistory.historial || []).filter(h => h.id !== logId);
                 await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
                 setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
-              } catch (err) { alert("Error al eliminar bitácora: " + err.message); }
+              } catch (err) { alert("Error: " + err.message); }
             }
           };
 
@@ -400,20 +344,17 @@
             e.preventDefault();
             if (!selectedEmpForHistory) return;
             const logEntry = {
-              id: String(Date.now()), 
-              tipo: logForm.tipo === 'Otro' ? (logForm.customTipo || 'Otro') : logForm.tipo, 
-              modoFechas: logForm.modoFechas,
-              fechaInicio: logForm.modoFechas === 'rango' ? logForm.fechaInicio : logForm.fechaUnica,
+              id: String(Date.now()), tipo: logForm.tipo === 'Otro' ? (logForm.customTipo || 'Otro') : logForm.tipo, 
+              modoFechas: logForm.modoFechas, fechaInicio: logForm.modoFechas === 'rango' ? logForm.fechaInicio : logForm.fechaUnica,
               fechaTermino: logForm.modoFechas === 'rango' ? logForm.fechaTermino : logForm.fechaUnica,
               nota: logForm.nota || '', archivos: logForm.archivos || [], 
-              autor: logForm.autorBitacora, rolAutor: logForm.rolBitacora, createdAt: new Date().toISOString()
+              autor: userSession.autor, rolAutor: userSession.rol, createdAt: new Date().toISOString()
             };
             try {
               const updatedHistorial = [...(selectedEmpForHistory.historial || []), logEntry];
               await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
               setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
-              setLogForm({ tipo: 'Licencia Médica', modoFechas: 'rango', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0], customTipo: '', nota: '', archivos: [], autorBitacora: userSession.rol === 'Supervisor' ? (supervisorsList[0] || '') : logForm.autorBitacora, rolBitacora: userSession.rol });
-              alert("Bitácora registrada.");
+              setLogForm({ tipo: 'Licencia Médica', modoFechas: 'rango', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0], customTipo: '', nota: '', archivos: [] });
             } catch (error) { alert("Error: " + error.message); }
           };
 
@@ -472,35 +413,54 @@
           }, [employees]);
 
           const RequisitoToggle = ({ label, icon, checked, onChange }) => (
-            <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer ${checked ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/60 border-slate-800'}`}>
+            <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${checked ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/60 border-slate-800'}`}>
                 <input type="checkbox" checked={checked} onChange={onChange} className="hidden" />
-                <div className={`w-5 h-5 rounded flex items-center justify-center ${checked ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 border border-slate-700'}`}>{checked && <i data-lucide="check" className="w-3 h-3"></i>}</div>
-                <div className="flex items-center gap-2"><i data-lucide={icon} className={`w-4 h-4 ${checked ? 'text-emerald-400' : 'text-slate-500'}`}></i><span className={`text-sm ${checked ? 'text-emerald-400' : 'text-slate-400'}`}>{label}</span></div>
+                <div className={`w-4 h-4 rounded flex items-center justify-center ${checked ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 border border-slate-700'}`}>{checked && <i data-lucide="check" className="w-3 h-3"></i>}</div>
+                <div className="flex items-center gap-2"><i data-lucide={icon} className={`w-4 h-4 ${checked ? 'text-emerald-400' : 'text-slate-500'}`}></i><span className={`text-xs font-medium ${checked ? 'text-emerald-400' : 'text-slate-400'}`}>{label}</span></div>
             </label>
           );
 
-          // PANTALLA LOGIN
+          // RENDERIZADO LOGIN ESTRICTO
           if (!hasEntered) {
             return (
               <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
-                <div className="bg-slate-900/80 border border-slate-800/80 p-8 rounded-3xl w-full max-w-md shadow-2xl flex flex-col items-center fade-in relative">
-                  <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center text-slate-950 mb-6"><i data-lucide="hard-hat" className="w-10 h-10"></i></div>
-                  <h1 className="text-2xl font-extrabold text-white mb-2 text-center">Gestor de Dotación</h1>
-                  <h2 className="text-lg font-bold text-amber-400 mb-8 uppercase">BRAMAQ</h2>
+                <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-md shadow-2xl flex flex-col items-center fade-in">
+                  <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center text-slate-950 mb-4"><i data-lucide="shield-check" className="w-10 h-10"></i></div>
+                  <h1 className="text-xl font-extrabold text-white">Gestor de Dotación</h1>
+                  <h2 className="text-sm font-bold text-amber-400 mb-8 uppercase tracking-widest">BRAMAQ</h2>
 
-                  <div className="w-full space-y-6">
-                    <select value={gateProfile} onChange={e => setGateProfile(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-4 text-sm font-semibold text-amber-400 focus:outline-none">
-                      <option value="" disabled>-- Elija un perfil --</option>
+                  <div className="w-full space-y-4">
+                    <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Seleccione Rol de Ingreso</label>
+                    <select value={selectedRole} onChange={e => { setSelectedRole(e.target.value); setSelectedSupName(''); }} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-amber-400 font-bold outline-none focus:border-amber-500">
+                      <option value="" disabled>-- Perfil Operativo --</option>
                       <option value="Administrativo">Administrativo / RRHH</option>
                       <option value="AdminContrato">Administrador de Contrato</option>
                       <option value="Supervisor">Supervisor</option>
                       <option value="Prevencionista">Prevencionista</option>
                     </select>
 
-                    <button disabled={!gateProfile} onClick={handleEnterApp} className={`w-full py-4 rounded-xl font-bold text-sm ${gateProfile ? 'bg-amber-500 text-slate-950' : 'bg-slate-800/50 text-slate-500 cursor-not-allowed'}`}>INGRESAR AL SISTEMA</button>
-                    
+                    {selectedRole === 'Supervisor' && (
+                      <div className="fade-in">
+                        <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1 mt-2">Identificación de Supervisor</label>
+                        <select value={selectedSupName} onChange={e => setSelectedSupName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 outline-none focus:border-amber-500">
+                          <option value="" disabled>-- Nombre del Supervisor --</option>
+                          {supervisorsList.map(name => <option key={name} value={name}>{name}</option>)}
+                        </select>
+                      </div>
+                    )}
+
+                    <button disabled={!selectedRole || (selectedRole === 'Supervisor' && !selectedSupName)} onClick={handleEnterApp} className={`w-full py-3.5 rounded-xl font-bold text-sm mt-4 ${(!selectedRole || (selectedRole === 'Supervisor' && !selectedSupName)) ? 'bg-slate-800 text-slate-500' : 'bg-amber-500 text-slate-950 hover:bg-amber-400'}`}>
+                      ACCEDER AL SISTEMA
+                    </button>
+
                     {isInstallable && (
-                      <button onClick={handleInstallClick} className="w-full py-3 rounded-xl font-semibold text-xs text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-2"><i data-lucide="download-cloud" className="w-4 h-4"></i> Instalar Aplicación</button>
+                      <button onClick={handleInstallClick} className="w-full py-3 mt-2 rounded-xl font-bold text-xs text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-2"><i data-lucide="download-cloud" className="w-4 h-4"></i> Instalar App PWA</button>
+                    )}
+                    {showInstallHelp && (
+                      <div className="w-full py-3 px-4 rounded-xl text-xs text-slate-300 border border-slate-800 bg-slate-950 text-center fade-in mt-2">
+                        {isIOS ? "En iPhone: Toca 'Compartir' y luego 'Agregar a inicio'." : "En el menú del navegador, selecciona 'Instalar aplicación'."}
+                        <br/><button onClick={()=>setShowInstallHelp(false)} className="text-[10px] text-slate-500 mt-2 underline">Cerrar</button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -508,63 +468,67 @@
             );
           }
 
-          // APLICACIÓN PRINCIPAL
+          // APLICACIÓN PRINCIPAL (DASHBOARD Y DIRECTORIO)
           return (
             <div className="flex h-screen overflow-hidden bg-slate-950">
-              <aside className="hidden lg:flex flex-col w-64 bg-slate-900/50 border-r border-slate-800 h-full">
+              {/* Sidebar Desktop */}
+              <aside className="hidden lg:flex flex-col w-64 bg-slate-900 border-r border-slate-800 h-full">
                 <div className="h-20 flex items-center px-6 border-b border-slate-800 gap-3">
-                  <div className="bg-amber-500 p-2.5 rounded-xl text-slate-950"><i data-lucide="hard-hat" className="w-5 h-5"></i></div>
-                  <div><div className="font-extrabold text-white text-base">BRAMAQ</div><div className="text-[9px] text-amber-500 uppercase font-bold">Enterprise</div></div>
+                  <div className="bg-amber-500 p-2 rounded-xl text-slate-950"><i data-lucide="hard-hat" className="w-5 h-5"></i></div>
+                  <div><div className="font-bold text-white">BRAMAQ</div><div className="text-[9px] text-amber-500 uppercase font-bold">Enterprise</div></div>
                 </div>
                 <div className="p-4 space-y-2 flex-1">
-                  <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold ${activeTab === 'dashboard' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'text-slate-400 hover:text-white'}`}><i data-lucide="layout-dashboard" className="w-4 h-4"></i> Panel Gerencial</button>
-                  <button onClick={() => setActiveTab('directorio')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold ${activeTab === 'directorio' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'text-slate-400 hover:text-white'}`}><i data-lucide="users" className="w-4 h-4"></i> Directorio y Bitácora</button>
+                  <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold ${activeTab === 'dashboard' ? 'bg-amber-500/10 text-amber-400' : 'text-slate-400 hover:text-white'}`}><i data-lucide="layout-dashboard" className="w-4 h-4"></i> Panel Gerencial</button>
+                  <button onClick={() => setActiveTab('directorio')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold ${activeTab === 'directorio' ? 'bg-amber-500/10 text-amber-400' : 'text-slate-400 hover:text-white'}`}><i data-lucide="users" className="w-4 h-4"></i> Directorio y Bitácora</button>
                   
-                  <div className="mt-8 pt-6 border-t border-slate-800 space-y-4">
-                    <div className="flex items-center gap-2 px-1"><span className={`w-2 h-2 rounded-full ${onlineStatus ? 'bg-emerald-500' : 'bg-red-500'}`}></span><span className="text-xs text-slate-300">{onlineStatus ? 'Conexión Activa' : 'Sin Conexión'}</span></div>
-                    <select value={userSession.rol} onChange={e => setUserSession({ rol: e.target.value })} className="w-full bg-slate-900 border border-slate-700 text-amber-400 text-xs py-2.5 px-3 rounded-lg outline-none">
-                      <option value="Administrativo">Administrativo</option>
-                      <option value="AdminContrato">Admin. de Contrato</option>
-                      <option value="Supervisor">Supervisor</option>
-                      <option value="Prevencionista">Prevencionista</option>
-                    </select>
+                  <div className="mt-8 pt-6 border-t border-slate-800">
+                    <div className="flex items-center gap-2 px-2 mb-4">
+                      <span className={`w-2 h-2 rounded-full ${onlineStatus ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500'}`}></span>
+                      <span className="text-xs text-slate-300">{onlineStatus ? 'Sincronizado' : 'Offline'}</span>
+                    </div>
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs text-slate-400">
+                      <span className="block text-[9px] uppercase font-bold text-slate-500 mb-1">Sesión Activa</span>
+                      <strong className="text-amber-400 block truncate">{userSession.autor}</strong>
+                      <span>{userSession.rol}</span>
+                    </div>
                   </div>
                 </div>
               </aside>
 
               <div className="flex-1 flex flex-col h-screen relative">
-                <header className="lg:hidden h-16 flex items-center justify-between px-4 bg-slate-900 border-b border-slate-800 sticky top-0 z-30">
+                {/* Header Mobile */}
+                <header className="lg:hidden h-16 flex items-center justify-between px-4 bg-slate-900 border-b border-slate-800 z-30">
                   <div className="flex items-center gap-2 text-white font-bold"><i data-lucide="hard-hat" className="text-amber-500 w-5 h-5"></i> BRAMAQ</div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <span className={`w-2 h-2 rounded-full ${onlineStatus ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
-                    <button onClick={() => setHasEntered(false)} className="text-xs bg-slate-800 px-3 py-1.5 rounded">Salir</button>
+                    <button onClick={() => setHasEntered(false)} className="text-xs bg-slate-800 text-slate-300 px-3 py-1.5 rounded-lg">Salir</button>
                   </div>
                 </header>
 
                 <main className="flex-1 overflow-y-auto p-4 sm:p-6 relative">
-                  {loading ? <div className="text-center py-20 text-amber-500"><i data-lucide="loader-2" className="w-10 h-10 animate-spin mx-auto"></i></div> : (
-                    <div className="max-w-7xl mx-auto space-y-8 fade-in">
+                  {loading ? <div className="text-center py-20 text-amber-500"><i data-lucide="loader-2" className="w-10 h-10 animate-spin mx-auto"></i><p className="mt-2 text-xs text-slate-400">Sincronizando nube...</p></div> : (
+                    <div className="max-w-7xl mx-auto space-y-6 fade-in pb-20">
                       
-                      {/* DASHBOARD */}
+                      {/* --- DASHBOARD --- */}
                       {activeTab === 'dashboard' && (
                         <>
                           <h1 className="text-2xl font-extrabold text-white">Panel Gerencial</h1>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                            <div onClick={() => { setActiveFilter('TODOS'); setActiveTab('directorio'); }} className="glass-panel p-6 rounded-3xl cursor-pointer">
-                              <p className="text-slate-400 text-xs font-bold uppercase">Dotación Total</p>
-                              <h3 className="text-4xl font-extrabold text-white mt-2">{kpis.total}</h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div onClick={() => { setActiveFilter('TODOS'); setActiveTab('directorio'); }} className="glass-panel p-5 rounded-2xl cursor-pointer">
+                              <p className="text-slate-400 text-[10px] font-bold uppercase">Dotación Total</p>
+                              <h3 className="text-3xl font-extrabold text-white mt-1">{kpis.total}</h3>
                             </div>
-                            <div onClick={() => { setActiveFilter('INCOMPLETOS'); setActiveTab('directorio'); }} className="glass-panel p-6 rounded-3xl cursor-pointer">
-                              <p className="text-red-400 text-xs font-bold uppercase">Incompletos / Alerta</p>
-                              <h3 className="text-4xl font-extrabold text-red-400 mt-2">{kpis.incompletos}</h3>
+                            <div onClick={() => { setActiveFilter('INCOMPLETOS'); setActiveTab('directorio'); }} className="glass-panel p-5 rounded-2xl cursor-pointer">
+                              <p className="text-red-400 text-[10px] font-bold uppercase">Incompletos / Alerta</p>
+                              <h3 className="text-3xl font-extrabold text-red-400 mt-1">{kpis.incompletos}</h3>
                             </div>
-                            <div onClick={() => { setActiveFilter('ADMIN_CONTRATO'); setActiveTab('directorio'); }} className="glass-panel p-6 rounded-3xl cursor-pointer">
-                              <p className="text-blue-400 text-xs font-bold uppercase">Admin. Contrato</p>
-                              <h3 className="text-4xl font-extrabold text-blue-400 mt-2">{kpis.adminContrato}</h3>
+                            <div onClick={() => { setActiveFilter('ADMIN_CONTRATO'); setActiveTab('directorio'); }} className="glass-panel p-5 rounded-2xl cursor-pointer">
+                              <p className="text-blue-400 text-[10px] font-bold uppercase">Admin. Contrato</p>
+                              <h3 className="text-3xl font-extrabold text-blue-400 mt-1">{kpis.adminContrato}</h3>
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+                          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
                             {[
                               { label: 'Supervisores', val: kpis.supervisores, filter: 'SUPERVISORES', icon: 'user-check', color: 'text-indigo-400' },
                               { label: 'Prevención', val: kpis.prevencionistas, filter: 'PREVENCIONISTAS', icon: 'shield', color: 'text-emerald-400' },
@@ -573,21 +537,21 @@
                               { label: 'Frontales', val: kpis.cargadorFrontal, filter: 'CARGADOR_FRONTAL', icon: 'box', color: 'text-yellow-400' },
                               { label: 'Mecánicos', val: kpis.mecanicos, filter: 'MECANICOS', icon: 'wrench', color: 'text-stone-400' }
                             ].map(item => (
-                              <div key={item.label} onClick={() => { setActiveFilter(item.filter); setActiveTab('directorio'); }} className="glass-panel p-5 rounded-2xl cursor-pointer text-center">
-                                <i data-lucide={item.icon} className={`w-6 h-6 mx-auto mb-2 ${item.color}`}></i>
-                                <div className="text-[10px] text-slate-400 font-bold uppercase">{item.label}</div>
-                                <div className={`text-2xl font-extrabold ${item.color}`}>{item.val}</div>
+                              <div key={item.label} onClick={() => { setActiveFilter(item.filter); setActiveTab('directorio'); }} className="glass-panel p-4 rounded-xl cursor-pointer text-center">
+                                <i data-lucide={item.icon} className={`w-5 h-5 mx-auto mb-1 ${item.color}`}></i>
+                                <div className="text-[9px] text-slate-400 font-bold uppercase">{item.label}</div>
+                                <div className={`text-xl font-extrabold ${item.color}`}>{item.val}</div>
                               </div>
                             ))}
                           </div>
 
-                          <div className="glass-panel p-6 rounded-3xl">
-                            <h3 className="font-bold text-white mb-6">Distribución Logística Operativa</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                          <div className="glass-panel p-6 rounded-2xl">
+                            <h3 className="font-bold text-white mb-4 text-sm">Distribución Logística</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               {citiesList.map(city => kpis.porCiudad[city] > 0 && (
                                 <div key={city} onClick={() => { setActiveFilter(city); setActiveTab('directorio'); }} className="cursor-pointer">
-                                  <div className="flex justify-between text-xs mb-2 text-slate-300"><span>{city}</span><span className="font-bold">{kpis.porCiudad[city]} Pers.</span></div>
-                                  <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden"><div className="bg-amber-500 h-full" style={{ width: `${(kpis.porCiudad[city] / kpis.total) * 100}%` }}></div></div>
+                                  <div className="flex justify-between text-xs mb-1 text-slate-300"><span>{city}</span><span className="font-bold">{kpis.porCiudad[city]}</span></div>
+                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden"><div className="bg-amber-500 h-full" style={{ width: `${(kpis.porCiudad[city] / kpis.total) * 100}%` }}></div></div>
                                 </div>
                               ))}
                             </div>
@@ -595,82 +559,86 @@
                         </>
                       )}
 
-                      {/* DIRECTORIO */}
+                      {/* --- DIRECTORIO --- */}
                       {activeTab === 'directorio' && (
                         <>
-                          <div className="glass-panel p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-20">
-                            <div className="flex items-center gap-3 w-full md:w-auto flex-1">
+                          <div className="glass-panel p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-3 sticky top-0 z-20">
+                            <div className="flex items-center gap-2 w-full md:w-auto flex-1">
                               <div className="relative w-full max-w-md">
                                 <i data-lucide="search" className="absolute left-3 top-2.5 w-4 h-4 text-slate-500"></i>
-                                <input type="text" placeholder="Buscar por nombre, RUT, cargo o ciudad..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-950 border border-slate-700 text-white text-sm rounded-xl pl-10 pr-4 py-2 focus:outline-none" />
+                                <input type="text" placeholder="Buscar por nombre, RUT, cargo o ciudad..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-950 border border-slate-700 text-white text-sm rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:border-amber-500" />
                               </div>
-                              {activeFilter !== 'TODOS' && <button onClick={() => setActiveFilter('TODOS')} className="bg-amber-500/10 text-amber-400 px-3 py-2 rounded-xl text-xs font-bold shrink-0">Quitar Filtro</button>}
+                              {activeFilter !== 'TODOS' && <button onClick={() => setActiveFilter('TODOS')} className="bg-amber-500/10 text-amber-400 px-3 py-2 rounded-lg text-xs font-bold shrink-0">Quitar Filtro</button>}
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-                              <button onClick={() => setIsGlobalHistoryOpen(true)} className="bg-indigo-600 px-4 py-2 rounded-xl text-white text-xs font-bold flex items-center gap-2"><i data-lucide="file-clock" className="w-4 h-4"></i> Hoja Global</button>
-                              <button onClick={handleDownloadExcel} className="bg-emerald-600 px-4 py-2 rounded-xl text-white text-xs font-bold flex items-center gap-2"><i data-lucide="download" className="w-4 h-4"></i> Exportar</button>
+                              <button onClick={() => setIsGlobalHistoryOpen(true)} className="bg-indigo-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1"><i data-lucide="file-clock" className="w-3.5 h-3.5"></i> Global</button>
+                              <button onClick={handleDownloadExcel} className="bg-emerald-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1"><i data-lucide="download" className="w-3.5 h-3.5"></i> Exportar</button>
                               <input type="file" ref={fileInputRef} onChange={handleUploadExcel} accept=".xlsx, .xls, .csv" className="hidden" />
-                              <button onClick={() => fileInputRef.current.click()} className="bg-slate-800 px-4 py-2 rounded-xl text-white text-xs font-bold flex items-center gap-2"><i data-lucide="upload" className="w-4 h-4"></i> Importar</button>
-                              <button onClick={() => { setCurrentEmployee(null); setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0], cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '', documentos: { contrato: true, induccion: true, examenes: true, epp: true }}); setIsModalOpen(true); }} className="bg-amber-500 text-slate-950 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><i data-lucide="plus" className="w-4 h-4"></i> Ficha</button>
+                              <button onClick={() => fileInputRef.current.click()} className="bg-slate-800 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1"><i data-lucide="upload" className="w-3.5 h-3.5"></i> Importar</button>
+                              <button onClick={() => { setCurrentEmployee(null); setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0], cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '', documentos: { contrato: true, induccion: true, examenes: true, epp: true }}); setIsModalOpen(true); }} className="bg-amber-500 text-slate-950 px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-1"><i data-lucide="plus" className="w-4 h-4"></i> Ficha</button>
                             </div>
                           </div>
 
                           {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
                             <div className="flex justify-end">
-                              <button onClick={handleDeleteAllData} className="text-xs text-red-500 font-bold flex items-center gap-1"><i data-lucide="trash-2" className="w-3 h-3"></i> Vaciar Base</button>
+                              <button onClick={handleDeleteAllData} className="text-[10px] text-red-500 font-bold flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded"><i data-lucide="trash-2" className="w-3 h-3"></i> Vaciar Base de Datos</button>
                             </div>
                           )}
 
-                          <div className="space-y-4">
+                          <div className="space-y-3">
+                            {filtered.length === 0 && <p className="text-center text-slate-500 py-10 text-sm">No se encontraron registros.</p>}
                             {filtered.map(emp => (
-                              <div key={emp.id} className="glass-panel p-5 rounded-2xl flex flex-col lg:flex-row gap-5">
+                              <div key={emp.id} className="glass-panel p-4 rounded-xl flex flex-col lg:flex-row gap-4">
                                 <div className="flex-1">
-                                  <div className="flex items-center gap-3 mb-2">
-                                    <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-white font-bold">{emp.nombre.charAt(0)}</div>
+                                  <div className="flex items-center gap-3 mb-1">
+                                    <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-white font-bold">{emp.nombre.charAt(0).toUpperCase()}</div>
                                     <div>
                                       <h4 className="font-bold text-white text-sm">{emp.nombre}</h4>
-                                      <p className="text-xs text-slate-400 font-mono">{emp.rut}</p>
+                                      <p className="text-[10px] text-slate-400 font-mono">{emp.rut}</p>
                                     </div>
                                   </div>
-                                  <div className="text-xs text-amber-400 font-bold mb-1">{emp.cargo}</div>
-                                  <div className="text-xs text-slate-400"><i data-lucide="map-pin" className="w-3 h-3 inline"></i> {emp.ciudad}</div>
+                                  <div className="text-xs text-amber-400 font-bold mb-1 pl-13"><i data-lucide="briefcase" className="w-3 h-3 inline"></i> {emp.cargo}</div>
+                                  <div className="text-[11px] text-slate-400 pl-13"><i data-lucide="map-pin" className="w-3 h-3 inline"></i> {emp.ciudad} | {emp.direccion}</div>
                                 </div>
 
-                                {/* RESTAURACIÓN DE BOTONES DE ACCIÓN RÁPIDA (CONTACTO DIRECTO) */}
-                                <div className="flex-1 space-y-3 bg-slate-900/50 p-3 rounded-xl border border-slate-800/50">
+                                {/* CONTACTOS Y ACCIONES RÁPIDAS (LLAMADA, WA, SMS) */}
+                                <div className="flex-1 space-y-2 bg-slate-900/80 p-3 rounded-lg border border-slate-800">
                                   {emp.telefono ? (
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="text-xs text-slate-300 font-mono"><i data-lucide="phone" className="w-3 h-3 inline text-slate-500"></i> {emp.telefono}</div>
+                                    <div className="flex items-center justify-between">
+                                      <button onClick={()=>setSelectedPhone(emp.telefono)} className="text-xs text-slate-300 font-mono hover:text-amber-400 transition-colors"><i data-lucide="user" className="w-3 h-3 inline text-slate-500 mr-1"></i>{emp.telefono}</button>
                                       <div className="flex gap-1">
-                                        <a href={`tel:${emp.telefono.replace(/\D/g,'')}`} className="bg-blue-600/20 text-blue-400 p-2 rounded-lg hover:bg-blue-600/40"><i data-lucide="phone" className="w-3.5 h-3.5"></i></a>
-                                        <a href={`https://wa.me/${emp.telefono.replace(/\D/g,'')}`} target="_blank" className="bg-emerald-600/20 text-emerald-400 p-2 rounded-lg hover:bg-emerald-600/40"><i data-lucide="message-circle" className="w-3.5 h-3.5"></i></a>
-                                        <a href={`sms:${emp.telefono.replace(/\D/g,'')}`} className="bg-slate-700/50 text-slate-300 p-2 rounded-lg hover:bg-slate-700"><i data-lucide="message-square" className="w-3.5 h-3.5"></i></a>
+                                        <a href={`tel:${emp.telefono.replace(/\D/g,'')}`} className="bg-blue-600 text-white p-1.5 rounded hover:bg-blue-500"><i data-lucide="phone" className="w-3 h-3"></i></a>
+                                        <a href={`https://wa.me/${emp.telefono.replace(/\D/g,'')}`} target="_blank" className="bg-emerald-600 text-white p-1.5 rounded hover:bg-emerald-500"><i data-lucide="message-circle" className="w-3 h-3"></i></a>
+                                        <a href={`sms:${emp.telefono.replace(/\D/g,'')}`} className="bg-slate-700 text-white p-1.5 rounded hover:bg-slate-600"><i data-lucide="message-square" className="w-3 h-3"></i></a>
                                       </div>
                                     </div>
-                                  ) : <div className="text-xs text-slate-500 italic">Sin teléfono personal</div>}
+                                  ) : <div className="text-[10px] text-slate-500 italic">Sin teléfono personal</div>}
 
                                   {emp.emergenciaFono ? (
-                                    <div className="flex items-center justify-between gap-2 border-t border-slate-800 pt-2">
-                                      <div className="text-xs text-red-300"><span className="text-slate-500 mr-1">{emp.emergenciaNombre}:</span><span className="font-mono">{emp.emergenciaFono}</span></div>
-                                      <a href={`tel:${emp.emergenciaFono.replace(/\D/g,'')}`} className="bg-red-600/20 text-red-400 p-2 rounded-lg hover:bg-red-600/40"><i data-lucide="phone" className="w-3.5 h-3.5"></i></a>
+                                    <div className="flex items-center justify-between border-t border-slate-800 pt-2">
+                                      <button onClick={()=>setSelectedPhone(emp.emergenciaFono)} className="text-[11px] text-red-300 font-mono hover:text-red-400 truncate max-w-[150px] sm:max-w-[200px]">
+                                        <i data-lucide="shield-alert" className="w-3 h-3 inline text-red-500 mr-1"></i>
+                                        {emp.emergenciaNombre}: {emp.emergenciaFono}
+                                      </button>
+                                      <a href={`tel:${emp.emergenciaFono.replace(/\D/g,'')}`} className="bg-red-600 text-white p-1.5 rounded hover:bg-red-500"><i data-lucide="phone" className="w-3 h-3"></i></a>
                                     </div>
-                                  ) : <div className="text-xs text-slate-500 italic border-t border-slate-800 pt-2">Sin contacto de emergencia</div>}
+                                  ) : <div className="text-[10px] text-slate-500 italic border-t border-slate-800 pt-2">Sin contacto emergencia</div>}
                                 </div>
 
-                                <div className="flex flex-row lg:flex-col justify-end lg:justify-center gap-2 items-center">
+                                <div className="flex flex-row lg:flex-col justify-end lg:justify-center gap-2 items-center lg:w-40 border-t border-slate-800 lg:border-none pt-3 lg:pt-0 shrink-0">
                                   {getMissingDataList(emp).length > 0 ? (
-                                    <span className="bg-red-500/10 text-red-400 px-2 py-1 rounded text-[10px] font-bold border border-red-500/20">Falta Info</span>
-                                  ) : <span className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-[10px] font-bold border border-emerald-500/20">Completo</span>}
+                                    <span className="bg-red-500/10 text-red-400 px-2 py-1 rounded text-[10px] font-bold border border-red-500/20 w-full text-center">Falta Info</span>
+                                  ) : <span className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-[10px] font-bold border border-emerald-500/20 w-full text-center">Docs. Completos</span>}
                                   
-                                  <div className="flex gap-2">
-                                    <button onClick={() => { setSelectedEmpForHistory(emp); setIsHistoryModalOpen(true); }} className="bg-slate-800 p-2 rounded-lg text-amber-400 relative">
+                                  <div className="flex gap-1.5 w-full justify-center">
+                                    <button onClick={() => { setSelectedEmpForHistory(emp); setIsHistoryModalOpen(true); }} className="bg-slate-800 p-2 rounded-lg text-amber-400 relative hover:bg-slate-700 flex-1 flex justify-center">
                                       <i data-lucide="book-open" className="w-4 h-4"></i>
-                                      {emp.historial?.length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-black text-[9px] font-bold rounded-full flex items-center justify-center">{emp.historial.length}</span>}
+                                      {emp.historial?.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-amber-500 text-black text-[9px] font-bold rounded-full flex items-center justify-center border border-slate-900">{emp.historial.length}</span>}
                                     </button>
-                                    <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="bg-slate-800 p-2 rounded-lg text-white"><i data-lucide="edit-2" className="w-4 h-4"></i></button>
+                                    <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="bg-slate-800 p-2 rounded-lg text-white hover:bg-slate-700 flex-1 flex justify-center"><i data-lucide="edit-2" className="w-4 h-4"></i></button>
                                     {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
-                                      <button onClick={() => handleDelete(emp.id)} className="bg-red-500/10 text-red-500 p-2 rounded-lg"><i data-lucide="trash" className="w-4 h-4"></i></button>
+                                      <button onClick={() => handleDelete(emp.id)} className="bg-red-500/10 text-red-500 p-2 rounded-lg hover:bg-red-500/20 flex-1 flex justify-center"><i data-lucide="trash" className="w-4 h-4"></i></button>
                                     )}
                                   </div>
                                 </div>
@@ -683,43 +651,78 @@
                   )}
                 </main>
                 
-                <nav className="lg:hidden bg-slate-900 border-t border-slate-800 flex justify-around p-2 pb-safe z-30">
-                  <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 rounded-xl text-[10px] font-bold ${activeTab === 'dashboard' ? 'text-amber-500' : 'text-slate-500'}`}><i data-lucide="layout-dashboard" className="w-5 h-5 mb-1"></i> Panel</button>
-                  <button onClick={() => setActiveTab('directorio')} className={`flex flex-col items-center p-2 rounded-xl text-[10px] font-bold ${activeTab === 'directorio' ? 'text-amber-500' : 'text-slate-500'}`}><i data-lucide="users" className="w-5 h-5 mb-1"></i> Dotación</button>
+                {/* Navbar Mobile */}
+                <nav className="lg:hidden bg-slate-900 border-t border-slate-800 flex justify-around p-2 pb-safe z-30 fixed bottom-0 w-full">
+                  <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 w-full text-[10px] font-bold ${activeTab === 'dashboard' ? 'text-amber-500 bg-slate-800 rounded-lg' : 'text-slate-500'}`}><i data-lucide="layout-dashboard" className="w-5 h-5 mb-1"></i> Panel</button>
+                  <button onClick={() => setActiveTab('directorio')} className={`flex flex-col items-center p-2 w-full text-[10px] font-bold ${activeTab === 'directorio' ? 'text-amber-500 bg-slate-800 rounded-lg' : 'text-slate-500'}`}><i data-lucide="users" className="w-5 h-5 mb-1"></i> Dotación</button>
                 </nav>
               </div>
 
-              {/* MODAL CREAR / EDITAR */}
+              {/* MODALES REUTILIZABLES */}
+
+              {/* MODAL CONTACTO PANTALLA COMPLETA */}
+              {selectedPhone && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm fade-in">
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xs p-6 shadow-2xl text-center">
+                    <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center text-amber-500 mx-auto mb-4"><i data-lucide="phone-call" className="w-8 h-8"></i></div>
+                    <h3 className="text-lg font-bold text-white mb-1">Opciones de Contacto</h3>
+                    <p className="text-xl font-mono text-amber-400 font-bold mb-6">{selectedPhone}</p>
+                    <div className="space-y-2">
+                      <a href={`tel:${selectedPhone.replace(/\D/g,'')}`} className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold"><i data-lucide="phone" className="w-4 h-4"></i> Llamar</a>
+                      <a href={`https://wa.me/${selectedPhone.replace(/\D/g,'')}`} target="_blank" className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold"><i data-lucide="message-circle" className="w-4 h-4"></i> WhatsApp</a>
+                      <a href={`sms:${selectedPhone.replace(/\D/g,'')}`} className="w-full flex items-center justify-center gap-2 py-3 bg-slate-800 text-white rounded-xl text-sm font-bold"><i data-lucide="message-square" className="w-4 h-4"></i> Mensaje SMS</a>
+                    </div>
+                    <button onClick={() => setSelectedPhone(null)} className="mt-4 text-xs text-slate-500 hover:text-white font-bold p-2">Cancelar</button>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL CREAR / EDITAR TRABAJADOR */}
               {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm fade-in overflow-y-auto">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl my-auto">
-                    <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-2xl sticky top-0 z-10">
-                      <h3 className="font-bold text-white">{currentEmployee ? 'Editar Trabajador' : 'Nuevo Trabajador'}</h3>
-                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white"><i data-lucide="x" className="w-5 h-5"></i></button>
+                    <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-2xl sticky top-0 z-10">
+                      <h3 className="font-bold text-white text-sm"><i data-lucide={currentEmployee ? "user-cog" : "user-plus"} className="w-4 h-4 inline mr-2 text-amber-500"></i>{currentEmployee ? 'Editar Ficha' : 'Nueva Ficha de Ingreso'}</h3>
+                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white p-1"><i data-lucide="x" className="w-5 h-5"></i></button>
                     </div>
-                    <div className="p-6">
-                      <form id="employeeForm" onSubmit={handleSave} className="space-y-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div><label className="text-xs text-slate-400">Nombre *</label><input required value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white" /></div>
-                          <div><label className="text-xs text-slate-400">RUT *</label><input required value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white font-mono" /></div>
-                          <div><label className="text-xs text-slate-400">Cargo</label><input value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white" /></div>
-                          <div><label className="text-xs text-slate-400">Ciudad</label><input value={formData.ciudad} onChange={e=>setFormData({...formData, ciudad:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white" /></div>
-                          <div><label className="text-xs text-slate-400">Teléfono Personal</label><input value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white font-mono" /></div>
-                          <div><label className="text-xs text-slate-400">Correo</label><input type="email" value={formData.correo} onChange={e=>setFormData({...formData, correo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white" /></div>
-                        </div>
-                        <div className="bg-red-500/10 p-4 rounded-xl border border-red-500/20 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div><label className="text-xs text-red-300">Contacto Emergencia</label><input value={formData.emergenciaNombre} onChange={e=>setFormData({...formData, emergenciaNombre:e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-white" /></div>
-                          <div><label className="text-xs text-red-300">Teléfono Emergencia</label><input value={formData.emergenciaFono} onChange={e=>setFormData({...formData, emergenciaFono:e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-white font-mono" /></div>
-                        </div>
+                    <div className="p-5">
+                      {formError && <div className="mb-4 text-xs text-red-400 bg-red-500/10 p-2 rounded border border-red-500/20">{formError}</div>}
+                      <form id="employeeForm" onSubmit={handleSave} className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <RequisitoToggle label="Contrato Firmado" icon="file-signature" checked={formData.documentos?.contrato ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), contrato: e.target.checked }})} />
-                          <RequisitoToggle label="Inducción S.S.O." icon="presentation" checked={formData.documentos?.induccion ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), induccion: e.target.checked }})} />
-                          <RequisitoToggle label="Exámenes Ocup." icon="stethoscope" checked={formData.documentos?.examenes ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), examenes: e.target.checked }})} />
-                          <RequisitoToggle label="Entrega EPP" icon="hard-hat" checked={formData.documentos?.epp ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), epp: e.target.checked }})} />
+                          <div><label className="text-[10px] uppercase font-bold text-slate-500">Nombre *</label><input required value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" /></div>
+                          <div><label className="text-[10px] uppercase font-bold text-slate-500">RUT *</label><input required value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-mono outline-none focus:border-amber-500" /></div>
+                          <div><label className="text-[10px] uppercase font-bold text-slate-500">Cargo</label><input value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" /></div>
+                          <div><label className="text-[10px] uppercase font-bold text-slate-500">Ciudad</label><input value={formData.ciudad} onChange={e=>setFormData({...formData, ciudad:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" /></div>
+                          <div><label className="text-[10px] uppercase font-bold text-slate-500">Dirección Residencial</label><input value={formData.direccion} onChange={e=>setFormData({...formData, direccion:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" /></div>
+                          <div><label className="text-[10px] uppercase font-bold text-slate-500">Correo Electrónico</label><input type="email" value={formData.correo} onChange={e=>setFormData({...formData, correo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" /></div>
                         </div>
-                        <div className="flex justify-end gap-3 border-t border-slate-800 pt-5">
-                          <button type="button" onClick={() => setIsModalOpen(false)} className="bg-slate-800 px-5 py-2.5 rounded-xl text-sm font-bold">Cancelar</button>
-                          <button type="submit" className="bg-amber-500 text-slate-950 px-6 py-2.5 rounded-xl text-sm font-bold">Guardar</button>
+
+                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-blue-400"><i data-lucide="phone" className="w-3 h-3 inline mr-1"></i>Teléfono Personal</label>
+                            <input value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} placeholder="+569..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono outline-none focus:border-blue-500 mt-1" />
+                          </div>
+                          <div></div>
+                          <div className="sm:col-span-2 border-t border-slate-800 my-1"></div>
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-red-400"><i data-lucide="shield-alert" className="w-3 h-3 inline mr-1"></i>Contacto Emergencia</label>
+                            <input value={formData.emergenciaNombre} onChange={e=>setFormData({...formData, emergenciaNombre:e.target.value})} placeholder="Nombre de familiar..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white mt-1 outline-none focus:border-red-500" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-red-400">Teléfono Emergencia</label>
+                            <input value={formData.emergenciaFono} onChange={e=>setFormData({...formData, emergenciaFono:e.target.value})} placeholder="+569..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono outline-none focus:border-red-500 mt-1" />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <RequisitoToggle label="Contrato" icon="file-signature" checked={formData.documentos?.contrato ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), contrato: e.target.checked }})} />
+                          <RequisitoToggle label="Inducción" icon="presentation" checked={formData.documentos?.induccion ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), induccion: e.target.checked }})} />
+                          <RequisitoToggle label="Exámenes" icon="stethoscope" checked={formData.documentos?.examenes ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), examenes: e.target.checked }})} />
+                          <RequisitoToggle label="E.P.P." icon="hard-hat" checked={formData.documentos?.epp ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), epp: e.target.checked }})} />
+                        </div>
+                        <div className="flex justify-end gap-2 pt-4">
+                          <button type="button" onClick={() => setIsModalOpen(false)} className="bg-slate-800 px-4 py-2 rounded-lg text-xs font-bold text-white">Cancelar</button>
+                          <button type="submit" className="bg-amber-500 text-slate-950 px-5 py-2 rounded-lg text-xs font-bold shadow-lg">Guardar Ficha</button>
                         </div>
                       </form>
                     </div>
@@ -731,54 +734,77 @@
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-sm fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl h-[90vh] flex flex-col shadow-2xl">
-                    <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-2xl">
-                      <div><h3 className="font-bold text-white text-lg">Bitácora / Hoja de Vida</h3><p className="text-sm text-slate-400">{selectedEmpForHistory.nombre} ({selectedEmpForHistory.rut})</p></div>
-                      <button onClick={() => setIsHistoryModalOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg"><i data-lucide="x" className="w-5 h-5"></i></button>
+                    <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-2xl shrink-0">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-amber-500 p-2 rounded-lg text-slate-950"><i data-lucide="book-open" className="w-5 h-5"></i></div>
+                        <div><h3 className="font-bold text-white text-sm">Hoja de Vida</h3><p className="text-[10px] text-slate-400">{selectedEmpForHistory.nombre} ({selectedEmpForHistory.rut})</p></div>
+                      </div>
+                      <button onClick={() => setIsHistoryModalOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg"><i data-lucide="x" className="w-4 h-4"></i></button>
                     </div>
-                    <div className="flex-1 overflow-y-auto flex flex-col lg:flex-row">
-                      <div className="flex-1 p-6 border-b lg:border-b-0 lg:border-r border-slate-800 overflow-y-auto">
-                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">Registros Históricos</h4>
-                        {!selectedEmpForHistory.historial?.length ? <p className="text-sm text-slate-500 text-center py-10">Sin observaciones.</p> : (
+
+                    <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+                      {/* Lista de Registros */}
+                      <div className="flex-1 p-4 sm:p-6 border-b lg:border-b-0 lg:border-r border-slate-800 overflow-y-auto">
+                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4"><i data-lucide="history" className="w-3 h-3 inline mr-1"></i>Registros Históricos</h4>
+                        {!selectedEmpForHistory.historial?.length ? <div className="text-center text-slate-500 py-20 text-xs"><i data-lucide="folder-open" className="w-10 h-10 mx-auto mb-2 opacity-50"></i>Expediente limpio.</div> : (
                           <div className="space-y-4">
                             {selectedEmpForHistory.historial.map(h => (
-                              <div key={h.id} className="bg-slate-950 border border-slate-800 p-4 rounded-xl">
-                                <div className="flex justify-between mb-2">
-                                  <span className="bg-slate-800 text-white text-xs font-bold px-2 py-1 rounded">{h.tipo}</span>
-                                  <span className="text-xs text-slate-400 font-mono">{h.fechaInicio}</span>
+                              <div key={h.id} className="bg-slate-950 border border-slate-800 p-4 rounded-xl relative group">
+                                <div className="flex justify-between items-start mb-2">
+                                  <span className="bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded border border-slate-700">{h.tipo}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono flex items-center"><i data-lucide="calendar" className="w-3 h-3 mr-1"></i>{h.modoFechas === 'rango' ? `${h.fechaInicio} al ${h.fechaTermino}` : h.fechaInicio}</span>
                                 </div>
-                                {h.nota && <p className="text-sm text-slate-300 mb-3">{h.nota}</p>}
+                                {h.nota && <p className="text-xs text-slate-300 mb-3 bg-slate-900 p-2 rounded border border-slate-800">{h.nota}</p>}
+                                
                                 {h.archivos?.length > 0 && (
-                                  <div className="grid grid-cols-2 gap-2 mb-3">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                                     {h.archivos.map((a, i) => (
                                       <div key={i} className="flex justify-between items-center bg-slate-900 p-2 rounded border border-slate-800">
-                                        <a href={a.url} target="_blank" className="text-[10px] text-blue-400 truncate w-3/4"><i data-lucide="paperclip" className="w-3 h-3 inline"></i> {a.nombre}</a>
-                                        <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-400"><i data-lucide="trash-2" className="w-3 h-3"></i></button>
+                                        <a href={a.url} target="_blank" className="text-[10px] text-blue-400 truncate w-3/4 flex items-center hover:underline"><i data-lucide={a.tipo?.includes('image') ? 'image' : 'file-text'} className="w-3 h-3 inline mr-1"></i> {a.nombre}</a>
+                                        <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-400 p-1 hover:bg-red-500/10 rounded"><i data-lucide="trash-2" className="w-3 h-3"></i></button>
                                       </div>
                                     ))}
                                   </div>
                                 )}
-                                <div className="flex justify-between items-center text-[10px] text-slate-500 border-t border-slate-800 pt-2">
-                                  <span>Por: {h.autor} ({h.rolAutor})</span>
-                                  <button onClick={() => handleDeleteLog(h.id)} className="text-red-500 hover:text-red-400 flex items-center gap-1"><i data-lucide="trash" className="w-3 h-3"></i> Borrar Todo</button>
+                                <div className="flex justify-between items-center text-[9px] text-slate-500 border-t border-slate-800 pt-2">
+                                  <span><strong className="text-slate-300">{h.autor}</strong> ({h.rolAutor})</span>
+                                  <button onClick={() => handleDeleteLog(h.id)} className="text-red-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="trash" className="w-3 h-3 inline mr-1"></i>Borrar Observación</button>
                                 </div>
                               </div>
                             ))}
                           </div>
                         )}
                       </div>
-                      <div className="w-full lg:w-96 p-6 bg-slate-900/50">
-                        <h4 className="text-xs font-bold text-amber-500 uppercase mb-4">Nueva Observación</h4>
+
+                      {/* Formulario Nueva Observación */}
+                      <div className="w-full lg:w-80 p-4 sm:p-6 bg-slate-900/50 overflow-y-auto">
+                        <h4 className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-4"><i data-lucide="plus-circle" className="w-3 h-3 inline mr-1"></i>Añadir Evento</h4>
                         <form onSubmit={handleAddLog} className="space-y-4">
-                          <select value={logForm.tipo} onChange={e=>setLogForm({...logForm, tipo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white"><option value="Licencia Médica">Licencia Médica</option><option value="Extensión de Licencia">Extensión de Licencia</option><option value="Permiso">Permiso</option><option value="Falta">Falta a Reunión</option><option value="Incidente">Incidente</option><option value="Otro">Otro...</option></select>
-                          {logForm.tipo === 'Otro' && <input required placeholder="Especificar..." value={logForm.customTipo} onChange={e=>setLogForm({...logForm, customTipo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white" />}
-                          <div className="grid grid-cols-2 gap-2"><input type="date" value={logForm.fechaInicio} onChange={e=>setLogForm({...logForm, fechaInicio:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white" /><input type="date" value={logForm.fechaTermino} onChange={e=>setLogForm({...logForm, fechaTermino:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white" /></div>
-                          <textarea placeholder="Observaciones..." value={logForm.nota} onChange={e=>setLogForm({...logForm, nota:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white h-24"></textarea>
                           <div>
-                            <input type="file" multiple ref={logFileRef} onChange={handleLogFileChange} className="hidden" />
-                            <button type="button" onClick={() => logFileRef.current.click()} className="w-full bg-slate-800 border border-slate-700 text-slate-300 py-2 rounded-lg text-xs font-bold"><i data-lucide="paperclip" className="w-4 h-4 inline"></i> Adjuntar Archivos</button>
-                            {logForm.archivos.length > 0 && <div className="mt-2 space-y-1">{logForm.archivos.map((a,i) => <div key={i} className="text-[10px] text-emerald-400 flex justify-between"><span>{a.nombre}</span><button type="button" onClick={()=>handleRemovePendingFile(i)} className="text-red-400"><i data-lucide="x" className="w-3 h-3"></i></button></div>)}</div>}
+                            <label className="text-[9px] text-slate-500 uppercase font-bold mb-1 block">Categoría del Evento</label>
+                            <select value={logForm.tipo} onChange={e=>setLogForm({...logForm, tipo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500"><option value="Licencia Médica">Licencia Médica</option><option value="Extensión de Licencia">Extensión de Licencia</option><option value="Permiso S/G Sueldo">Permiso sin goce de sueldo</option><option value="Permiso Autorizado">Permiso Autorizado</option><option value="Falta Injustificada">Falta Injustificada</option><option value="Incidente">Incidente/Accidente</option><option value="Amonestación">Amonestación</option><option value="Otro">Otro Evento...</option></select>
                           </div>
-                          <button type="submit" className="w-full bg-amber-500 text-black py-3 rounded-lg font-bold text-sm">Guardar Observación</button>
+                          {logForm.tipo === 'Otro' && <input required placeholder="Especificar evento..." value={logForm.customTipo} onChange={e=>setLogForm({...logForm, customTipo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white outline-none focus:border-amber-500" />}
+                          
+                          <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                            <div className="flex gap-4 mb-2">
+                              <label className="text-[10px] text-slate-300 flex items-center gap-1 cursor-pointer"><input type="radio" checked={logForm.modoFechas === 'rango'} onChange={()=>setLogForm({...logForm, modoFechas:'rango'})} /> Rango</label>
+                              <label className="text-[10px] text-slate-300 flex items-center gap-1 cursor-pointer"><input type="radio" checked={logForm.modoFechas === 'unica'} onChange={()=>setLogForm({...logForm, modoFechas:'unica'})} /> Única</label>
+                            </div>
+                            {logForm.modoFechas === 'rango' ? (
+                              <div className="flex gap-2"><input type="date" value={logForm.fechaInicio} onChange={e=>setLogForm({...logForm, fechaInicio:e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-xs text-white font-mono" /><input type="date" value={logForm.fechaTermino} onChange={e=>setLogForm({...logForm, fechaTermino:e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-xs text-white font-mono" /></div>
+                            ) : <input type="date" value={logForm.fechaUnica} onChange={e=>setLogForm({...logForm, fechaUnica:e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-xs text-white font-mono" />}
+                          </div>
+
+                          <textarea placeholder="Redactar detalles y motivos..." value={logForm.nota} onChange={e=>setLogForm({...logForm, nota:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white h-20 resize-none outline-none focus:border-amber-500"></textarea>
+                          
+                          <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                            <input type="file" multiple ref={logFileRef} onChange={handleLogFileChange} className="hidden" />
+                            <button type="button" onClick={() => logFileRef.current.click()} className="w-full bg-slate-800 border border-slate-700 text-slate-300 py-2 rounded text-xs font-bold hover:bg-slate-700"><i data-lucide="paperclip" className="w-3 h-3 inline mr-1"></i> Adjuntar Evidencia</button>
+                            {logForm.archivos.length > 0 && <div className="mt-2 space-y-1 max-h-20 overflow-y-auto pr-1">{logForm.archivos.map((a,i) => <div key={i} className="text-[9px] bg-slate-900 p-1.5 rounded flex justify-between items-center text-emerald-400"><span className="truncate w-5/6"><i data-lucide="check" className="w-3 h-3 inline mr-1"></i>{a.nombre}</span><button type="button" onClick={()=>handleRemovePendingFile(i)} className="text-red-400"><i data-lucide="x" className="w-3 h-3"></i></button></div>)}</div>}
+                          </div>
+
+                          <button type="submit" className="w-full bg-amber-500 hover:bg-amber-400 text-black py-3 rounded-lg font-bold text-xs shadow-lg mt-2"><i data-lucide="save" className="w-4 h-4 inline mr-1"></i> Registrar Evento</button>
                         </form>
                       </div>
                     </div>
@@ -786,30 +812,38 @@
                 </div>
               )}
 
-              {/* MODAL HOJA DE VIDA GLOBAL */}
+              {/* MODAL HOJA GLOBAL */}
               {isGlobalHistoryOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-sm fade-in">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/90 backdrop-blur-sm fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl h-[90vh] flex flex-col shadow-2xl">
-                    <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-2xl">
-                      <h3 className="font-bold text-white text-lg">Consolidado Global de Bitácoras</h3>
-                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg"><i data-lucide="x" className="w-5 h-5"></i></button>
+                    <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-2xl shrink-0">
+                      <div className="flex items-center gap-2"><i data-lucide="file-clock" className="text-amber-500 w-5 h-5"></i><h3 className="font-bold text-white text-sm">Consolidado Global de Bitácoras</h3></div>
+                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg"><i data-lucide="x" className="w-4 h-4"></i></button>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-6 bg-slate-950/50">
-                      {allGlobalLogs.length === 0 ? <p className="text-center text-slate-500 py-10">No hay registros globales.</p> : (
+                    
+                    <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-950/50">
+                      {allGlobalLogs.length === 0 ? <p className="text-center text-slate-500 py-20 text-sm">El sistema no posee observaciones registradas.</p> : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                           {allGlobalLogs.map((log, i) => (
-                            <div key={i} className="bg-slate-900 p-4 rounded-xl border border-slate-800">
-                              <div className="font-bold text-sm text-white mb-1">{log.empleadoNombre}</div>
-                              <div className="flex justify-between items-center mb-2"><span className="text-[10px] text-slate-400 font-mono">{log.empleadoRut}</span><span className="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded">{log.tipo}</span></div>
-                              <p className="text-xs text-slate-300 bg-slate-950 p-2 rounded mb-2">{log.nota}</p>
-                              <div className="text-[10px] text-slate-500 flex justify-between"><span>{log.fechaInicio}</span><span>Autor: {log.autor}</span></div>
+                            <div key={i} className="bg-slate-900 p-4 rounded-xl border border-slate-800 hover:border-slate-700">
+                              <div className="font-bold text-sm text-white mb-0.5">{log.empleadoNombre}</div>
+                              <div className="flex justify-between items-center mb-3">
+                                <span className="text-[10px] text-slate-400 font-mono">{log.empleadoRut}</span>
+                                <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-bold">{log.tipo}</span>
+                              </div>
+                              {log.nota && <p className="text-xs text-slate-300 bg-slate-950 p-2.5 rounded border border-slate-800/50 mb-3 line-clamp-3">{log.nota}</p>}
+                              <div className="text-[9px] text-slate-500 flex justify-between items-end border-t border-slate-800 pt-2">
+                                <span className="font-mono">{log.fechaInicio}</span>
+                                <div className="text-right"><span>Autorizado por:</span><br/><strong className="text-slate-300">{log.autor}</strong></div>
+                              </div>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
-                    <div className="p-5 border-t border-slate-800 flex justify-end gap-3 bg-slate-900 rounded-b-2xl">
-                      <button onClick={handleDownloadGlobalLogsExcel} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2"><i data-lucide="file-spreadsheet" className="w-4 h-4"></i> Descargar Consolidado (Excel)</button>
+                    
+                    <div className="p-4 border-t border-slate-800 flex justify-end gap-3 bg-slate-900 rounded-b-2xl shrink-0">
+                      <button onClick={handleDownloadGlobalLogsExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-lg font-bold text-xs flex items-center gap-2 shadow-lg"><i data-lucide="file-spreadsheet" className="w-4 h-4"></i> Exportar Consolidado (XLSX)</button>
                     </div>
                   </div>
                 </div>
@@ -819,16 +853,16 @@
           );
         }
 
-        // CARGA SEGURA SIN PANTALLAS AZULES NI BLANCAS
-        window.addEventListener('load', () => {
+        // CARGA SEGURA SIN PANTALLA AZUL (Protección React DOM)
+        window.addEventListener('DOMContentLoaded', () => {
             const container = document.getElementById('root');
             if (container) {
                 try {
                     const root = ReactDOM.createRoot(container);
                     root.render(<App />);
                 } catch (e) {
-                    console.error("Error crítico UI:", e);
-                    container.innerHTML = '<div style="color:white; padding:40px; text-align:center;">Error al iniciar la interfaz.</div>';
+                    console.error("Error crítico UI React:", e);
+                    container.innerHTML = '<div style="color:red; padding:40px; text-align:center;">Fallo grave en renderizado. Revisa la consola.</div>';
                 }
             }
         });
