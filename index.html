@@ -54,7 +54,7 @@
     <!-- CARGADOR INICIAL -->
     <div id="loader-estatico" class="app-loader">
         <div style="font-size: 24px; margin-bottom: 10px;">BRAMAQ Enterprise</div>
-        <div style="font-size: 14px; color: #94a3b8; font-weight: normal;">Iniciando sistema...</div>
+        <div style="font-size: 14px; color: #94a3b8; font-weight: normal;">Iniciando sistema operativo...</div>
     </div>
 
     <div id="root"></div>
@@ -99,12 +99,11 @@
           appId: "1:369713509600:web:b6d878c..."
         };
 
-        let db, storage;
+        let db;
         try {
           if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();
           db.enablePersistence({ synchronizeTabs: true }).catch(() => console.warn('Caché offline limitada'));
-          storage = null; // Guardado directo a base de datos gratuita
         } catch (e) { console.error("Error iniciando base de datos:", e); }
 
         function App() {
@@ -136,6 +135,7 @@
           const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
           const [selectedEmpForHistory, setSelectedEmpForHistory] = useState(null);
           const [isGlobalHistoryOpen, setIsGlobalHistoryOpen] = useState(false);
+          const [globalLogMonth, setGlobalLogMonth] = useState('TODOS'); // Nuevo filtro de fecha global
           const [selectedPhone, setSelectedPhone] = useState(null);
           const [uploadingFiles, setUploadingFiles] = useState(false);
 
@@ -148,13 +148,11 @@
             customTipo: '', nota: '', archivos: []
           });
 
-          // Ocultar loader estático
           useEffect(() => {
               const loader = document.getElementById('loader-estatico');
               if (loader) loader.style.display = 'none';
           }, []);
 
-          // PWA Install Logic
           useEffect(() => {
             setIsIOS(/iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase()));
             const handleBeforeInstallPrompt = (e) => { e.preventDefault(); setDeferredPrompt(e); setIsInstallable(true); };
@@ -173,12 +171,13 @@
             }
           };
 
-          // SINCRONIZACIÓN FIREBASE
+          // SINCRONIZACIÓN FIREBASE EN TIEMPO REAL
           useEffect(() => {
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
             window.addEventListener('online', on); window.addEventListener('offline', off);
             
             if (!db) return; 
+            
             setLoading(true);
             const unsub = db.collection('employees').onSnapshot(snap => {
               const items = [];
@@ -300,6 +299,7 @@
             }
           };
 
+          // IMPORTACIÓN INTELIGENTE DE EXCEL
           const fileInputRef = useRef(null);
           const logFileRef = useRef(null);
 
@@ -376,7 +376,7 @@
             if (confirm("⚠️ ¿Eliminar permanentemente este trabajador y toda su hoja de vida?")) await db.collection('employees').doc(id).delete();
           };
 
-          // MULTIARCHIVO BITÁCORA SEGURO
+          // MULTIARCHIVO BITÁCORA
           const handleLogFileChange = (e) => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
@@ -512,11 +512,28 @@
             };
           }, [employees, citiesList]);
 
+          // LÓGICA DE LA HOJA DE VIDA GLOBAL CON FILTRO DE FECHAS (MESES)
           const allGlobalLogs = useMemo(() => {
             let logs = [];
             employees.forEach(emp => { if (emp.historial && Array.isArray(emp.historial)) emp.historial.forEach(h => logs.push({ ...h, empleadoNombre: emp.nombre || 'Desconocido', empleadoRut: emp.rut || '' })); });
             return logs.sort((a, b) => new Date(b.createdAt || b.fechaInicio || 0) - new Date(a.createdAt || a.fechaInicio || 0));
           }, [employees]);
+
+          const availableMonths = useMemo(() => {
+              const months = new Set();
+              allGlobalLogs.forEach(log => {
+                  if (log.fechaInicio) {
+                      const month = log.fechaInicio.substring(0, 7); // Formato YYYY-MM
+                      if (month) months.add(month);
+                  }
+              });
+              return Array.from(months).sort().reverse();
+          }, [allGlobalLogs]);
+
+          const filteredGlobalLogs = useMemo(() => {
+              if (globalLogMonth === 'TODOS') return allGlobalLogs;
+              return allGlobalLogs.filter(log => log.fechaInicio && log.fechaInicio.startsWith(globalLogMonth));
+          }, [allGlobalLogs, globalLogMonth]);
 
           // PANTALLA LOGIN OBLIGATORIA
           if (!hasEntered) {
@@ -664,7 +681,7 @@
                               {citiesList.map(city => kpis.porCiudad[city] > 0 && (
                                 <div key={city} onClick={() => { setActiveFilter(city); setActiveTab('directorio'); }} className="cursor-pointer hover:opacity-80 transition-opacity">
                                   <div className="flex justify-between text-xs mb-1 text-slate-300"><span>{city}</span><span className="font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800">{kpis.porCiudad[city]} Pers.</span></div>
-                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden"><div className="bg-amber-500 h-full" style={{ width: `${(kpis.porCiudad[city] / kpis.total) * 100}%` }}></div></div>
+                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden"><div className="bg-amber-500 h-full" style={{ width: `${kpis.total > 0 ? (kpis.porCiudad[city] / kpis.total) * 100 : 0}%` }}></div></div>
                                 </div>
                               ))}
                             </div>
@@ -713,8 +730,10 @@
                           )}
 
                           <div className="space-y-3">
-                            {filtered.length === 0 && <div className="text-center bg-slate-900 border border-slate-800 rounded-2xl py-20"><Ico i="search-x" c="w-10 h-10 text-slate-600 mx-auto mb-2" /><p className="text-slate-500 text-sm">No se encontraron trabajadores con ese criterio.</p></div>}
+                            {filtered.length === 0 && <div className="text-center bg-slate-900 border border-slate-800 rounded-2xl py-20"><Ico i="search-x" c="w-10 h-10 text-slate-600 mx-auto mb-2" /><p className="text-slate-500 text-sm mt-2">No se encontraron trabajadores con ese criterio.</p></div>}
                             
+                            {activeFilter === 'CON_BITACORA' && filtered.length > 0 && <div className="text-[10px] text-blue-400 bg-blue-500/10 p-2 rounded border border-blue-500/20 font-bold"><Ico i="filter" c="w-3 h-3 inline mr-1" /> FILTRO ACTIVO: Mostrando únicamente trabajadores con observaciones en su Bitácora.</div>}
+
                             {filtered.map(emp => (
                               <div key={emp.id} className="glass-panel p-4 rounded-xl flex flex-col lg:flex-row gap-4 hover:border-slate-600 transition-colors">
                                 <div className="flex-1">
@@ -729,7 +748,7 @@
                                   <div className="text-[11px] text-slate-400 pl-15"><Ico i="map-pin" c="w-3 h-3 inline mr-1" /> {emp.ciudad || 'Sin Ciudad'} {emp.direccion ? `| ${emp.direccion} ${emp.numero ? '#'+emp.numero : ''}`.trim() : ''}</div>
                                 </div>
 
-                                {/* CONTACTOS Y ACCIONES RÁPIDAS (LLAMADA, WA, SMS) NORMALIZADAS CON TEXTO */}
+                                {/* CONTACTOS Y ACCIONES RÁPIDAS */}
                                 <div className="flex-1 space-y-2 bg-slate-900/80 p-3 rounded-lg border border-slate-800 flex flex-col justify-center">
                                   {emp.telefono ? (
                                     <div className="flex items-center justify-between gap-1">
@@ -760,7 +779,7 @@
                                   ) : <div className="text-[10px] text-slate-500 italic py-1">Sin contacto de emergencia registrado</div>}
                                 </div>
 
-                                {/* ESTADOS Y BOTONES DE GESTIÓN CON TEXTO CLARO */}
+                                {/* ESTADOS Y BOTONES DE GESTIÓN CON TEXTO */}
                                 <div className="flex flex-col justify-center gap-2 items-center lg:w-48 border-t border-slate-800 lg:border-none pt-3 lg:pt-0 shrink-0">
                                   {getMissingDataList(emp).length > 0 ? (
                                     <div className="bg-red-500/10 text-red-400 px-2 py-1 rounded text-[10px] font-bold border border-red-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="alert-circle" c="w-3 h-3" /> Faltan Datos</div>
@@ -845,7 +864,7 @@
                           <div><label className="text-[10px] uppercase font-bold text-slate-500">Nombre Completo *</label><input required value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1" placeholder="Ej: Juan Pérez"/></div>
                           <div><label className="text-[10px] uppercase font-bold text-slate-500">RUT *</label><input required value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-mono outline-none focus:border-amber-500 mt-1" placeholder="12.345.678-9"/></div>
                           
-                          {/* Selector Cargo Híbrido */}
+                          {/* Selector Cargo Híbrido iOS */}
                           <div>
                             <label className="text-[10px] uppercase font-bold text-slate-500">Cargo / Función *</label>
                             {!isCustomCargo ? (
@@ -869,7 +888,7 @@
                             )}
                           </div>
                           
-                          {/* Selector Ciudad Híbrido */}
+                          {/* Selector Ciudad Híbrido iOS */}
                           <div>
                             <label className="text-[10px] uppercase font-bold text-slate-500">Ciudad Base *</label>
                             {!isCustomCity ? (
@@ -945,6 +964,7 @@
                     </div>
 
                     <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-slate-950/50">
+                      {/* Lista de Eventos */}
                       <div className="flex-1 p-5 border-b lg:border-b-0 lg:border-r border-slate-800 overflow-y-auto">
                         <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-5 flex items-center"><Ico i="history" c="w-3.5 h-3.5 mr-1.5" />Registros Históricos</h4>
                         {!selectedEmpForHistory.historial?.length ? <div className="text-center text-slate-500 py-32 text-sm"><div className="mb-3 opacity-30"><Ico i="folder-open" c="w-12 h-12 mx-auto" /></div>Expediente limpio. No hay observaciones.</div> : (
@@ -981,6 +1001,7 @@
                         )}
                       </div>
 
+                      {/* Formulario Crear Evento */}
                       <div className="w-full lg:w-[380px] p-5 bg-slate-900 overflow-y-auto flex flex-col">
                         <h4 className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-5 flex items-center"><Ico i="plus-circle" c="w-3.5 h-3.5 mr-1.5" />Registrar Nuevo Evento</h4>
                         
@@ -1043,15 +1064,28 @@
               {isGlobalHistoryOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/90 backdrop-blur-sm fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-                    <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-3xl shrink-0">
-                      <div className="flex items-center gap-3"><div className="bg-indigo-500/20 p-2 rounded-xl text-indigo-400"><Ico i="file-clock" c="w-5 h-5" /></div><div><h3 className="font-bold text-white text-base">Consolidado Global de Bitácoras</h3><p className="text-[10px] text-slate-400">Todos los trabajadores con observaciones registradas.</p></div></div>
-                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg border border-slate-700"><Ico i="x" c="w-4 h-4" /></button>
+                    <div className="p-4 sm:p-5 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 rounded-t-3xl shrink-0">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-indigo-500/20 p-2 rounded-xl text-indigo-400"><Ico i="file-clock" c="w-5 h-5" /></div>
+                        <div><h3 className="font-bold text-white text-base">Hoja de Vida Global</h3><p className="text-[10px] text-slate-400">Trabajadores con observaciones.</p></div>
+                      </div>
+                      
+                      <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-2 w-full sm:w-auto">
+                          <Ico i="filter" c="w-3.5 h-3.5 text-slate-500" />
+                          <select value={globalLogMonth} onChange={(e) => setGlobalLogMonth(e.target.value)} className="bg-transparent text-slate-300 text-xs py-2 outline-none cursor-pointer w-full">
+                              <option value="TODOS">Todos los meses</option>
+                              {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                        </div>
+                        <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg border border-slate-700 shrink-0"><Ico i="x" c="w-4 h-4" /></button>
+                      </div>
                     </div>
                     
                     <div className="flex-1 overflow-y-auto p-5 sm:p-8 bg-slate-950/50">
-                      {allGlobalLogs.length === 0 ? <div className="text-center py-32"><div className="mb-4"><Ico i="clipboard-list" c="w-16 h-16 text-slate-700 mx-auto" /></div><p className="text-slate-400 font-medium">El sistema no posee observaciones registradas a nivel global.</p></div> : (
+                      {filteredGlobalLogs.length === 0 ? <div className="text-center py-32"><div className="mb-4"><Ico i="clipboard-list" c="w-16 h-16 text-slate-700 mx-auto" /></div><p className="text-slate-400 font-medium">No se encontraron observaciones {globalLogMonth !== 'TODOS' ? `en el mes seleccionado.` : `registradas a nivel global.`}</p></div> : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                          {allGlobalLogs.map((log, i) => (
+                          {filteredGlobalLogs.map((log, i) => (
                             <div key={i} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 hover:border-slate-600 transition-colors flex flex-col h-full shadow-lg">
                               <div className="flex justify-between items-start mb-3 border-b border-slate-800 pb-3">
                                 <div className="pr-2"><div className="font-bold text-sm text-white mb-0.5 leading-tight">{log.empleadoNombre}</div><span className="text-[9px] text-slate-400 font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">RUT: {log.empleadoRut}</span></div>
