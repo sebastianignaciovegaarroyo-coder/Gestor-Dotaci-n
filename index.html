@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-title" content="BRAMAQ">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3200/3200424.png">
     
-    <title>Gestor de Dotación BRAMAQ - Enterprise Cloud</title>
+    <title>Gestor de Dotación BRAMAQ - Enterprise</title>
     
     <!-- CDNs Empresariales -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -38,16 +38,68 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f1f5f9; margin: 0; }
+        
+        /* TEMA OSCURO (Por Defecto) */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #020617; 
+            color: #f1f5f9; 
+            margin: 0; 
+            color-scheme: dark;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
         .glass-panel { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(30, 41, 59, 0.8); }
         .fade-in { animation: fadeIn 0.3s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         #root { min-height: 100vh; }
-        .app-loader { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; color: #f59e0b; font-weight: bold; background: #020617; }
+        .app-loader { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; color: #f59e0b; font-weight: bold; background: #020617; transition: background 0.3s;}
+
+        /* ================= TEMA CLARO ================= */
+        body.light-mode {
+            background-color: #f8fafc;
+            color: #0f172a;
+            color-scheme: light;
+        }
+        body.light-mode .app-loader { background: #f8fafc; }
+        body.light-mode .bg-slate-950 { background-color: #f8fafc !important; }
+        body.light-mode .bg-slate-900 { background-color: #ffffff !important; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        body.light-mode .bg-slate-800 { background-color: #f1f5f9 !important; color: #334155 !important; }
+        body.light-mode .border-slate-800 { border-color: #e2e8f0 !important; }
+        body.light-mode .border-slate-700 { border-color: #cbd5e1 !important; }
+        body.light-mode .text-slate-400 { color: #64748b !important; }
+        body.light-mode .text-slate-300 { color: #475569 !important; }
+        body.light-mode .text-white { color: #0f172a !important; }
+        
+        /* Proteger textos de botones de colores en modo claro */
+        body.light-mode .bg-blue-600.text-white,
+        body.light-mode .bg-emerald-600.text-white,
+        body.light-mode .bg-indigo-600.text-white,
+        body.light-mode .bg-slate-700.text-slate-300,
+        body.light-mode .bg-slate-800.text-white {
+            color: #ffffff !important;
+        }
+        body.light-mode .bg-slate-700 { background-color: #cbd5e1 !important; }
+        
+        body.light-mode .glass-panel { background: rgba(255, 255, 255, 0.9) !important; border: 1px solid rgba(226, 232, 240, 0.8) !important; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05) !important; }
+        
+        body.light-mode input, body.light-mode select, body.light-mode textarea {
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            border-color: #cbd5e1 !important;
+        }
+        body.light-mode input::placeholder, body.light-mode textarea::placeholder {
+            color: #94a3b8 !important;
+        }
+        body.light-mode .hover\:bg-slate-800:hover { background-color: #e2e8f0 !important; }
+        body.light-mode .hover\:border-slate-600:hover { border-color: #94a3b8 !important; }
+        /* ================================================= */
+
     </style>
 </head>
 <body class="antialiased selection:bg-amber-500/30 selection:text-amber-200" translate="no">
@@ -112,6 +164,9 @@
           const [isIOS, setIsIOS] = useState(false);
           const [showInstallHelp, setShowInstallHelp] = useState(false);
 
+          // ESTADO DEL TEMA (Claro/Oscuro)
+          const [theme, setTheme] = useState(localStorage.getItem('bramaq-theme') || 'dark');
+
           const [hasEntered, setHasEntered] = useState(false);
           const [selectedRole, setSelectedRole] = useState('');
           const [selectedSupName, setSelectedSupName] = useState('');
@@ -128,15 +183,12 @@
           const [currentEmployee, setCurrentEmployee] = useState(null);
           const [formError, setFormError] = useState('');
           
-          // Estados para Modo Manual en Desplegables
           const [isCustomCargo, setIsCustomCargo] = useState(false);
           const [isCustomCity, setIsCustomCity] = useState(false);
           
           const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
           const [selectedEmpForHistory, setSelectedEmpForHistory] = useState(null);
           const [isGlobalHistoryOpen, setIsGlobalHistoryOpen] = useState(false);
-          
-          // FILTROS AVANZADOS DE FECHA PARA BITÁCORA GLOBAL
           const [filterStartDate, setFilterStartDate] = useState('');
           const [filterEndDate, setFilterEndDate] = useState('');
 
@@ -151,6 +203,13 @@
             tipo: 'Licencia Médica', modoFechas: 'unica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
             customTipo: '', nota: '', archivos: []
           });
+
+          // EFECTO TEMA
+          useEffect(() => {
+              if (theme === 'light') { document.body.classList.add('light-mode'); } 
+              else { document.body.classList.remove('light-mode'); }
+              localStorage.setItem('bramaq-theme', theme);
+          }, [theme]);
 
           useEffect(() => {
               const loader = document.getElementById('loader-estatico');
@@ -181,7 +240,6 @@
             window.addEventListener('online', on); window.addEventListener('offline', off);
             
             if (!db) return; 
-            
             setLoading(true);
             const unsub = db.collection('employees').onSnapshot(snap => {
               const items = [];
@@ -193,7 +251,7 @@
             return () => { unsub(); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
           }, []);
 
-          // LISTAS DINÁMICAS EXTRÁIDAS DE LA BASE DE DATOS
+          // LISTAS DINÁMICAS
           const cargosList = useMemo(() => {
             const cargos = new Set(['OPERADOR CARGADOR FRONTAL', 'OPERADOR GRUA HORQUILLA', 'SUPERVISOR TURNO', 'MECANICO FAENA', 'ADMINISTRATIVO FAENA', 'ADMINISTRADOR DE CONTRATO', 'PREVENCIONISTA DE RIESGOS']);
             employees.forEach(e => { if(e.cargo) cargos.add(String(e.cargo).trim().toUpperCase()); });
@@ -279,7 +337,6 @@
             }
           };
 
-          // IMPORTACIÓN INTELIGENTE DE EXCEL
           const fileInputRef = useRef(null);
           const logFileRef = useRef(null);
 
@@ -302,7 +359,7 @@
                   let addedCount = 0; let duplicateCount = 0;
                   let existingRuts = new Set(employees.map(emp => cleanRut(emp.rut)));
                   
-                  if (confirm(`Se detectaron ${jsonSheet.length} filas.\nSe omitirán automáticamente los duplicados por RUT.\n¿Proceder?`)) {
+                  if (confirm(`Se detectaron ${jsonSheet.length} filas.\nSe omitirán duplicados por RUT.\n¿Proceder?`)) {
                     for (let row of jsonSheet) {
                       const keys = Object.keys(row);
                       const findVal = (terms) => {
@@ -356,7 +413,6 @@
             if (confirm("⚠️ ¿Eliminar permanentemente este trabajador y toda su hoja de vida?")) await db.collection('employees').doc(id).delete();
           };
 
-          // MULTIARCHIVO BITÁCORA SEGURO EN BASE64
           const handleLogFileChange = (e) => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
@@ -501,26 +557,20 @@
 
           const filteredGlobalLogs = useMemo(() => {
               let filtered = allGlobalLogs;
-              if (filterStartDate) {
-                  filtered = filtered.filter(log => log.fechaInicio >= filterStartDate);
-              }
-              if (filterEndDate) {
-                  filtered = filtered.filter(log => log.fechaInicio <= filterEndDate);
-              }
+              if (filterStartDate) { filtered = filtered.filter(log => log.fechaInicio >= filterStartDate); }
+              if (filterEndDate) { filtered = filtered.filter(log => log.fechaInicio <= filterEndDate); }
               return filtered;
           }, [allGlobalLogs, filterStartDate, filterEndDate]);
 
-          // DESCARGA EXCEL GLOBAL (RESPETANDO FILTRO DE FECHAS)
           const handleDownloadGlobalLogsExcel = () => {
             try {
-              if (filteredGlobalLogs.length === 0) { alert("No hay observaciones en este rango de fechas."); return; }
+              if (filteredGlobalLogs.length === 0) { alert("No hay observaciones en este rango."); return; }
               let logs = filteredGlobalLogs.map(h => ({
                 "RUT": h.empleadoRut || '', "Trabajador": h.empleadoNombre || '', "Cargo": h.empleadoCargo || '', "Tipo Evento": h.tipo || '',
                 "Fecha": h.modoFechas === 'rango' ? `${h.fechaInicio || ''} a ${h.fechaTermino || ''}` : (h.fechaInicio || ''),
                 "Observación": h.nota || '', "Autor": h.autor || '', "Perfil": h.rolAutor || '',
                 "Tiene Archivos": h.archivos?.length > 0 ? "SÍ" : "NO"
               }));
-              
               const ws = XLSX.utils.json_to_sheet(logs);
               const wb = XLSX.utils.book_new();
               XLSX.utils.book_append_sheet(wb, ws, "Bitacora Global");
@@ -528,10 +578,18 @@
             } catch (error) { alert("Error: " + error.message); }
           };
 
-          // PANTALLA LOGIN OBLIGATORIA
+          // PANTALLA LOGIN
           if (!hasEntered) {
             return (
-              <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+              <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative">
+                
+                {/* BOTÓN TEMA CLARO/OSCURO LOGIN */}
+                <div className="absolute top-4 right-4 sm:top-6 sm:right-6">
+                    <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2.5 rounded-full bg-slate-800 text-amber-500 hover:bg-slate-700 transition-colors shadow-lg border border-slate-700" title={`Cambiar a Tema ${theme === 'dark' ? 'Claro' : 'Oscuro'}`}>
+                        <Ico i={theme === 'dark' ? 'sun' : 'moon'} c="w-5 h-5" />
+                    </button>
+                </div>
+
                 <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-md shadow-2xl flex flex-col items-center fade-in">
                   <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center text-slate-950 mb-4"><Ico i="shield-check" c="w-10 h-10" /></div>
                   <h1 className="text-xl font-extrabold text-white">Gestor de Dotación</h1>
@@ -567,7 +625,7 @@
                     {showInstallHelp && (
                       <div className="w-full py-3 px-4 rounded-xl text-xs text-slate-300 border border-slate-800 bg-slate-950 text-center fade-in mt-2">
                         {isIOS ? "En iPhone: Toca 'Compartir' (icono con flecha) y selecciona 'Agregar a inicio'." : "En el menú de tu navegador, selecciona 'Instalar aplicación'."}
-                        <br/><button onClick={()=>setShowInstallHelp(false)} className="text-[10px] text-slate-500 mt-2 underline">Cerrar</button>
+                        <br/><button onClick={()=>setShowInstallHelp(false)} className="text-[10px] text-slate-500 mt-2 underline cursor-pointer">Cerrar</button>
                       </div>
                     )}
                   </div>
@@ -576,7 +634,7 @@
             );
           }
 
-          // APLICACIÓN PRINCIPAL (GERENCIAL Y OPERATIVA)
+          // APLICACIÓN PRINCIPAL
           return (
             <div className="flex h-screen overflow-hidden bg-slate-950">
               {/* Sidebar Desktop */}
@@ -599,7 +657,11 @@
                       <strong className="text-amber-400 block truncate">{userSession.autor}</strong>
                       <span>{userSession.rol}</span>
                     </div>
-                    {/* BOTÓN CERRAR SESIÓN DESKTOP */}
+                    
+                    {/* BOTONES INFERIORES DESKTOP */}
+                    <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="w-full bg-slate-800 hover:bg-slate-700 text-amber-500 border border-slate-700 py-2.5 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2 mb-2">
+                      <Ico i={theme === 'dark' ? 'sun' : 'moon'} c="w-4 h-4" /> Tema {theme === 'dark' ? 'Claro' : 'Oscuro'}
+                    </button>
                     <button onClick={() => setHasEntered(false)} className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 py-2.5 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2">
                       <Ico i="log-out" c="w-4 h-4" /> Cambiar Perfil / Salir
                     </button>
@@ -611,9 +673,9 @@
                 {/* Header Mobile */}
                 <header className="lg:hidden h-16 flex items-center justify-between px-4 bg-slate-900 border-b border-slate-800 z-30">
                   <div className="flex items-center gap-2 text-white font-bold"><Ico i="hard-hat" c="text-amber-500 w-5 h-5" /> BRAMAQ</div>
-                  <div className="flex items-center gap-3">
-                    <span className={`w-2 h-2 rounded-full ${onlineStatus ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
-                    {/* BOTÓN CERRAR SESIÓN MOBILE */}
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 bg-slate-800 text-amber-500 rounded-lg border border-slate-700 mr-1"><Ico i={theme === 'dark' ? 'sun' : 'moon'} c="w-4 h-4" /></button>
+                    <span className={`w-2 h-2 rounded-full mr-1 ${onlineStatus ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
                     <button onClick={() => setHasEntered(false)} className="text-[10px] bg-red-500/10 text-red-400 px-3 py-2 rounded-lg border border-red-500/20 flex items-center gap-1.5 font-bold transition-colors"><Ico i="log-out" c="w-3 h-3" /> Salir</button>
                   </div>
                 </header>
@@ -622,7 +684,7 @@
                   {loading ? <div className="text-center py-20 text-amber-500"><Ico i="loader-2" c="w-10 h-10 animate-spin mx-auto" /><p className="mt-2 text-xs text-slate-400">Sincronizando información en tiempo real...</p></div> : (
                     <div className="max-w-7xl mx-auto space-y-6 fade-in pb-20">
                       
-                      {/* ======================= DASHBOARD ======================= */}
+                      {/* DASHBOARD */}
                       {activeTab === 'dashboard' && (
                         <>
                           <h1 className="text-2xl font-extrabold text-white">Resumen Ejecutivo</h1>
@@ -682,7 +744,7 @@
                         </>
                       )}
 
-                      {/* ======================= DIRECTORIO DE DOTACIÓN ======================= */}
+                      {/* DIRECTORIO */}
                       {activeTab === 'directorio' && (
                         <>
                           <div className="glass-panel p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-3 sticky top-0 z-20 shadow-xl">
@@ -723,7 +785,7 @@
                           )}
 
                           <div className="space-y-3">
-                            {filtered.length === 0 && <div className="text-center bg-slate-900 border border-slate-800 rounded-2xl py-20"><Ico i="search-x" c="w-10 h-10 text-slate-600 mx-auto mb-2" /><p className="text-slate-500 text-sm mt-2">No se encontraron trabajadores con ese criterio.</p></div>}
+                            {filtered.length === 0 && <div className="text-center bg-slate-900 border border-slate-800 rounded-2xl py-20"><Ico i="search-x" c="w-10 h-10 text-slate-600 mx-auto mb-2" /><p className="text-slate-500 text-sm">No se encontraron trabajadores con ese criterio.</p></div>}
                             
                             {activeFilter === 'CON_BITACORA' && filtered.length > 0 && <div className="text-[10px] text-blue-400 bg-blue-500/10 p-2.5 rounded-lg border border-blue-500/20 font-bold flex items-center gap-1.5"><Ico i="filter" c="w-3.5 h-3.5" /> FILTRO ACTIVO: Mostrando únicamente trabajadores con observaciones en su Bitácora.</div>}
 
@@ -741,7 +803,7 @@
                                   <div className="text-[11px] text-slate-400 pl-15"><Ico i="map-pin" c="w-3 h-3 inline mr-1" /> {emp.ciudad || 'Sin Ciudad'} {emp.direccion ? `| ${emp.direccion} ${emp.numero ? '#'+emp.numero : ''}`.trim() : ''}</div>
                                 </div>
 
-                                {/* CONTACTOS Y ACCIONES RÁPIDAS */}
+                                {/* CONTACTOS */}
                                 <div className="flex-1 space-y-2 bg-slate-900/80 p-3 rounded-lg border border-slate-800 flex flex-col justify-center">
                                   {emp.telefono ? (
                                     <div className="flex items-center justify-between gap-1">
@@ -772,7 +834,7 @@
                                   ) : <div className="text-[10px] text-slate-500 italic py-1">Sin contacto de emergencia registrado</div>}
                                 </div>
 
-                                {/* ESTADOS Y BOTONES DE GESTIÓN CON TEXTO */}
+                                {/* ESTADOS Y BOTONES DE GESTIÓN */}
                                 <div className="flex flex-col justify-center gap-2 items-center lg:w-48 border-t border-slate-800 lg:border-none pt-3 lg:pt-0 shrink-0">
                                   {getMissingDataList(emp).length > 0 ? (
                                     <div className="bg-red-500/10 text-red-400 px-2 py-1 rounded text-[10px] font-bold border border-red-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="alert-circle" c="w-3 h-3" /> Faltan Datos</div>
@@ -842,7 +904,7 @@
                 </div>
               )}
 
-              {/* MODAL FICHA TRABAJADOR (CREAR/EDITAR) */}
+              {/* MODAL FICHA TRABAJADOR */}
               {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm fade-in overflow-y-auto">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl my-auto">
@@ -857,7 +919,7 @@
                           <div><label className="text-[10px] uppercase font-bold text-slate-500">Nombre Completo *</label><input required value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1" placeholder="Ej: Juan Pérez"/></div>
                           <div><label className="text-[10px] uppercase font-bold text-slate-500">RUT *</label><input required value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-mono outline-none focus:border-amber-500 mt-1" placeholder="12.345.678-9"/></div>
                           
-                          {/* Selector Cargo Híbrido iOS */}
+                          {/* Selector Cargo iOS Seguro */}
                           <div>
                             <label className="text-[10px] uppercase font-bold text-slate-500">Cargo / Función *</label>
                             {!isCustomCargo ? (
@@ -867,7 +929,7 @@
                                   if (e.target.value === 'OTRO') { setIsCustomCargo(true); setFormData({...formData, cargo: ''}); } 
                                   else { setFormData({...formData, cargo: e.target.value}); }
                                 }}
-                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1 cursor-pointer appearance-none"
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1 cursor-pointer"
                               >
                                 <option value="" disabled>-- Seleccionar Cargo --</option>
                                 {cargosList.map(c => <option key={c} value={c}>{c}</option>)}
@@ -881,7 +943,7 @@
                             )}
                           </div>
                           
-                          {/* Selector Ciudad Híbrido iOS */}
+                          {/* Selector Ciudad iOS Seguro */}
                           <div>
                             <label className="text-[10px] uppercase font-bold text-slate-500">Ciudad Base *</label>
                             {!isCustomCity ? (
@@ -891,7 +953,7 @@
                                   if (e.target.value === 'OTRO') { setIsCustomCity(true); setFormData({...formData, ciudad: ''}); } 
                                   else { setFormData({...formData, ciudad: e.target.value}); }
                                 }}
-                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1 cursor-pointer appearance-none"
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1 cursor-pointer"
                               >
                                 <option value="" disabled>-- Seleccionar Ciudad --</option>
                                 {citiesList.map(c => <option key={c} value={c}>{c}</option>)}
@@ -905,7 +967,7 @@
                             )}
                           </div>
                           
-                          {/* Dirección separada en Calle y N° */}
+                          {/* Dirección */}
                           <div>
                             <label className="text-[10px] uppercase font-bold text-slate-500">Dirección Residencial</label>
                             <div className="flex gap-2 mt-1">
@@ -976,7 +1038,7 @@
                                       <div key={i} className="flex justify-between items-center bg-slate-950 p-2.5 rounded-lg border border-slate-800 group/file hover:border-slate-600">
                                         <a href={a.url} target="_blank" className="text-[10px] text-blue-400 truncate w-3/4 flex items-center hover:underline"><Ico i={a.tipo?.includes('image') ? 'image' : 'file-text'} c="w-3.5 h-3.5 mr-1.5 text-slate-500" /> {a.nombre}</a>
                                         {((userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') || userSession.autor === h.autor) && (
-                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo"><Ico i="trash-2" c="w-3.5 h-3.5" /></button>
+                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo de la base de datos"><Ico i="trash-2" c="w-3.5 h-3.5" /></button>
                                         )}
                                       </div>
                                     ))}
@@ -1001,7 +1063,7 @@
                         <form onSubmit={handleAddLog} className="space-y-4 flex-1 flex flex-col">
                           <div>
                             <label className="text-[9px] text-slate-500 uppercase font-bold mb-1.5 block">Categoría de Evento *</label>
-                            <select value={logForm.tipo} onChange={e=>setLogForm({...logForm, tipo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-500 cursor-pointer appearance-none">
+                            <select value={logForm.tipo} onChange={e=>setLogForm({...logForm, tipo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-500 cursor-pointer">
                               {(userSession.rol === 'Administrativo') && <option value="Licencia Médica">Licencia Médica</option>}
                               {(userSession.rol === 'Administrativo') && <option value="Extensión de Licencia">Extensión de Licencia</option>}
                               {(userSession.rol === 'Administrativo') && <option value="Enmendadura">Enmendadura de Asistencia</option>}
@@ -1053,21 +1115,21 @@
                 </div>
               )}
 
-              {/* MODAL HOJA GLOBAL (BITÁCORA MAESTRA) */}
+              {/* MODAL HOJA GLOBAL (FILTRO RANGO DE FECHAS) */}
               {isGlobalHistoryOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/90 backdrop-blur-sm fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl overflow-hidden">
                     
-                    {/* ENCABEZADO Y FILTRO DE FECHA AVANZADO */}
                     <div className="p-4 sm:p-5 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 rounded-t-3xl shrink-0">
                       <div className="flex items-center gap-3 w-full sm:w-auto justify-between">
                         <div className="flex items-center gap-3">
                           <div className="bg-indigo-500/20 p-2 rounded-xl text-indigo-400"><Ico i="file-clock" c="w-5 h-5" /></div>
-                          <div><h3 className="font-bold text-white text-base">Hoja de Vida Global</h3><p className="text-[10px] text-slate-400">Todos los eventos registrados.</p></div>
+                          <div><h3 className="font-bold text-white text-base">Hoja de Vida Global</h3><p className="text-[10px] text-slate-400">Auditoría de eventos operativos.</p></div>
                         </div>
                         <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg border border-slate-700 sm:hidden"><Ico i="x" c="w-4 h-4" /></button>
                       </div>
                       
+                      {/* FILTRO DE RANGO DE FECHAS INTELIGENTE */}
                       <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 w-full sm:w-auto overflow-x-auto">
                         <Ico i="calendar-search" c="w-4 h-4 text-amber-500 shrink-0" />
                         <span className="text-[9px] text-slate-500 uppercase font-bold shrink-0">Desde:</span>
@@ -1078,6 +1140,7 @@
                             <button onClick={() => {setFilterStartDate(''); setFilterEndDate('');}} className="ml-1 text-red-400 bg-red-500/10 p-1 rounded shrink-0" title="Borrar Filtro de Fecha"><Ico i="x" c="w-3 h-3" /></button>
                         )}
                       </div>
+
                       <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg border border-slate-700 hidden sm:block shrink-0"><Ico i="x" c="w-4 h-4" /></button>
                     </div>
                     
