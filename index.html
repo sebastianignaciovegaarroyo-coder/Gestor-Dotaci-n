@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/Gestor-Dotaci-n/">
     
+    <!-- PWA & Mobile Optimization -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#020617">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -21,9 +22,9 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     
+    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
     
     <script>
       if ('serviceWorker' in navigator) {
@@ -45,6 +46,9 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         #root { min-height: 100vh; }
         .app-loader { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; color: #f59e0b; font-weight: bold; background: #020617; }
+        
+        /* Ajuste nativo para las listas desplegables (datalist) */
+        input::-webkit-calendar-picker-indicator { display: none !important; }
     </style>
 </head>
 <body class="antialiased selection:bg-amber-500/30 selection:text-amber-200" translate="no">
@@ -59,7 +63,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
         
-        // RENDERIZADOR DE ÍCONOS
         const Ico = ({ i, c, title }) => {
             const spanRef = useRef(null);
             useEffect(() => {
@@ -86,7 +89,7 @@
             }
         }
         
-        // CONFIGURACIÓN DE FIREBASE
+        // CONFIGURACIÓN CENTRAL FIREBASE
         const firebaseConfig = {
           apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9Vr69wJz2vA...",
           authDomain: "bramaqcloud.firebaseapp.com",
@@ -96,12 +99,11 @@
           appId: "1:369713509600:web:b6d878c..."
         };
 
-        let db, storage;
+        let db;
         try {
           if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();
           db.enablePersistence({ synchronizeTabs: true }).catch(() => console.warn('Caché offline limitada'));
-          try { storage = firebase.storage(); } catch(e) { storage = null; }
         } catch (e) { console.error("Error iniciando base de datos:", e); }
 
         function App() {
@@ -121,7 +123,6 @@
           const [searchTerm, setSearchTerm] = useState('');
           const [activeTab, setActiveTab] = useState('dashboard');
           const [activeFilter, setActiveFilter] = useState('TODOS');
-          const [citiesList, setCitiesList] = useState([]);
           
           const [isModalOpen, setIsModalOpen] = useState(false);
           const [currentEmployee, setCurrentEmployee] = useState(null);
@@ -133,9 +134,8 @@
           const [selectedPhone, setSelectedPhone] = useState(null);
           const [uploadingFiles, setUploadingFiles] = useState(false);
 
-          // CHECKLIST ELIMINADO DE LA ESTRUCTURA
           const [formData, setFormData] = useState({
-            nombre: '', rut: '', direccion: '', ciudad: '', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''
+            nombre: '', rut: '', direccion: '', numero: '', ciudad: '', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''
           });
 
           const [logForm, setLogForm] = useState({
@@ -172,17 +172,12 @@
             window.addEventListener('online', on); window.addEventListener('offline', off);
             
             if (!db) return; 
-            
             setLoading(true);
             const unsub = db.collection('employees').onSnapshot(snap => {
               const items = [];
-              const cities = new Set(['Valdivia', 'Loncoche', 'San José de la Mariquina', 'Lanco', 'Panguipulli']);
               snap.forEach(doc => {
-                const data = doc.data() || {};
-                items.push({ id: doc.id, ...data });
-                if (data.ciudad) cities.add(String(data.ciudad).trim());
+                items.push({ id: doc.id, ...doc.data() });
               });
-              setCitiesList(Array.from(cities).sort());
               setEmployees(items); 
               setLoading(false);
             }, (error) => { console.error("Error DB:", error); setLoading(false); });
@@ -190,8 +185,19 @@
             return () => { unsub(); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
           }, []);
 
+          // LISTAS DINÁMICAS (Para Datalist en Ficha)
           const supervisorsList = useMemo(() => {
             return employees.filter(e => String(e.cargo || '').toUpperCase().includes('SUPERVISOR')).map(e => String(e.nombre || 'Sin Nombre')).sort();
+          }, [employees]);
+
+          const cargosList = useMemo(() => {
+            const cargos = new Set(employees.map(e => String(e.cargo || '').trim()).filter(c => c !== ''));
+            return Array.from(cargos).sort();
+          }, [employees]);
+
+          const citiesList = useMemo(() => {
+            const cities = new Set(employees.map(e => String(e.ciudad || '').trim()).filter(c => c !== ''));
+            return Array.from(cities).sort();
           }, [employees]);
 
           const handleEnterApp = () => {
@@ -225,16 +231,18 @@
                   ? emp.historial.map(h => `[${h.fechaInicio || ''}] ${h.tipo || ''}: ${h.nota || ''}`).join(" | ") 
                   : "Sin registros";
                 
+                const dirCompleta = emp.direccion ? `${emp.direccion} ${emp.numero ? '#'+emp.numero : ''}`.trim() : "";
+
                 const row = {
                   "RUT": emp.rut || "", "Nombre": emp.nombre || "", "Cargo": emp.cargo || "", "Ciudad": emp.ciudad || "",
-                  "Dirección": emp.direccion || "", "Teléfono": emp.telefono ? normalizePhone(emp.telefono) : "",
+                  "Dirección Completa": dirCompleta, "Teléfono": emp.telefono ? normalizePhone(emp.telefono) : "",
                   "Correo": emp.correo || "", "Contacto Emergencia": emp.emergenciaNombre || "",
                   "Teléfono Emergencia": emp.emergenciaFono ? normalizePhone(emp.emergenciaFono) : "",
                   "Historial (Bitácora)": historialTxt
                 };
                 
                 Object.keys(emp).forEach(key => {
-                  if (!['id', 'historial', 'documentos', 'rut', 'nombre', 'cargo', 'ciudad', 'direccion', 'telefono', 'correo', 'emergenciaNombre', 'emergenciaFono'].includes(key)) {
+                  if (!['id', 'historial', 'rut', 'nombre', 'cargo', 'ciudad', 'direccion', 'numero', 'telefono', 'correo', 'emergenciaNombre', 'emergenciaFono'].includes(key)) {
                     row[key] = emp[key];
                   }
                 });
@@ -317,7 +325,7 @@
                         } return '';
                       };
                       
-                      const nombre = findVal(['nombre']); const rut = findVal(['rut']); const direccion = findVal(['direccion', 'domicilio']); const ciudad = findVal(['ciudad', 'comuna']) || 'Valdivia'; const cargo = findVal(['cargo', 'funcion']); const telefono = findVal(['telefon', 'fono', 'celular']); const correo = findVal(['correo', 'email']); const emergenciaNombre = findVal(['emergencia nom', 'contacto emer']); const emergenciaFono = findVal(['emergencia fono', 'emergencia tel']);
+                      const nombre = findVal(['nombre']); const rut = findVal(['rut']); const direccion = findVal(['direccion', 'calle', 'domicilio']); const numero = findVal(['numero', 'num']); const ciudad = findVal(['ciudad', 'comuna']); const cargo = findVal(['cargo', 'funcion']); const telefono = findVal(['telefon', 'fono', 'celular']); const correo = findVal(['correo', 'email']); const emergenciaNombre = findVal(['emergencia nom', 'contacto emer']); const emergenciaFono = findVal(['emergencia fono', 'emergencia tel']);
                       const cRut = cleanRut(rut);
                       
                       if ((nombre || rut) && cRut) {
@@ -325,13 +333,13 @@
                           let extras = {};
                           keys.forEach(k => {
                             const kl = String(k).toLowerCase();
-                            if (!kl.includes('nombre') && !kl.includes('rut') && !kl.includes('direccion') && !kl.includes('ciudad') && !kl.includes('cargo') && !kl.includes('telefon') && !kl.includes('correo') && !kl.includes('emergencia')) {
+                            if (!kl.includes('nombre') && !kl.includes('rut') && !kl.includes('direccion') && !kl.includes('numero') && !kl.includes('ciudad') && !kl.includes('cargo') && !kl.includes('telefon') && !kl.includes('correo') && !kl.includes('emergencia')) {
                               if (row[k]) extras[k] = row[k];
                             }
                           });
 
                           await db.collection('employees').add({
-                            nombre: nombre || 'Sin Nombre', rut: rut, direccion: direccion, ciudad: ciudad, cargo: cargo || 'OPERADOR', telefono: telefono, correo: correo, emergenciaNombre: emergenciaNombre, emergenciaFono: emergenciaFono,
+                            nombre: nombre || 'Sin Nombre', rut: rut, direccion: direccion, numero: numero, ciudad: ciudad || 'Valdivia', cargo: cargo || 'OPERADOR', telefono: telefono, correo: correo, emergenciaNombre: emergenciaNombre, emergenciaFono: emergenciaFono,
                             historial: [], ...extras
                           });
                           existingRuts.add(cRut); addedCount++;
@@ -361,6 +369,7 @@
             if (confirm("⚠️ ¿Eliminar permanentemente este trabajador y toda su hoja de vida?")) await db.collection('employees').doc(id).delete();
           };
 
+          // MULTIARCHIVO BITÁCORA SEGURO EN BASE64
           const handleLogFileChange = (e) => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
@@ -405,17 +414,17 @@
             try {
               const finalFiles = [];
               for (const item of logForm.archivos) {
-                 if(storage) {
-                     const path = `bitacora/${selectedEmpForHistory.id}/${Date.now()}_${item.nombre}`;
-                     const ref = storage.ref(path);
-                     await ref.put(item.fileObj);
-                     const url = await ref.getDownloadURL();
-                     finalFiles.push({ nombre: item.nombre, tipo: item.tipo, url: url, path: path });
-                 } else {
-                     const reader = new FileReader();
-                     const url = await new Promise((res) => { reader.onload = (ev) => res(ev.target.result); reader.readAsDataURL(item.fileObj); });
-                     finalFiles.push({ nombre: item.nombre, tipo: item.tipo, url: url });
+                 // Validamos el tamaño para que Firebase Firestore no colapse (Límite max 1MB por documento)
+                 if (item.fileObj.size > 800000) {
+                     throw new Error(`El archivo "${item.nombre}" es muy pesado. El límite permitido es 800KB para guardar de forma fluida.`);
                  }
+                 const url = await new Promise((resolve, reject) => {
+                     const reader = new FileReader();
+                     reader.onload = (ev) => resolve(ev.target.result);
+                     reader.onerror = (err) => reject(err);
+                     reader.readAsDataURL(item.fileObj);
+                 });
+                 finalFiles.push({ nombre: item.nombre, tipo: item.tipo, url: url });
               }
 
               const logEntry = {
@@ -432,15 +441,19 @@
               setLogForm({ tipo: 'Licencia Médica', modoFechas: 'unica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0], customTipo: '', nota: '', archivos: [] });
               setUploadingFiles(false);
             } catch (error) { 
-              alert("Error guardando observación: " + error.message); 
+              alert(error.message); 
               setUploadingFiles(false); 
             }
           };
 
+          // RADAR DE INFORMACIÓN FALTANTE
           const getMissingDataList = (emp) => {
             let missing = [];
-            // Ya no se evalúa documentación aquí
+            if (!emp.cargo) missing.push("Cargo");
+            if (!emp.ciudad) missing.push("Ciudad");
+            if (!emp.direccion) missing.push("Dirección");
             if (!emp.telefono) missing.push("Teléfono");
+            if (!emp.correo) missing.push("Correo");
             if (!emp.emergenciaNombre || !emp.emergenciaFono) missing.push("Emergencia");
             return missing;
           };
@@ -508,7 +521,7 @@
 
                   <div className="w-full space-y-4">
                     <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Seleccione Rol de Ingreso</label>
-                    <select value={selectedRole} onChange={e => { setSelectedRole(e.target.value); setSelectedSupName(''); }} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-amber-400 font-bold outline-none focus:border-amber-500">
+                    <select value={selectedRole} onChange={e => { setSelectedRole(e.target.value); setSelectedSupName(''); }} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-amber-400 font-bold outline-none focus:border-amber-500 cursor-pointer">
                       <option value="" disabled>-- Perfil Operativo --</option>
                       <option value="Administrativo">Administrativo / RRHH</option>
                       <option value="AdminContrato">Administrador de Contrato</option>
@@ -519,19 +532,19 @@
                     {selectedRole === 'Supervisor' && (
                       <div className="fade-in">
                         <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1 mt-2">Identificación de Supervisor</label>
-                        <select value={selectedSupName} onChange={e => setSelectedSupName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 outline-none focus:border-amber-500">
+                        <select value={selectedSupName} onChange={e => setSelectedSupName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 outline-none focus:border-amber-500 cursor-pointer">
                           <option value="" disabled>-- Nombre del Supervisor --</option>
                           {supervisorsList.map(name => <option key={name} value={name}>{name}</option>)}
                         </select>
                       </div>
                     )}
 
-                    <button disabled={!selectedRole || (selectedRole === 'Supervisor' && !selectedSupName)} onClick={handleEnterApp} className={`w-full py-3.5 rounded-xl font-bold text-sm mt-4 ${(!selectedRole || (selectedRole === 'Supervisor' && !selectedSupName)) ? 'bg-slate-800 text-slate-500' : 'bg-amber-500 text-slate-950 hover:bg-amber-400'}`}>
+                    <button disabled={!selectedRole || (selectedRole === 'Supervisor' && !selectedSupName)} onClick={handleEnterApp} className={`w-full py-3.5 rounded-xl font-bold text-sm mt-4 transition-colors ${(!selectedRole || (selectedRole === 'Supervisor' && !selectedSupName)) ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]'}`}>
                       ACCEDER AL SISTEMA
                     </button>
 
                     {isInstallable && (
-                      <button onClick={handleInstallClick} className="w-full py-3 mt-2 rounded-xl font-bold text-xs text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-2 hover:bg-emerald-500/10"><Ico i="download-cloud" c="w-4 h-4" /> Instalar Aplicación</button>
+                      <button onClick={handleInstallClick} className="w-full py-3 mt-2 rounded-xl font-bold text-xs text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-2 hover:bg-emerald-500/10 transition-colors"><Ico i="download-cloud" c="w-4 h-4" /> Instalar Aplicación</button>
                     )}
                     {showInstallHelp && (
                       <div className="w-full py-3 px-4 rounded-xl text-xs text-slate-300 border border-slate-800 bg-slate-950 text-center fade-in mt-2">
@@ -596,11 +609,11 @@
                         <>
                           <h1 className="text-2xl font-extrabold text-white">Resumen Ejecutivo</h1>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <div onClick={() => { setActiveFilter('TODOS'); setActiveTab('directorio'); }} className="glass-panel p-5 rounded-2xl cursor-pointer hover:border-amber-500/50">
+                            <div onClick={() => { setActiveFilter('TODOS'); setActiveTab('directorio'); }} className="glass-panel p-5 rounded-2xl cursor-pointer hover:border-amber-500/50 transition-colors">
                               <p className="text-slate-400 text-[10px] font-bold uppercase">Dotación Total</p>
                               <h3 className="text-3xl font-extrabold text-white mt-1">{kpis.total}</h3>
                             </div>
-                            <div onClick={() => { setActiveFilter('INCOMPLETOS'); setActiveTab('directorio'); }} className="glass-panel p-5 rounded-2xl cursor-pointer hover:border-red-500/50">
+                            <div onClick={() => { setActiveFilter('INCOMPLETOS'); setActiveTab('directorio'); }} className="glass-panel p-5 rounded-2xl cursor-pointer hover:border-red-500/50 transition-colors">
                               <p className="text-red-400 text-[10px] font-bold uppercase">Información Faltante</p>
                               <h3 className="text-3xl font-extrabold text-red-400 mt-1">{kpis.incompletos}</h3>
                             </div>
@@ -625,7 +638,7 @@
                               { label: 'Frontales', val: kpis.cargadorFrontal, filter: 'CARGADOR_FRONTAL', icon: 'box', color: 'text-yellow-400' },
                               { label: 'Mecánicos', val: kpis.mecanicos, filter: 'MECANICOS', icon: 'wrench', color: 'text-stone-400' }
                             ].map(item => item.val > 0 && (
-                              <div key={item.label} onClick={() => { setActiveFilter(item.filter); setActiveTab('directorio'); }} className="glass-panel p-4 rounded-xl cursor-pointer text-center hover:bg-slate-800">
+                              <div key={item.label} onClick={() => { setActiveFilter(item.filter); setActiveTab('directorio'); }} className="glass-panel p-4 rounded-xl cursor-pointer text-center hover:bg-slate-800 transition-colors">
                                 <Ico i={item.icon} c={`w-5 h-5 mx-auto mb-1 ${item.color}`} />
                                 <div className="text-[9px] text-slate-400 font-bold uppercase">{item.label}</div>
                                 <div className={`text-xl font-extrabold ${item.color}`}>{item.val}</div>
@@ -637,7 +650,7 @@
                             <h3 className="font-bold text-white mb-4 text-sm">Distribución por Ciudad (Operaciones)</h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               {citiesList.map(city => kpis.porCiudad[city] > 0 && (
-                                <div key={city} onClick={() => { setActiveFilter(city); setActiveTab('directorio'); }} className="cursor-pointer hover:opacity-80">
+                                <div key={city} onClick={() => { setActiveFilter(city); setActiveTab('directorio'); }} className="cursor-pointer hover:opacity-80 transition-opacity">
                                   <div className="flex justify-between text-xs mb-1 text-slate-300"><span>{city}</span><span className="font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800">{kpis.porCiudad[city]} Pers.</span></div>
                                   <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden"><div className="bg-amber-500 h-full" style={{ width: `${(kpis.porCiudad[city] / kpis.total) * 100}%` }}></div></div>
                                 </div>
@@ -654,29 +667,29 @@
                             <div className="flex items-center gap-2 w-full md:w-auto flex-1">
                               <div className="relative w-full max-w-md">
                                 <Ico i="search" c="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-                                <input type="text" placeholder="Buscar empleado por nombre, RUT, cargo o ciudad..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-950 border border-slate-700 text-white text-sm rounded-lg pl-9 pr-3 py-2 outline-none focus:border-amber-500" />
+                                <input type="text" placeholder="Buscar empleado por nombre, RUT, cargo o ciudad..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-950 border border-slate-700 text-white text-sm rounded-lg pl-9 pr-3 py-2 outline-none focus:border-amber-500 transition-colors" />
                               </div>
-                              {activeFilter !== 'TODOS' && <button onClick={() => setActiveFilter('TODOS')} className="bg-amber-500/10 border border-amber-500/20 text-amber-400 px-3 py-2 rounded-lg text-[10px] font-bold shrink-0 uppercase tracking-widest">Limpiar Filtros</button>}
+                              {activeFilter !== 'TODOS' && <button onClick={() => setActiveFilter('TODOS')} className="bg-amber-500/10 border border-amber-500/20 text-amber-400 px-3 py-2 rounded-lg text-[10px] font-bold shrink-0 uppercase tracking-widest hover:bg-amber-500/20 transition-colors">Limpiar Filtros</button>}
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-                              <button onClick={() => setIsGlobalHistoryOpen(true)} className="bg-indigo-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:bg-indigo-500"><Ico i="file-clock" c="w-4 h-4" /> Hoja Global</button>
-                              <button onClick={handleDownloadExcel} className="bg-emerald-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-500"><Ico i="download" c="w-4 h-4" /> Exportar Base</button>
+                              <button onClick={() => setIsGlobalHistoryOpen(true)} className="bg-indigo-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:bg-indigo-500 transition-colors"><Ico i="file-clock" c="w-4 h-4" /> Hoja Global</button>
+                              <button onClick={handleDownloadExcel} className="bg-emerald-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-500 transition-colors"><Ico i="download" c="w-4 h-4" /> Exportar Base</button>
                               
                               {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
                                 <>
                                   <input type="file" ref={fileInputRef} onChange={handleUploadExcel} accept=".xlsx, .xls, .csv" className="hidden" />
-                                  <button onClick={() => fileInputRef.current.click()} className="bg-slate-800 border border-slate-700 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:bg-slate-700"><Ico i="upload" c="w-4 h-4" /> Importar Excel</button>
+                                  <button onClick={() => fileInputRef.current.click()} className="bg-slate-800 border border-slate-700 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:bg-slate-700 transition-colors"><Ico i="upload" c="w-4 h-4" /> Importar Excel</button>
                                 </>
                               )}
                               
-                              <button onClick={() => { setCurrentEmployee(null); setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0] || 'Valdivia', cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''}); setIsModalOpen(true); }} className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-1.5 shadow-lg"><Ico i="user-plus" c="w-4 h-4" /> Crear Ficha</button>
+                              <button onClick={() => { setCurrentEmployee(null); setFormData({nombre: '', rut: '', direccion: '', numero: '', ciudad: '', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''}); setIsModalOpen(true); }} className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-colors"><Ico i="user-plus" c="w-4 h-4" /> Crear Ficha</button>
                             </div>
                           </div>
 
                           {(userSession.rol === 'Administrativo') && (
                             <div className="flex justify-end">
-                              <button onClick={handleDeleteAllData} className="text-[10px] text-red-500 font-bold flex items-center gap-1 bg-red-500/10 border border-red-500/20 px-2 py-1 rounded hover:bg-red-500/20"><Ico i="alert-triangle" c="w-3 h-3" /> VACIAR TODA LA BASE DE DATOS</button>
+                              <button onClick={handleDeleteAllData} className="text-[10px] text-red-500 font-bold flex items-center gap-1 bg-red-500/10 border border-red-500/20 px-2 py-1 rounded hover:bg-red-500/20 transition-colors"><Ico i="alert-triangle" c="w-3 h-3" /> VACIAR TODA LA BASE DE DATOS</button>
                             </div>
                           )}
 
@@ -694,16 +707,16 @@
                                     </div>
                                   </div>
                                   <div className="text-xs text-amber-400 font-bold mb-1 pl-15"><Ico i="briefcase" c="w-3 h-3 inline mr-1" /> {emp.cargo || 'Sin Cargo Definido'}</div>
-                                  <div className="text-[11px] text-slate-400 pl-15"><Ico i="map-pin" c="w-3 h-3 inline mr-1" /> {emp.ciudad || 'Sin Ciudad'} {emp.direccion ? `| ${emp.direccion}` : ''}</div>
+                                  <div className="text-[11px] text-slate-400 pl-15"><Ico i="map-pin" c="w-3 h-3 inline mr-1" /> {emp.ciudad || 'Sin Ciudad'} {emp.direccion ? `| ${emp.direccion} ${emp.numero ? '#'+emp.numero : ''}`.trim() : ''}</div>
                                 </div>
 
-                                {/* CONTACTOS Y ACCIONES RÁPIDAS (LLAMADA, WA, SMS) */}
+                                {/* CONTACTOS Y ACCIONES RÁPIDAS */}
                                 <div className="flex-1 space-y-2 bg-slate-900/80 p-3 rounded-lg border border-slate-800 flex flex-col justify-center">
                                   {emp.telefono ? (
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex flex-col">
+                                    <div className="flex items-center justify-between gap-1">
+                                      <div className="flex flex-col truncate pr-2">
                                         <span className="text-[9px] text-slate-500 uppercase font-bold">Teléfono Personal</span>
-                                        <button onClick={()=>setSelectedPhone(normalizePhone(emp.telefono))} className="text-xs text-slate-200 font-mono hover:text-amber-400 text-left truncate"><Ico i="smartphone" c="w-3 h-3 inline text-slate-500 mr-1" />{normalizePhone(emp.telefono)}</button>
+                                        <button onClick={()=>setSelectedPhone(normalizePhone(emp.telefono))} className="text-xs text-slate-200 font-mono hover:text-amber-400 text-left truncate transition-colors"><Ico i="smartphone" c="w-3 h-3 inline text-slate-500 mr-1" />{normalizePhone(emp.telefono)}</button>
                                       </div>
                                       <div className="flex gap-1.5 shrink-0">
                                         <a href={`tel:${normalizePhone(emp.telefono).replace('+', '')}`} className="bg-blue-600/20 text-blue-400 border border-blue-500/20 px-2 py-1.5 rounded hover:bg-blue-600/40 flex items-center gap-1.5 transition-colors" title="Llamar"><Ico i="phone" c="w-3.5 h-3.5" /><span className="text-[10px] font-bold hidden sm:inline">Llamar</span></a>
@@ -716,10 +729,10 @@
                                   <div className="border-t border-slate-800 w-full my-1"></div>
 
                                   {emp.emergenciaFono ? (
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-1">
                                       <div className="flex flex-col truncate pr-2">
                                         <span className="text-[9px] text-red-400 uppercase font-bold">Aviso de Emergencia</span>
-                                        <button onClick={()=>setSelectedPhone(normalizePhone(emp.emergenciaFono))} className="text-[11px] text-red-300 font-mono hover:text-red-400 text-left truncate">
+                                        <button onClick={()=>setSelectedPhone(normalizePhone(emp.emergenciaFono))} className="text-[11px] text-red-300 font-mono hover:text-red-400 text-left truncate transition-colors">
                                           <Ico i="shield-alert" c="w-3 h-3 inline text-red-500 mr-1" />{emp.emergenciaNombre}: {normalizePhone(emp.emergenciaFono)}
                                         </button>
                                       </div>
@@ -728,27 +741,29 @@
                                   ) : <div className="text-[10px] text-slate-500 italic py-1">Sin contacto de emergencia registrado</div>}
                                 </div>
 
-                                {/* BOTONES DE ACCIÓN PRINCIPAL (CON TEXTO) */}
+                                {/* BOTONES DE ACCIÓN PRINCIPAL */}
                                 <div className="flex flex-col justify-center gap-2 items-center lg:w-48 border-t border-slate-800 lg:border-none pt-3 lg:pt-0 shrink-0">
                                   {getMissingDataList(emp).length > 0 ? (
                                     <div className="bg-red-500/10 text-red-400 px-2 py-1 rounded text-[10px] font-bold border border-red-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="alert-circle" c="w-3 h-3" /> Faltan Datos</div>
                                   ) : (
-                                    <div className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-[10px] font-bold border border-emerald-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="check-circle" c="w-3 h-3" /> Contacto Completo</div>
+                                    <div className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-[10px] font-bold border border-emerald-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="check-circle" c="w-3 h-3" /> Perfil Completo</div>
                                   )}
                                   
-                                  <div className="flex gap-2 w-full mt-1">
-                                    <button onClick={() => { setSelectedEmpForHistory(emp); setIsHistoryModalOpen(true); }} className="bg-slate-800 border border-slate-700 py-2 px-2 rounded-lg text-amber-400 relative hover:bg-slate-700 flex-1 flex items-center justify-center gap-1.5 transition-colors" title="Abrir Bitácora y Observaciones">
-                                      <Ico i="book-open" c="w-4 h-4" />
-                                      <span className="text-[10px] font-bold">Bitácora</span>
+                                  <div className="flex gap-1.5 w-full mt-1">
+                                    <button onClick={() => { setSelectedEmpForHistory(emp); setIsHistoryModalOpen(true); }} className="bg-slate-800 border border-slate-700 py-1.5 px-2 rounded-lg text-amber-400 relative hover:bg-slate-700 flex-1 flex flex-col items-center justify-center transition-colors" title="Abrir Bitácora y Observaciones">
+                                      <div className="flex items-center gap-1.5">
+                                        <Ico i="book-open" c="w-4 h-4" />
+                                        <span className="text-[10px] font-bold">Bitácora</span>
+                                      </div>
                                       {emp.historial?.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-amber-500 text-black text-[9px] font-bold rounded-full flex items-center justify-center shadow-lg border border-slate-900">{emp.historial.length}</span>}
                                     </button>
                                   </div>
-                                  <div className="flex gap-2 w-full">
-                                    <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="bg-slate-800 border border-slate-700 py-2 px-2 rounded-lg text-white hover:bg-slate-700 flex-1 flex items-center justify-center gap-1.5 transition-colors" title="Editar Ficha">
+                                  <div className="flex gap-1.5 w-full">
+                                    <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="bg-slate-800 border border-slate-700 py-1.5 px-2 rounded-lg text-white hover:bg-slate-700 flex-1 flex items-center justify-center gap-1.5 transition-colors" title="Editar Ficha">
                                       <Ico i="edit-2" c="w-3.5 h-3.5" /><span className="text-[10px] font-bold">Editar</span>
                                     </button>
                                     {(userSession.rol === 'Administrativo') && (
-                                      <button onClick={() => handleDelete(emp.id)} className="bg-red-500/10 border border-red-500/20 text-red-500 py-2 px-2 rounded-lg hover:bg-red-500/20 flex-1 flex items-center justify-center gap-1.5 transition-colors" title="Eliminar Trabajador">
+                                      <button onClick={() => handleDelete(emp.id)} className="bg-red-500/10 border border-red-500/20 text-red-500 py-1.5 px-2 rounded-lg hover:bg-red-500/20 flex-1 flex items-center justify-center gap-1.5 transition-colors" title="Eliminar Trabajador">
                                         <Ico i="trash" c="w-3.5 h-3.5" /><span className="text-[10px] font-bold">Eliminar</span>
                                       </button>
                                     )}
@@ -781,9 +796,9 @@
                     <h3 className="text-lg font-bold text-white mb-1">Comunicación Directa</h3>
                     <p className="text-xl font-mono text-amber-400 font-bold mb-6">{selectedPhone}</p>
                     <div className="space-y-3">
-                      <a href={`tel:${selectedPhone.replace('+', '')}`} className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20"><Ico i="phone" c="w-5 h-5" /> Llamada Telefónica</a>
-                      <a href={`https://wa.me/${selectedPhone.replace('+', '')}`} target="_blank" className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/20"><Ico i="message-circle" c="w-5 h-5" /> Enviar WhatsApp</a>
-                      <a href={`sms:${selectedPhone.replace('+', '')}`} className="w-full flex items-center justify-center gap-2 py-3 bg-slate-800 border border-slate-700 text-white rounded-xl text-sm font-bold"><Ico i="message-square" c="w-5 h-5" /> Mensaje de Texto (SMS)</a>
+                      <a href={`tel:${selectedPhone.replace('+', '')}`} className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-transform hover:scale-105"><Ico i="phone" c="w-5 h-5" /> Llamada Telefónica</a>
+                      <a href={`https://wa.me/${selectedPhone.replace('+', '')}`} target="_blank" className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/20 transition-transform hover:scale-105"><Ico i="message-circle" c="w-5 h-5" /> Enviar WhatsApp</a>
+                      <a href={`sms:${selectedPhone.replace('+', '')}`} className="w-full flex items-center justify-center gap-2 py-3 bg-slate-800 border border-slate-700 text-white rounded-xl text-sm font-bold transition-transform hover:scale-105"><Ico i="message-square" c="w-5 h-5" /> Mensaje de Texto (SMS)</a>
                     </div>
                   </div>
                 </div>
@@ -801,12 +816,30 @@
                       {formError && <div className="mb-4 text-xs text-red-400 bg-red-500/10 p-3 rounded border border-red-500/20 font-medium"><Ico i="alert-octagon" c="w-4 h-4 inline mr-1" />{formError}</div>}
                       <form id="employeeForm" onSubmit={handleSave} className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div><label className="text-[10px] uppercase font-bold text-slate-500">Nombre Completo *</label><input required value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" placeholder="Ej: Juan Pérez"/></div>
-                          <div><label className="text-[10px] uppercase font-bold text-slate-500">RUT *</label><input required value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-mono outline-none focus:border-amber-500" placeholder="12.345.678-9"/></div>
-                          <div><label className="text-[10px] uppercase font-bold text-slate-500">Cargo / Función</label><input value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" placeholder="OPERADOR..." /></div>
-                          <div><label className="text-[10px] uppercase font-bold text-slate-500">Ciudad Base</label><input value={formData.ciudad} onChange={e=>setFormData({...formData, ciudad:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" placeholder="Valdivia"/></div>
-                          <div><label className="text-[10px] uppercase font-bold text-slate-500">Dirección Residencial</label><input value={formData.direccion} onChange={e=>setFormData({...formData, direccion:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" /></div>
-                          <div><label className="text-[10px] uppercase font-bold text-slate-500">Correo Electrónico</label><input type="email" value={formData.correo} onChange={e=>setFormData({...formData, correo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" placeholder="usuario@correo.com" /></div>
+                          <div><label className="text-[10px] uppercase font-bold text-slate-500">Nombre Completo *</label><input required value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1" placeholder="Ej: Juan Pérez"/></div>
+                          <div><label className="text-[10px] uppercase font-bold text-slate-500">RUT *</label><input required value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-mono outline-none focus:border-amber-500 mt-1" placeholder="12.345.678-9"/></div>
+                          
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Cargo / Función</label>
+                            <input list="cargos-list" value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1" placeholder="Escriba o seleccione..." />
+                            <datalist id="cargos-list">{cargosList.map(c => <option key={c} value={c} />)}</datalist>
+                          </div>
+                          
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Ciudad Base</label>
+                            <input list="ciudades-list" value={formData.ciudad} onChange={e=>setFormData({...formData, ciudad:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1" placeholder="Escriba o seleccione..." />
+                            <datalist id="ciudades-list">{citiesList.map(c => <option key={c} value={c} />)}</datalist>
+                          </div>
+                          
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Dirección Residencial</label>
+                            <div className="flex gap-2 mt-1">
+                               <input value={formData.direccion} onChange={e=>setFormData({...formData, direccion:e.target.value})} className="w-2/3 bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" placeholder="Calle / Pasaje" />
+                               <input value={formData.numero} onChange={e=>setFormData({...formData, numero:e.target.value})} className="w-1/3 bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" placeholder="N° / Depto" />
+                            </div>
+                          </div>
+                          
+                          <div><label className="text-[10px] uppercase font-bold text-slate-500">Correo Electrónico</label><input type="email" value={formData.correo} onChange={e=>setFormData({...formData, correo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1" placeholder="usuario@correo.com" /></div>
                         </div>
 
                         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
@@ -818,7 +851,7 @@
                           <div className="sm:col-span-2 border-t border-slate-800 my-1"></div>
                           <div>
                             <label className="text-[10px] uppercase font-bold text-red-400"><Ico i="shield-alert" c="w-3 h-3 inline mr-1" />Familiar de Emergencia</label>
-                            <input value={formData.emergenciaNombre} onChange={e=>setFormData({...formData, emergenciaNombre:e.target.value})} placeholder="Nombre..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white mt-1 outline-none focus:border-red-500" />
+                            <input value={formData.emergenciaNombre} onChange={e=>setFormData({...formData, emergenciaNombre:e.target.value})} placeholder="Nombre del familiar..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white mt-1 outline-none focus:border-red-500" />
                           </div>
                           <div>
                             <label className="text-[10px] uppercase font-bold text-red-400">Teléfono Emergencia</label>
@@ -827,8 +860,8 @@
                         </div>
 
                         <div className="flex justify-end gap-2 pt-5 mt-5 border-t border-slate-800">
-                          <button type="button" onClick={() => setIsModalOpen(false)} className="bg-slate-800 border border-slate-700 px-5 py-2.5 rounded-xl text-xs font-bold text-white hover:bg-slate-700">Cancelar</button>
-                          <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-6 py-2.5 rounded-xl text-xs font-bold shadow-[0_0_15px_rgba(245,158,11,0.2)] flex items-center gap-2"><Ico i="save" c="w-4 h-4" /> Guardar Ficha</button>
+                          <button type="button" onClick={() => setIsModalOpen(false)} className="bg-slate-800 border border-slate-700 px-5 py-2.5 rounded-xl text-xs font-bold text-white hover:bg-slate-700 transition-colors">Cancelar</button>
+                          <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-6 py-2.5 rounded-xl text-xs font-bold shadow-[0_0_15px_rgba(245,158,11,0.2)] flex items-center gap-2 transition-colors"><Ico i="cloud-upload" c="w-4 h-4" /> Confirmar y Guardar</button>
                         </div>
                       </form>
                     </div>
@@ -868,7 +901,7 @@
                                       <div key={i} className="flex justify-between items-center bg-slate-950 p-2.5 rounded-lg border border-slate-800 group/file hover:border-slate-600">
                                         <a href={a.url} target="_blank" className="text-[10px] text-blue-400 truncate w-3/4 flex items-center hover:underline"><Ico i={a.tipo?.includes('image') ? 'image' : 'file-text'} c="w-3.5 h-3.5 mr-1.5 text-slate-500" /> {a.nombre}</a>
                                         {((userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') || userSession.autor === h.autor) && (
-                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo"><Ico i="trash-2" c="w-3.5 h-3.5" /></button>
+                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo de la base de datos"><Ico i="trash-2" c="w-3.5 h-3.5" /></button>
                                         )}
                                       </div>
                                     ))}
@@ -927,14 +960,14 @@
                           
                           <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
                             <input type="file" multiple ref={logFileRef} onChange={handleLogFileChange} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" />
-                            <button type="button" onClick={() => logFileRef.current.click()} className="w-full bg-slate-800 border border-slate-700 text-slate-300 py-2.5 rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors border-dashed"><Ico i="upload-cloud" c="w-4 h-4 mr-1 inline" /> Adjuntar Evidencias</button>
+                            <button type="button" onClick={() => logFileRef.current.click()} className="w-full bg-slate-800 border border-slate-700 text-slate-300 py-2.5 rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors border-dashed"><Ico i="upload-cloud" c="w-4 h-4 mr-1 inline" /> Adjuntar Evidencias (Max 800KB)</button>
                             {logForm.archivos.length > 0 && <div className="mt-3 space-y-1.5 max-h-24 overflow-y-auto pr-1">
                                {logForm.archivos.map((a,i) => <div key={i} className="text-[9px] bg-slate-900 p-2 rounded-lg flex justify-between items-center text-emerald-400 border border-emerald-500/20"><span className="truncate w-[85%]"><Ico i="check-circle" c="w-3 h-3 mr-1 inline" />{a.nombre}</span><button type="button" onClick={()=>handleRemovePendingFile(i)} className="text-red-400 bg-red-500/10 p-1 rounded"><Ico i="x" c="w-3 h-3" /></button></div>)}
                             </div>}
                           </div>
 
                           <div className="mt-auto pt-4 border-t border-slate-800">
-                            <button type="submit" disabled={uploadingFiles} className={`w-full py-3.5 rounded-xl font-bold text-xs shadow-lg flex items-center justify-center gap-2 ${uploadingFiles ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-amber-500 hover:bg-amber-400 text-black'}`}>
+                            <button type="submit" disabled={uploadingFiles} className={`w-full py-3.5 rounded-xl font-bold text-xs shadow-lg flex items-center justify-center gap-2 transition-colors ${uploadingFiles ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-amber-500 hover:bg-amber-400 text-black'}`}>
                               {uploadingFiles ? <><Ico i="loader-2" c="w-4 h-4 animate-spin" /> Guardando Evento...</> : <><Ico i="save" c="w-4 h-4" /> Confirmar y Guardar Registro</>}
                             </button>
                           </div>
@@ -977,7 +1010,7 @@
                     </div>
                     
                     <div className="p-5 border-t border-slate-800 flex justify-end gap-3 bg-slate-900 rounded-b-3xl shrink-0">
-                      <button onClick={handleDownloadGlobalLogsExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold text-xs flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]"><Ico i="file-spreadsheet" c="w-4 h-4 mr-1" /> Generar Excel Consolidado</button>
+                      <button onClick={handleDownloadGlobalLogsExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold text-xs flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)] transition-colors"><Ico i="file-spreadsheet" c="w-4 h-4 mr-1" /> Generar Excel Consolidado</button>
                     </div>
                   </div>
                 </div>
