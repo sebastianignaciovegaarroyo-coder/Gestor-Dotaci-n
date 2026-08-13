@@ -135,7 +135,11 @@
           const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
           const [selectedEmpForHistory, setSelectedEmpForHistory] = useState(null);
           const [isGlobalHistoryOpen, setIsGlobalHistoryOpen] = useState(false);
-          const [globalLogMonth, setGlobalLogMonth] = useState('TODOS'); // Nuevo filtro de fecha global
+          
+          // FILTROS AVANZADOS DE FECHA PARA BITÁCORA GLOBAL
+          const [filterStartDate, setFilterStartDate] = useState('');
+          const [filterEndDate, setFilterEndDate] = useState('');
+
           const [selectedPhone, setSelectedPhone] = useState(null);
           const [uploadingFiles, setUploadingFiles] = useState(false);
 
@@ -171,7 +175,7 @@
             }
           };
 
-          // SINCRONIZACIÓN FIREBASE EN TIEMPO REAL
+          // SINCRONIZACIÓN FIREBASE
           useEffect(() => {
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
             window.addEventListener('online', on); window.addEventListener('offline', off);
@@ -260,30 +264,6 @@
               XLSX.utils.book_append_sheet(wb, ws, "Dotacion Completa");
               XLSX.writeFile(wb, `BRAMAQ_Dotacion_${new Date().toISOString().split('T')[0]}.xlsx`);
             } catch (error) { alert("Error al exportar: " + error.message); }
-          };
-
-          const handleDownloadGlobalLogsExcel = () => {
-            try {
-              let logs = [];
-              employees.forEach(emp => {
-                if (emp.historial && Array.isArray(emp.historial)) {
-                  emp.historial.forEach(h => {
-                    logs.push({
-                      "RUT": emp.rut || '', "Trabajador": emp.nombre || '', "Cargo": emp.cargo || '', "Tipo Evento": h.tipo || '',
-                      "Fecha": h.modoFechas === 'rango' ? `${h.fechaInicio || ''} a ${h.fechaTermino || ''}` : (h.fechaInicio || ''),
-                      "Observación": h.nota || '', "Autor": h.autor || '', "Perfil": h.rolAutor || '',
-                      "Tiene Archivos": h.archivos?.length > 0 ? "SÍ" : "NO"
-                    });
-                  });
-                }
-              });
-              if (logs.length === 0) { alert("No hay bitácoras registradas."); return; }
-              logs.sort((a, b) => new Date(b["Fecha"] || 0) - new Date(a["Fecha"] || 0));
-              const ws = XLSX.utils.json_to_sheet(logs);
-              const wb = XLSX.utils.book_new();
-              XLSX.utils.book_append_sheet(wb, ws, "Bitacora Global");
-              XLSX.writeFile(wb, `BRAMAQ_Bitacora_Global.xlsx`);
-            } catch (error) { alert("Error: " + error.message); }
           };
 
           const handleDeleteAllData = async () => {
@@ -376,7 +356,7 @@
             if (confirm("⚠️ ¿Eliminar permanentemente este trabajador y toda su hoja de vida?")) await db.collection('employees').doc(id).delete();
           };
 
-          // MULTIARCHIVO BITÁCORA
+          // MULTIARCHIVO BITÁCORA SEGURO EN BASE64
           const handleLogFileChange = (e) => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
@@ -512,28 +492,41 @@
             };
           }, [employees, citiesList]);
 
-          // LÓGICA DE LA HOJA DE VIDA GLOBAL CON FILTRO DE FECHAS (MESES)
+          // LÓGICA DE FILTRADO POR FECHAS (HOJA GLOBAL)
           const allGlobalLogs = useMemo(() => {
             let logs = [];
-            employees.forEach(emp => { if (emp.historial && Array.isArray(emp.historial)) emp.historial.forEach(h => logs.push({ ...h, empleadoNombre: emp.nombre || 'Desconocido', empleadoRut: emp.rut || '' })); });
+            employees.forEach(emp => { if (emp.historial && Array.isArray(emp.historial)) emp.historial.forEach(h => logs.push({ ...h, empleadoNombre: emp.nombre || 'Desconocido', empleadoRut: emp.rut || '', empleadoCargo: emp.cargo || '' })); });
             return logs.sort((a, b) => new Date(b.createdAt || b.fechaInicio || 0) - new Date(a.createdAt || a.fechaInicio || 0));
           }, [employees]);
 
-          const availableMonths = useMemo(() => {
-              const months = new Set();
-              allGlobalLogs.forEach(log => {
-                  if (log.fechaInicio) {
-                      const month = log.fechaInicio.substring(0, 7); // Formato YYYY-MM
-                      if (month) months.add(month);
-                  }
-              });
-              return Array.from(months).sort().reverse();
-          }, [allGlobalLogs]);
-
           const filteredGlobalLogs = useMemo(() => {
-              if (globalLogMonth === 'TODOS') return allGlobalLogs;
-              return allGlobalLogs.filter(log => log.fechaInicio && log.fechaInicio.startsWith(globalLogMonth));
-          }, [allGlobalLogs, globalLogMonth]);
+              let filtered = allGlobalLogs;
+              if (filterStartDate) {
+                  filtered = filtered.filter(log => log.fechaInicio >= filterStartDate);
+              }
+              if (filterEndDate) {
+                  filtered = filtered.filter(log => log.fechaInicio <= filterEndDate);
+              }
+              return filtered;
+          }, [allGlobalLogs, filterStartDate, filterEndDate]);
+
+          // DESCARGA EXCEL GLOBAL (RESPETANDO FILTRO DE FECHAS)
+          const handleDownloadGlobalLogsExcel = () => {
+            try {
+              if (filteredGlobalLogs.length === 0) { alert("No hay observaciones en este rango de fechas."); return; }
+              let logs = filteredGlobalLogs.map(h => ({
+                "RUT": h.empleadoRut || '', "Trabajador": h.empleadoNombre || '', "Cargo": h.empleadoCargo || '', "Tipo Evento": h.tipo || '',
+                "Fecha": h.modoFechas === 'rango' ? `${h.fechaInicio || ''} a ${h.fechaTermino || ''}` : (h.fechaInicio || ''),
+                "Observación": h.nota || '', "Autor": h.autor || '', "Perfil": h.rolAutor || '',
+                "Tiene Archivos": h.archivos?.length > 0 ? "SÍ" : "NO"
+              }));
+              
+              const ws = XLSX.utils.json_to_sheet(logs);
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, "Bitacora Global");
+              XLSX.writeFile(wb, `BRAMAQ_Bitacora_Global.xlsx`);
+            } catch (error) { alert("Error: " + error.message); }
+          };
 
           // PANTALLA LOGIN OBLIGATORIA
           if (!hasEntered) {
@@ -732,7 +725,7 @@
                           <div className="space-y-3">
                             {filtered.length === 0 && <div className="text-center bg-slate-900 border border-slate-800 rounded-2xl py-20"><Ico i="search-x" c="w-10 h-10 text-slate-600 mx-auto mb-2" /><p className="text-slate-500 text-sm mt-2">No se encontraron trabajadores con ese criterio.</p></div>}
                             
-                            {activeFilter === 'CON_BITACORA' && filtered.length > 0 && <div className="text-[10px] text-blue-400 bg-blue-500/10 p-2 rounded border border-blue-500/20 font-bold"><Ico i="filter" c="w-3 h-3 inline mr-1" /> FILTRO ACTIVO: Mostrando únicamente trabajadores con observaciones en su Bitácora.</div>}
+                            {activeFilter === 'CON_BITACORA' && filtered.length > 0 && <div className="text-[10px] text-blue-400 bg-blue-500/10 p-2.5 rounded-lg border border-blue-500/20 font-bold flex items-center gap-1.5"><Ico i="filter" c="w-3.5 h-3.5" /> FILTRO ACTIVO: Mostrando únicamente trabajadores con observaciones en su Bitácora.</div>}
 
                             {filtered.map(emp => (
                               <div key={emp.id} className="glass-panel p-4 rounded-xl flex flex-col lg:flex-row gap-4 hover:border-slate-600 transition-colors">
@@ -874,11 +867,11 @@
                                   if (e.target.value === 'OTRO') { setIsCustomCargo(true); setFormData({...formData, cargo: ''}); } 
                                   else { setFormData({...formData, cargo: e.target.value}); }
                                 }}
-                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1 cursor-pointer"
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1 cursor-pointer appearance-none"
                               >
                                 <option value="" disabled>-- Seleccionar Cargo --</option>
                                 {cargosList.map(c => <option key={c} value={c}>{c}</option>)}
-                                <option value="OTRO" className="font-bold text-amber-500">➕ Agregar nuevo cargo manualmente...</option>
+                                <option value="OTRO" className="font-bold text-amber-500">➕ Agregar nuevo manualmente...</option>
                               </select>
                             ) : (
                               <div className="flex gap-2 mt-1">
@@ -898,11 +891,11 @@
                                   if (e.target.value === 'OTRO') { setIsCustomCity(true); setFormData({...formData, ciudad: ''}); } 
                                   else { setFormData({...formData, ciudad: e.target.value}); }
                                 }}
-                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1 cursor-pointer"
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1 cursor-pointer appearance-none"
                               >
                                 <option value="" disabled>-- Seleccionar Ciudad --</option>
                                 {citiesList.map(c => <option key={c} value={c}>{c}</option>)}
-                                <option value="OTRO" className="font-bold text-amber-500">➕ Agregar nueva ciudad manualmente...</option>
+                                <option value="OTRO" className="font-bold text-amber-500">➕ Agregar nueva manualmente...</option>
                               </select>
                             ) : (
                               <div className="flex gap-2 mt-1">
@@ -983,7 +976,7 @@
                                       <div key={i} className="flex justify-between items-center bg-slate-950 p-2.5 rounded-lg border border-slate-800 group/file hover:border-slate-600">
                                         <a href={a.url} target="_blank" className="text-[10px] text-blue-400 truncate w-3/4 flex items-center hover:underline"><Ico i={a.tipo?.includes('image') ? 'image' : 'file-text'} c="w-3.5 h-3.5 mr-1.5 text-slate-500" /> {a.nombre}</a>
                                         {((userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') || userSession.autor === h.autor) && (
-                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo de la base de datos"><Ico i="trash-2" c="w-3.5 h-3.5" /></button>
+                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo"><Ico i="trash-2" c="w-3.5 h-3.5" /></button>
                                         )}
                                       </div>
                                     ))}
@@ -1008,7 +1001,7 @@
                         <form onSubmit={handleAddLog} className="space-y-4 flex-1 flex flex-col">
                           <div>
                             <label className="text-[9px] text-slate-500 uppercase font-bold mb-1.5 block">Categoría de Evento *</label>
-                            <select value={logForm.tipo} onChange={e=>setLogForm({...logForm, tipo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-500 cursor-pointer">
+                            <select value={logForm.tipo} onChange={e=>setLogForm({...logForm, tipo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-500 cursor-pointer appearance-none">
                               {(userSession.rol === 'Administrativo') && <option value="Licencia Médica">Licencia Médica</option>}
                               {(userSession.rol === 'Administrativo') && <option value="Extensión de Licencia">Extensión de Licencia</option>}
                               {(userSession.rol === 'Administrativo') && <option value="Enmendadura">Enmendadura de Asistencia</option>}
@@ -1064,26 +1057,32 @@
               {isGlobalHistoryOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/90 backdrop-blur-sm fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+                    
+                    {/* ENCABEZADO Y FILTRO DE FECHA AVANZADO */}
                     <div className="p-4 sm:p-5 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 rounded-t-3xl shrink-0">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-indigo-500/20 p-2 rounded-xl text-indigo-400"><Ico i="file-clock" c="w-5 h-5" /></div>
-                        <div><h3 className="font-bold text-white text-base">Hoja de Vida Global</h3><p className="text-[10px] text-slate-400">Trabajadores con observaciones.</p></div>
+                      <div className="flex items-center gap-3 w-full sm:w-auto justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-indigo-500/20 p-2 rounded-xl text-indigo-400"><Ico i="file-clock" c="w-5 h-5" /></div>
+                          <div><h3 className="font-bold text-white text-base">Hoja de Vida Global</h3><p className="text-[10px] text-slate-400">Todos los eventos registrados.</p></div>
+                        </div>
+                        <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg border border-slate-700 sm:hidden"><Ico i="x" c="w-4 h-4" /></button>
                       </div>
                       
-                      <div className="flex items-center gap-3 w-full sm:w-auto">
-                        <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-2 w-full sm:w-auto">
-                          <Ico i="filter" c="w-3.5 h-3.5 text-slate-500" />
-                          <select value={globalLogMonth} onChange={(e) => setGlobalLogMonth(e.target.value)} className="bg-transparent text-slate-300 text-xs py-2 outline-none cursor-pointer w-full">
-                              <option value="TODOS">Todos los meses</option>
-                              {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
-                          </select>
-                        </div>
-                        <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg border border-slate-700 shrink-0"><Ico i="x" c="w-4 h-4" /></button>
+                      <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 w-full sm:w-auto overflow-x-auto">
+                        <Ico i="calendar-search" c="w-4 h-4 text-amber-500 shrink-0" />
+                        <span className="text-[9px] text-slate-500 uppercase font-bold shrink-0">Desde:</span>
+                        <input type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} className="bg-transparent text-slate-300 text-[11px] outline-none cursor-pointer font-mono shrink-0" />
+                        <span className="text-[9px] text-slate-500 uppercase font-bold shrink-0 ml-1">Hasta:</span>
+                        <input type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} className="bg-transparent text-slate-300 text-[11px] outline-none cursor-pointer font-mono shrink-0" />
+                        {(filterStartDate || filterEndDate) && (
+                            <button onClick={() => {setFilterStartDate(''); setFilterEndDate('');}} className="ml-1 text-red-400 bg-red-500/10 p-1 rounded shrink-0" title="Borrar Filtro de Fecha"><Ico i="x" c="w-3 h-3" /></button>
+                        )}
                       </div>
+                      <button onClick={() => setIsGlobalHistoryOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-lg border border-slate-700 hidden sm:block shrink-0"><Ico i="x" c="w-4 h-4" /></button>
                     </div>
                     
                     <div className="flex-1 overflow-y-auto p-5 sm:p-8 bg-slate-950/50">
-                      {filteredGlobalLogs.length === 0 ? <div className="text-center py-32"><div className="mb-4"><Ico i="clipboard-list" c="w-16 h-16 text-slate-700 mx-auto" /></div><p className="text-slate-400 font-medium">No se encontraron observaciones {globalLogMonth !== 'TODOS' ? `en el mes seleccionado.` : `registradas a nivel global.`}</p></div> : (
+                      {filteredGlobalLogs.length === 0 ? <div className="text-center py-32"><div className="mb-4"><Ico i="clipboard-list" c="w-16 h-16 text-slate-700 mx-auto" /></div><p className="text-slate-400 font-medium">No se encontraron observaciones en el rango de fechas seleccionado.</p></div> : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                           {filteredGlobalLogs.map((log, i) => (
                             <div key={i} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 hover:border-slate-600 transition-colors flex flex-col h-full shadow-lg">
@@ -1105,7 +1104,7 @@
                     </div>
                     
                     <div className="p-5 border-t border-slate-800 flex justify-end gap-3 bg-slate-900 rounded-b-3xl shrink-0">
-                      <button onClick={handleDownloadGlobalLogsExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold text-xs flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)] transition-colors"><Ico i="file-spreadsheet" c="w-4 h-4 mr-1" /> Generar Excel Consolidado</button>
+                      <button onClick={handleDownloadGlobalLogsExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold text-xs flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)] transition-colors"><Ico i="file-spreadsheet" c="w-4 h-4 mr-1" /> Generar Excel de este Rango</button>
                     </div>
                   </div>
                 </div>
