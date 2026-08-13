@@ -1,17 +1,16 @@
-// Service Worker BRAMAQ - Modo No Bloqueante
-self.addEventListener('install', (event) => {
+const CACHE_NAME = 'bramaq-enterprise-v1';
+
+self.addEventListener('install', (e) => {
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(clients.claim());
+self.addEventListener('activate', (e) => {
+  e.waitUntil(clients.claim());
 });
 
-self.addEventListener('fetch', (event) => {
-  // Pasa todas las peticiones directamente a la red sin bloquear nada
-  event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request);
-    })
+// Estrategia Network First: Siempre busca internet primero.
+self.addEventListener('fetch', (e) => {
+  e.respondWith(
+    fetch(e.request).catch(() => caches.match(e.request))
   );
 });
