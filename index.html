@@ -13,8 +13,9 @@
     <meta name="apple-mobile-web-app-title" content="BRAMAQ">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3200/3200424.png">
     
-    <title>Gestor de Dotación BRAMAQ - Enterprise</title>
+    <title>Gestor de Dotación BRAMAQ - Enterprise Cloud</title>
     
+    <!-- CDNs Empresariales -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -26,6 +27,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     
+    <!-- REGISTRO SERVICE WORKER -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -46,9 +48,6 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         #root { min-height: 100vh; }
         .app-loader { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; color: #f59e0b; font-weight: bold; background: #020617; }
-        
-        /* Ajuste nativo para las listas desplegables (datalist) */
-        input::-webkit-calendar-picker-indicator { display: none !important; }
     </style>
 </head>
 <body class="antialiased selection:bg-amber-500/30 selection:text-amber-200" translate="no">
@@ -63,6 +62,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
         
+        // RENDERIZADOR DE ÍCONOS INFALIBLE
         const Ico = ({ i, c, title }) => {
             const spanRef = useRef(null);
             useEffect(() => {
@@ -128,6 +128,10 @@
           const [currentEmployee, setCurrentEmployee] = useState(null);
           const [formError, setFormError] = useState('');
           
+          // Estados para Alternar Dropdowns a Inputs manuales
+          const [isCustomCargo, setIsCustomCargo] = useState(false);
+          const [isCustomCity, setIsCustomCity] = useState(false);
+          
           const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
           const [selectedEmpForHistory, setSelectedEmpForHistory] = useState(null);
           const [isGlobalHistoryOpen, setIsGlobalHistoryOpen] = useState(false);
@@ -143,11 +147,13 @@
             customTipo: '', nota: '', archivos: []
           });
 
+          // Ocultar loader nativo al iniciar React
           useEffect(() => {
               const loader = document.getElementById('loader-estatico');
               if (loader) loader.style.display = 'none';
           }, []);
 
+          // PWA Install Logic
           useEffect(() => {
             setIsIOS(/iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase()));
             const handleBeforeInstallPrompt = (e) => { e.preventDefault(); setDeferredPrompt(e); setIsInstallable(true); };
@@ -166,17 +172,18 @@
             }
           };
 
-          // SINCRONIZACIÓN FIREBASE
+          // SINCRONIZACIÓN FIREBASE EN TIEMPO REAL
           useEffect(() => {
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
             window.addEventListener('online', on); window.addEventListener('offline', off);
             
             if (!db) return; 
+            
             setLoading(true);
             const unsub = db.collection('employees').onSnapshot(snap => {
               const items = [];
               snap.forEach(doc => {
-                items.push({ id: doc.id, ...doc.data() });
+                items.push({ id: doc.id, ...(doc.data() || {}) });
               });
               setEmployees(items); 
               setLoading(false);
@@ -185,19 +192,22 @@
             return () => { unsub(); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
           }, []);
 
-          // LISTAS DINÁMICAS (Para Datalist en Ficha)
-          const supervisorsList = useMemo(() => {
-            return employees.filter(e => String(e.cargo || '').toUpperCase().includes('SUPERVISOR')).map(e => String(e.nombre || 'Sin Nombre')).sort();
-          }, [employees]);
+          // GENERADORES DE LISTAS DINÁMICAS (Para Filtros y Fichas)
+          const defaultCargos = ['OPERADOR CARGADOR FRONTAL', 'OPERADOR GRUA HORQUILLA', 'SUPERVISOR TURNO', 'MECANICO FAENA', 'ADMINISTRATIVO FAENA', 'ADMINISTRADOR DE CONTRATO', 'PREVENCIONISTA DE RIESGOS'];
+          const defaultCities = ['Valdivia', 'Loncoche', 'San José de la Mariquina', 'Lanco', 'Panguipulli', 'Malalhue', 'Los Lagos', 'Ciruelos'];
 
           const cargosList = useMemo(() => {
-            const cargos = new Set(employees.map(e => String(e.cargo || '').trim()).filter(c => c !== ''));
+            const cargos = new Set([...defaultCargos, ...employees.map(e => String(e.cargo || '').trim().toUpperCase()).filter(c => c !== '')]);
             return Array.from(cargos).sort();
           }, [employees]);
 
           const citiesList = useMemo(() => {
-            const cities = new Set(employees.map(e => String(e.ciudad || '').trim()).filter(c => c !== ''));
+            const cities = new Set([...defaultCities, ...employees.map(e => String(e.ciudad || '').trim()).filter(c => c !== '')]);
             return Array.from(cities).sort();
+          }, [employees]);
+
+          const supervisorsList = useMemo(() => {
+            return employees.filter(e => String(e.cargo || '').toUpperCase().includes('SUPERVISOR')).map(e => String(e.nombre || 'Sin Nombre')).sort();
           }, [employees]);
 
           const handleEnterApp = () => {
@@ -235,7 +245,7 @@
 
                 const row = {
                   "RUT": emp.rut || "", "Nombre": emp.nombre || "", "Cargo": emp.cargo || "", "Ciudad": emp.ciudad || "",
-                  "Dirección Completa": dirCompleta, "Teléfono": emp.telefono ? normalizePhone(emp.telefono) : "",
+                  "Dirección": dirCompleta, "Teléfono": emp.telefono ? normalizePhone(emp.telefono) : "",
                   "Correo": emp.correo || "", "Contacto Emergencia": emp.emergenciaNombre || "",
                   "Teléfono Emergencia": emp.emergenciaFono ? normalizePhone(emp.emergenciaFono) : "",
                   "Historial (Bitácora)": historialTxt
@@ -293,6 +303,7 @@
             }
           };
 
+          // IMPORTACIÓN INTELIGENTE DE EXCEL
           const fileInputRef = useRef(null);
           const logFileRef = useRef(null);
 
@@ -414,9 +425,9 @@
             try {
               const finalFiles = [];
               for (const item of logForm.archivos) {
-                 // Validamos el tamaño para que Firebase Firestore no colapse (Límite max 1MB por documento)
+                 // Validamos el tamaño para que Firestore no colapse por Storage bloqueado
                  if (item.fileObj.size > 800000) {
-                     throw new Error(`El archivo "${item.nombre}" es muy pesado. El límite permitido es 800KB para guardar de forma fluida.`);
+                     throw new Error(`El archivo "${item.nombre}" supera el límite de 800KB. Redúzcalo para continuar.`);
                  }
                  const url = await new Promise((resolve, reject) => {
                      const reader = new FileReader();
@@ -450,10 +461,10 @@
           const getMissingDataList = (emp) => {
             let missing = [];
             if (!emp.cargo) missing.push("Cargo");
-            if (!emp.ciudad) missing.push("Ciudad");
+            if (!emp.ciudad) missing.push("Ciudad Base");
             if (!emp.direccion) missing.push("Dirección");
-            if (!emp.telefono) missing.push("Teléfono");
             if (!emp.correo) missing.push("Correo");
+            if (!emp.telefono) missing.push("Teléfono");
             if (!emp.emergenciaNombre || !emp.emergenciaFono) missing.push("Emergencia");
             return missing;
           };
@@ -510,7 +521,8 @@
             return logs.sort((a, b) => new Date(b.createdAt || b.fechaInicio || 0) - new Date(a.createdAt || a.fechaInicio || 0));
           }, [employees]);
 
-          // PANTALLA LOGIN OBLIGATORIA
+
+          // ======================= PANTALLA LOGIN OBLIGATORIA =======================
           if (!hasEntered) {
             return (
               <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -558,7 +570,7 @@
             );
           }
 
-          // APLICACIÓN PRINCIPAL (GERENCIAL Y OPERATIVA)
+          // ======================= APLICACIÓN PRINCIPAL (GERENCIAL Y OPERATIVA) =======================
           return (
             <div className="flex h-screen overflow-hidden bg-slate-950">
               {/* Sidebar Desktop */}
@@ -604,7 +616,7 @@
                   {loading ? <div className="text-center py-20 text-amber-500"><Ico i="loader-2" c="w-10 h-10 animate-spin mx-auto" /><p className="mt-2 text-xs text-slate-400">Sincronizando información en tiempo real...</p></div> : (
                     <div className="max-w-7xl mx-auto space-y-6 fade-in pb-20">
                       
-                      {/* ======================= DASHBOARD ======================= */}
+                      {/* DASHBOARD */}
                       {activeTab === 'dashboard' && (
                         <>
                           <h1 className="text-2xl font-extrabold text-white">Resumen Ejecutivo</h1>
@@ -652,7 +664,7 @@
                               {citiesList.map(city => kpis.porCiudad[city] > 0 && (
                                 <div key={city} onClick={() => { setActiveFilter(city); setActiveTab('directorio'); }} className="cursor-pointer hover:opacity-80 transition-opacity">
                                   <div className="flex justify-between text-xs mb-1 text-slate-300"><span>{city}</span><span className="font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800">{kpis.porCiudad[city]} Pers.</span></div>
-                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden"><div className="bg-amber-500 h-full" style={{ width: `${(kpis.porCiudad[city] / kpis.total) * 100}%` }}></div></div>
+                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden"><div className="bg-amber-500 h-full" style={{ width: `${kpis.total > 0 ? (kpis.porCiudad[city] / kpis.total) * 100 : 0}%` }}></div></div>
                                 </div>
                               ))}
                             </div>
@@ -660,7 +672,7 @@
                         </>
                       )}
 
-                      {/* ======================= DIRECTORIO DE DOTACIÓN ======================= */}
+                      {/* DIRECTORIO DE DOTACIÓN */}
                       {activeTab === 'directorio' && (
                         <>
                           <div className="glass-panel p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-3 sticky top-0 z-20 shadow-xl">
@@ -683,7 +695,14 @@
                                 </>
                               )}
                               
-                              <button onClick={() => { setCurrentEmployee(null); setFormData({nombre: '', rut: '', direccion: '', numero: '', ciudad: '', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''}); setIsModalOpen(true); }} className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-colors"><Ico i="user-plus" c="w-4 h-4" /> Crear Ficha</button>
+                              <button onClick={() => { 
+                                setCurrentEmployee(null); 
+                                setFormData({nombre: '', rut: '', direccion: '', numero: '', ciudad: '', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''}); 
+                                setIsCustomCargo(false);
+                                setIsCustomCity(false);
+                                setFormError('');
+                                setIsModalOpen(true); 
+                              }} className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-colors"><Ico i="user-plus" c="w-4 h-4" /> Crear Ficha</button>
                             </div>
                           </div>
 
@@ -741,12 +760,12 @@
                                   ) : <div className="text-[10px] text-slate-500 italic py-1">Sin contacto de emergencia registrado</div>}
                                 </div>
 
-                                {/* BOTONES DE ACCIÓN PRINCIPAL */}
+                                {/* ESTADOS Y BOTONES DE GESTIÓN CON TEXTO */}
                                 <div className="flex flex-col justify-center gap-2 items-center lg:w-48 border-t border-slate-800 lg:border-none pt-3 lg:pt-0 shrink-0">
                                   {getMissingDataList(emp).length > 0 ? (
                                     <div className="bg-red-500/10 text-red-400 px-2 py-1 rounded text-[10px] font-bold border border-red-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="alert-circle" c="w-3 h-3" /> Faltan Datos</div>
                                   ) : (
-                                    <div className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-[10px] font-bold border border-emerald-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="check-circle" c="w-3 h-3" /> Perfil Completo</div>
+                                    <div className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-[10px] font-bold border border-emerald-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="check-circle" c="w-3 h-3" /> Ficha Completa</div>
                                   )}
                                   
                                   <div className="flex gap-1.5 w-full mt-1">
@@ -759,7 +778,14 @@
                                     </button>
                                   </div>
                                   <div className="flex gap-1.5 w-full">
-                                    <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="bg-slate-800 border border-slate-700 py-1.5 px-2 rounded-lg text-white hover:bg-slate-700 flex-1 flex items-center justify-center gap-1.5 transition-colors" title="Editar Ficha">
+                                    <button onClick={() => { 
+                                      setCurrentEmployee(emp); 
+                                      setFormData(emp); 
+                                      setIsCustomCargo(emp.cargo && !cargosList.includes(String(emp.cargo).toUpperCase()));
+                                      setIsCustomCity(emp.ciudad && !citiesList.includes(emp.ciudad));
+                                      setFormError('');
+                                      setIsModalOpen(true); 
+                                    }} className="bg-slate-800 border border-slate-700 py-1.5 px-2 rounded-lg text-white hover:bg-slate-700 flex-1 flex items-center justify-center gap-1.5 transition-colors" title="Editar Ficha">
                                       <Ico i="edit-2" c="w-3.5 h-3.5" /><span className="text-[10px] font-bold">Editar</span>
                                     </button>
                                     {(userSession.rol === 'Administrativo') && (
@@ -785,9 +811,9 @@
                 </nav>
               </div>
 
-              {/* ======================= MODALES DE GESTIÓN ======================= */}
+              {/* ======================= MODALES ======================= */}
 
-              {/* MODAL CONTACTO PANTALLA COMPLETA */}
+              {/* MODAL CONTACTO COMPLETO */}
               {selectedPhone && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xs p-6 shadow-2xl text-center relative">
@@ -804,7 +830,7 @@
                 </div>
               )}
 
-              {/* MODAL FICHA TRABAJADOR */}
+              {/* MODAL FICHA TRABAJADOR (CREAR/EDITAR) */}
               {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm fade-in overflow-y-auto">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl my-auto">
@@ -815,43 +841,80 @@
                     <div className="p-5">
                       {formError && <div className="mb-4 text-xs text-red-400 bg-red-500/10 p-3 rounded border border-red-500/20 font-medium"><Ico i="alert-octagon" c="w-4 h-4 inline mr-1" />{formError}</div>}
                       <form id="employeeForm" onSubmit={handleSave} className="space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div><label className="text-[10px] uppercase font-bold text-slate-500">Nombre Completo *</label><input required value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1" placeholder="Ej: Juan Pérez"/></div>
                           <div><label className="text-[10px] uppercase font-bold text-slate-500">RUT *</label><input required value={formData.rut} onChange={e=>setFormData({...formData, rut:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-mono outline-none focus:border-amber-500 mt-1" placeholder="12.345.678-9"/></div>
                           
+                          {/* Selector Cargo Híbrido */}
                           <div>
-                            <label className="text-[10px] uppercase font-bold text-slate-500">Cargo / Función</label>
-                            <input list="cargos-list" value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1" placeholder="Escriba o seleccione..." />
-                            <datalist id="cargos-list">{cargosList.map(c => <option key={c} value={c} />)}</datalist>
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Cargo / Función *</label>
+                            {!isCustomCargo ? (
+                              <select 
+                                value={cargosList.includes(String(formData.cargo).toUpperCase()) ? String(formData.cargo).toUpperCase() : (formData.cargo ? 'OTRO' : '')} 
+                                onChange={e => {
+                                  if (e.target.value === 'OTRO') { setIsCustomCargo(true); setFormData({...formData, cargo: ''}); } 
+                                  else { setFormData({...formData, cargo: e.target.value}); }
+                                }}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1 cursor-pointer"
+                              >
+                                <option value="" disabled>-- Seleccionar Cargo --</option>
+                                {cargosList.map(c => <option key={c} value={c}>{c}</option>)}
+                                <option value="OTRO" className="font-bold text-amber-500">➕ Agregar nuevo cargo manualmente...</option>
+                              </select>
+                            ) : (
+                              <div className="flex gap-2 mt-1">
+                                <input autoFocus placeholder="Escriba el nuevo cargo..." required value={formData.cargo} onChange={e=>setFormData({...formData, cargo:e.target.value})} className="w-full bg-slate-950 border border-amber-500 rounded-lg p-2.5 text-xs text-white outline-none" />
+                                <button type="button" onClick={() => setIsCustomCargo(false)} className="bg-slate-800 px-3 rounded-lg hover:bg-slate-700 text-slate-400" title="Volver a la lista"><Ico i="list" c="w-4 h-4" /></button>
+                              </div>
+                            )}
                           </div>
                           
+                          {/* Selector Ciudad Híbrido */}
                           <div>
-                            <label className="text-[10px] uppercase font-bold text-slate-500">Ciudad Base</label>
-                            <input list="ciudades-list" value={formData.ciudad} onChange={e=>setFormData({...formData, ciudad:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1" placeholder="Escriba o seleccione..." />
-                            <datalist id="ciudades-list">{citiesList.map(c => <option key={c} value={c} />)}</datalist>
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Ciudad Base *</label>
+                            {!isCustomCity ? (
+                              <select 
+                                value={citiesList.includes(formData.ciudad) ? formData.ciudad : (formData.ciudad ? 'OTRO' : '')} 
+                                onChange={e => {
+                                  if (e.target.value === 'OTRO') { setIsCustomCity(true); setFormData({...formData, ciudad: ''}); } 
+                                  else { setFormData({...formData, ciudad: e.target.value}); }
+                                }}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1 cursor-pointer"
+                              >
+                                <option value="" disabled>-- Seleccionar Ciudad --</option>
+                                {citiesList.map(c => <option key={c} value={c}>{c}</option>)}
+                                <option value="OTRO" className="font-bold text-amber-500">➕ Agregar nueva ciudad manualmente...</option>
+                              </select>
+                            ) : (
+                              <div className="flex gap-2 mt-1">
+                                <input autoFocus placeholder="Escriba la nueva ciudad..." required value={formData.ciudad} onChange={e=>setFormData({...formData, ciudad:e.target.value})} className="w-full bg-slate-950 border border-amber-500 rounded-lg p-2.5 text-xs text-white outline-none" />
+                                <button type="button" onClick={() => setIsCustomCity(false)} className="bg-slate-800 px-3 rounded-lg hover:bg-slate-700 text-slate-400" title="Volver a la lista"><Ico i="list" c="w-4 h-4" /></button>
+                              </div>
+                            )}
                           </div>
                           
+                          {/* Dirección separada en Calle y N° */}
                           <div>
                             <label className="text-[10px] uppercase font-bold text-slate-500">Dirección Residencial</label>
                             <div className="flex gap-2 mt-1">
                                <input value={formData.direccion} onChange={e=>setFormData({...formData, direccion:e.target.value})} className="w-2/3 bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" placeholder="Calle / Pasaje" />
-                               <input value={formData.numero} onChange={e=>setFormData({...formData, numero:e.target.value})} className="w-1/3 bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" placeholder="N° / Depto" />
+                               <input value={formData.numero} onChange={e=>setFormData({...formData, numero:e.target.value})} className="w-1/3 bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500" placeholder="N°" />
                             </div>
                           </div>
                           
                           <div><label className="text-[10px] uppercase font-bold text-slate-500">Correo Electrónico</label><input type="email" value={formData.correo} onChange={e=>setFormData({...formData, correo:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white outline-none focus:border-amber-500 mt-1" placeholder="usuario@correo.com" /></div>
                         </div>
 
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
                           <div>
                             <label className="text-[10px] uppercase font-bold text-blue-400"><Ico i="phone" c="w-3 h-3 inline mr-1" />Teléfono Personal</label>
                             <input value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} placeholder="+56 9..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white font-mono outline-none focus:border-blue-500 mt-1" />
                           </div>
-                          <div></div>
+                          <div className="hidden sm:block"></div>
                           <div className="sm:col-span-2 border-t border-slate-800 my-1"></div>
                           <div>
                             <label className="text-[10px] uppercase font-bold text-red-400"><Ico i="shield-alert" c="w-3 h-3 inline mr-1" />Familiar de Emergencia</label>
-                            <input value={formData.emergenciaNombre} onChange={e=>setFormData({...formData, emergenciaNombre:e.target.value})} placeholder="Nombre del familiar..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white mt-1 outline-none focus:border-red-500" />
+                            <input value={formData.emergenciaNombre} onChange={e=>setFormData({...formData, emergenciaNombre:e.target.value})} placeholder="Nombre..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white mt-1 outline-none focus:border-red-500" />
                           </div>
                           <div>
                             <label className="text-[10px] uppercase font-bold text-red-400">Teléfono Emergencia</label>
@@ -859,9 +922,9 @@
                           </div>
                         </div>
 
-                        <div className="flex justify-end gap-2 pt-5 mt-5 border-t border-slate-800">
+                        <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-slate-800">
                           <button type="button" onClick={() => setIsModalOpen(false)} className="bg-slate-800 border border-slate-700 px-5 py-2.5 rounded-xl text-xs font-bold text-white hover:bg-slate-700 transition-colors">Cancelar</button>
-                          <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-6 py-2.5 rounded-xl text-xs font-bold shadow-[0_0_15px_rgba(245,158,11,0.2)] flex items-center gap-2 transition-colors"><Ico i="cloud-upload" c="w-4 h-4" /> Confirmar y Guardar</button>
+                          <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-6 py-2.5 rounded-xl text-xs font-bold shadow-[0_0_15px_rgba(245,158,11,0.2)] flex items-center gap-2 transition-colors"><Ico i="save" c="w-4 h-4" /> Guardar Ficha</button>
                         </div>
                       </form>
                     </div>
@@ -869,7 +932,7 @@
                 </div>
               )}
 
-              {/* MODAL BITÁCORA INDIVIDUAL (HOJA DE VIDA) */}
+              {/* MODAL BITÁCORA INDIVIDUAL */}
               {isHistoryModalOpen && selectedEmpForHistory && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/90 backdrop-blur-sm fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl h-[95vh] flex flex-col shadow-2xl overflow-hidden">
@@ -882,7 +945,6 @@
                     </div>
 
                     <div className="flex-1 overflow-hidden flex flex-col lg:flex-row bg-slate-950/50">
-                      {/* Lista de Eventos */}
                       <div className="flex-1 p-5 border-b lg:border-b-0 lg:border-r border-slate-800 overflow-y-auto">
                         <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-5 flex items-center"><Ico i="history" c="w-3.5 h-3.5 mr-1.5" />Registros Históricos</h4>
                         {!selectedEmpForHistory.historial?.length ? <div className="text-center text-slate-500 py-32 text-sm"><div className="mb-3 opacity-30"><Ico i="folder-open" c="w-12 h-12 mx-auto" /></div>Expediente limpio. No hay observaciones.</div> : (
@@ -919,7 +981,6 @@
                         )}
                       </div>
 
-                      {/* Formulario Crear Evento */}
                       <div className="w-full lg:w-[380px] p-5 bg-slate-900 overflow-y-auto flex flex-col">
                         <h4 className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-5 flex items-center"><Ico i="plus-circle" c="w-3.5 h-3.5 mr-1.5" />Registrar Nuevo Evento</h4>
                         
