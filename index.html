@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/Gestor-Dotaci-n/">
     
-    <!-- PWA & Mobile Optimization -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#020617">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,9 +12,8 @@
     <meta name="apple-mobile-web-app-title" content="BRAMAQ">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3200/3200424.png">
     
-    <title>Gestor de Dotación BRAMAQ - Enterprise Cloud</title>
+    <title>Gestor de Dotación BRAMAQ - Enterprise</title>
     
-    <!-- CDNs Empresariales -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -23,12 +21,10 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     
-    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
     
-    <!-- REGISTRO SERVICE WORKER -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -63,9 +59,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
         
-        // =====================================================================
-        // RENDERIZADOR INFALIBLE DE ÍCONOS
-        // =====================================================================
+        // RENDERIZADOR DE ÍCONOS
         const Ico = ({ i, c, title }) => {
             const spanRef = useRef(null);
             useEffect(() => {
@@ -92,7 +86,7 @@
             }
         }
         
-        // CONFIGURACIÓN CENTRAL FIREBASE
+        // CONFIGURACIÓN DE FIREBASE
         const firebaseConfig = {
           apiKey: "AIzaSyD_ZlO3treRtz6ZkjY9Vr69wJz2vA...",
           authDomain: "bramaqcloud.firebaseapp.com",
@@ -139,9 +133,9 @@
           const [selectedPhone, setSelectedPhone] = useState(null);
           const [uploadingFiles, setUploadingFiles] = useState(false);
 
+          // CHECKLIST ELIMINADO DE LA ESTRUCTURA
           const [formData, setFormData] = useState({
-            nombre: '', rut: '', direccion: '', ciudad: '', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '',
-            documentos: { contrato: true, induccion: true, examenes: true, epp: true }
+            nombre: '', rut: '', direccion: '', ciudad: '', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''
           });
 
           const [logForm, setLogForm] = useState({
@@ -149,13 +143,11 @@
             customTipo: '', nota: '', archivos: []
           });
 
-          // Ocultar loader estático
           useEffect(() => {
               const loader = document.getElementById('loader-estatico');
               if (loader) loader.style.display = 'none';
           }, []);
 
-          // PWA Install Logic
           useEffect(() => {
             setIsIOS(/iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase()));
             const handleBeforeInstallPrompt = (e) => { e.preventDefault(); setDeferredPrompt(e); setIsInstallable(true); };
@@ -174,7 +166,7 @@
             }
           };
 
-          // SINCRONIZACIÓN FIREBASE EN TIEMPO REAL
+          // SINCRONIZACIÓN FIREBASE
           useEffect(() => {
             const on = () => setOnlineStatus(true), off = () => setOnlineStatus(false);
             window.addEventListener('online', on); window.addEventListener('offline', off);
@@ -214,7 +206,6 @@
             setHasEntered(true);
           };
 
-          // NORMALIZACIÓN DE TELÉFONO
           const normalizePhone = (phone) => {
             if (!phone) return '';
             let p = String(phone).replace(/\D/g, '');
@@ -225,7 +216,7 @@
 
           const cleanRut = (rut) => String(rut || '').trim().toLowerCase().replace(/[^0-9kK]/g, '');
 
-          // EXPORTACIÓN TOTAL A EXCEL
+          // EXPORTACIÓN EXCEL
           const handleDownloadExcel = () => {
             try {
               if (employees.length === 0) { alert("Base de datos vacía."); return; }
@@ -239,8 +230,6 @@
                   "Dirección": emp.direccion || "", "Teléfono": emp.telefono ? normalizePhone(emp.telefono) : "",
                   "Correo": emp.correo || "", "Contacto Emergencia": emp.emergenciaNombre || "",
                   "Teléfono Emergencia": emp.emergenciaFono ? normalizePhone(emp.emergenciaFono) : "",
-                  "Contrato": emp.documentos?.contrato ? "Sí" : "No", "Inducción SSO": emp.documentos?.induccion ? "Sí" : "No",
-                  "Exámenes": emp.documentos?.examenes ? "Sí" : "No", "EPP": emp.documentos?.epp ? "Sí" : "No",
                   "Historial (Bitácora)": historialTxt
                 };
                 
@@ -296,7 +285,6 @@
             }
           };
 
-          // IMPORTACIÓN INTELIGENTE DE EXCEL
           const fileInputRef = useRef(null);
           const logFileRef = useRef(null);
 
@@ -344,7 +332,7 @@
 
                           await db.collection('employees').add({
                             nombre: nombre || 'Sin Nombre', rut: rut, direccion: direccion, ciudad: ciudad, cargo: cargo || 'OPERADOR', telefono: telefono, correo: correo, emergenciaNombre: emergenciaNombre, emergenciaFono: emergenciaFono,
-                            documentos: { contrato: true, induccion: true, examenes: true, epp: true }, historial: [], ...extras
+                            historial: [], ...extras
                           });
                           existingRuts.add(cRut); addedCount++;
                         } else { duplicateCount++; }
@@ -373,7 +361,6 @@
             if (confirm("⚠️ ¿Eliminar permanentemente este trabajador y toda su hoja de vida?")) await db.collection('employees').doc(id).delete();
           };
 
-          // MULTIARCHIVO BITÁCORA
           const handleLogFileChange = (e) => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
@@ -452,15 +439,9 @@
 
           const getMissingDataList = (emp) => {
             let missing = [];
+            // Ya no se evalúa documentación aquí
             if (!emp.telefono) missing.push("Teléfono");
-            if (!emp.correo) missing.push("Correo");
             if (!emp.emergenciaNombre || !emp.emergenciaFono) missing.push("Emergencia");
-            if (emp.documentos) {
-              if (!emp.documentos.contrato) missing.push("Contrato");
-              if (!emp.documentos.induccion) missing.push("Inducción");
-              if (!emp.documentos.examenes) missing.push("Exámenes");
-              if (!emp.documentos.epp) missing.push("EPP");
-            }
             return missing;
           };
 
@@ -515,14 +496,6 @@
             employees.forEach(emp => { if (emp.historial && Array.isArray(emp.historial)) emp.historial.forEach(h => logs.push({ ...h, empleadoNombre: emp.nombre || 'Desconocido', empleadoRut: emp.rut || '' })); });
             return logs.sort((a, b) => new Date(b.createdAt || b.fechaInicio || 0) - new Date(a.createdAt || a.fechaInicio || 0));
           }, [employees]);
-
-          const RequisitoToggle = ({ label, icon, checked, onChange }) => (
-            <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${checked ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/60 border-slate-800'}`}>
-                <input type="checkbox" checked={checked} onChange={onChange} className="hidden" />
-                <div className={`w-4 h-4 rounded flex items-center justify-center ${checked ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 border border-slate-700'}`}>{checked && <Ico i="check" c="w-3 h-3" />}</div>
-                <div className="flex items-center gap-2"><Ico i={icon} c={`w-4 h-4 ${checked ? 'text-emerald-400' : 'text-slate-500'}`} /><span className={`text-xs font-medium ${checked ? 'text-emerald-400' : 'text-slate-400'}`}>{label}</span></div>
-            </label>
-          );
 
           // PANTALLA LOGIN OBLIGATORIA
           if (!hasEntered) {
@@ -582,8 +555,8 @@
                   <div><div className="font-bold text-white">BRAMAQ</div><div className="text-[9px] text-amber-500 uppercase font-bold">Enterprise</div></div>
                 </div>
                 <div className="p-4 space-y-2 flex-1">
-                  <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold ${activeTab === 'dashboard' ? 'bg-amber-500/10 text-amber-400' : 'text-slate-400 hover:text-white'}`}><Ico i="layout-dashboard" c="w-4 h-4" /> Panel Gerencial</button>
-                  <button onClick={() => setActiveTab('directorio')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold ${activeTab === 'directorio' ? 'bg-amber-500/10 text-amber-400' : 'text-slate-400 hover:text-white'}`}><Ico i="users" c="w-4 h-4" /> Directorio y Fichas</button>
+                  <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${activeTab === 'dashboard' ? 'bg-amber-500/10 text-amber-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Ico i="layout-dashboard" c="w-4 h-4" /> Panel Gerencial</button>
+                  <button onClick={() => setActiveTab('directorio')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${activeTab === 'directorio' ? 'bg-amber-500/10 text-amber-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Ico i="users" c="w-4 h-4" /> Directorio y Fichas</button>
                   
                   <div className="mt-8 pt-6 border-t border-slate-800">
                     <div className="flex items-center gap-2 px-2 mb-4">
@@ -610,7 +583,7 @@
                   <div className="flex items-center gap-3">
                     <span className={`w-2 h-2 rounded-full ${onlineStatus ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
                     {/* BOTÓN CERRAR SESIÓN MOBILE */}
-                    <button onClick={() => setHasEntered(false)} className="text-xs bg-red-500/10 text-red-400 px-3 py-1.5 rounded-lg border border-red-500/20 flex items-center gap-1 font-bold"><Ico i="log-out" c="w-3 h-3" /> Salir</button>
+                    <button onClick={() => setHasEntered(false)} className="text-[10px] bg-red-500/10 text-red-400 px-3 py-2 rounded-lg border border-red-500/20 flex items-center gap-1.5 font-bold transition-colors"><Ico i="log-out" c="w-3 h-3" /> Salir</button>
                   </div>
                 </header>
 
@@ -687,21 +660,21 @@
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-                              <button onClick={() => setIsGlobalHistoryOpen(true)} className="bg-indigo-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1 hover:bg-indigo-500"><Ico i="file-clock" c="w-3.5 h-3.5" /> Ver Hoja Global</button>
-                              <button onClick={handleDownloadExcel} className="bg-emerald-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1 hover:bg-emerald-500"><Ico i="download" c="w-3.5 h-3.5" /> Exportar Todo</button>
+                              <button onClick={() => setIsGlobalHistoryOpen(true)} className="bg-indigo-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:bg-indigo-500"><Ico i="file-clock" c="w-4 h-4" /> Hoja Global</button>
+                              <button onClick={handleDownloadExcel} className="bg-emerald-600 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-500"><Ico i="download" c="w-4 h-4" /> Exportar Base</button>
                               
                               {(userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') && (
                                 <>
                                   <input type="file" ref={fileInputRef} onChange={handleUploadExcel} accept=".xlsx, .xls, .csv" className="hidden" />
-                                  <button onClick={() => fileInputRef.current.click()} className="bg-slate-800 border border-slate-700 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1 hover:bg-slate-700"><Ico i="upload" c="w-3.5 h-3.5" /> Carga Masiva (Excel)</button>
+                                  <button onClick={() => fileInputRef.current.click()} className="bg-slate-800 border border-slate-700 px-3 py-2 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 hover:bg-slate-700"><Ico i="upload" c="w-4 h-4" /> Importar Excel</button>
                                 </>
                               )}
                               
-                              <button onClick={() => { setCurrentEmployee(null); setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0] || 'Valdivia', cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: '', documentos: { contrato: true, induccion: true, examenes: true, epp: true }}); setIsModalOpen(true); }} className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-1 shadow-lg"><Ico i="user-plus" c="w-4 h-4" /> Crear Ficha</button>
+                              <button onClick={() => { setCurrentEmployee(null); setFormData({nombre: '', rut: '', direccion: '', ciudad: citiesList[0] || 'Valdivia', cargo: 'OPERADOR GRUA HORQUILLA', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''}); setIsModalOpen(true); }} className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-1.5 shadow-lg"><Ico i="user-plus" c="w-4 h-4" /> Crear Ficha</button>
                             </div>
                           </div>
 
-                          {userSession.rol === 'Administrativo' && (
+                          {(userSession.rol === 'Administrativo') && (
                             <div className="flex justify-end">
                               <button onClick={handleDeleteAllData} className="text-[10px] text-red-500 font-bold flex items-center gap-1 bg-red-500/10 border border-red-500/20 px-2 py-1 rounded hover:bg-red-500/20"><Ico i="alert-triangle" c="w-3 h-3" /> VACIAR TODA LA BASE DE DATOS</button>
                             </div>
@@ -724,7 +697,7 @@
                                   <div className="text-[11px] text-slate-400 pl-15"><Ico i="map-pin" c="w-3 h-3 inline mr-1" /> {emp.ciudad || 'Sin Ciudad'} {emp.direccion ? `| ${emp.direccion}` : ''}</div>
                                 </div>
 
-                                {/* CONTACTOS Y ACCIONES RÁPIDAS (LLAMADA, WA, SMS) NORMALIZADAS CON TEXTO */}
+                                {/* CONTACTOS Y ACCIONES RÁPIDAS (LLAMADA, WA, SMS) */}
                                 <div className="flex-1 space-y-2 bg-slate-900/80 p-3 rounded-lg border border-slate-800 flex flex-col justify-center">
                                   {emp.telefono ? (
                                     <div className="flex items-center justify-between">
@@ -755,29 +728,27 @@
                                   ) : <div className="text-[10px] text-slate-500 italic py-1">Sin contacto de emergencia registrado</div>}
                                 </div>
 
-                                {/* ESTADOS Y BOTONES DE GESTIÓN CON TEXTO CLARO */}
+                                {/* BOTONES DE ACCIÓN PRINCIPAL (CON TEXTO) */}
                                 <div className="flex flex-col justify-center gap-2 items-center lg:w-48 border-t border-slate-800 lg:border-none pt-3 lg:pt-0 shrink-0">
                                   {getMissingDataList(emp).length > 0 ? (
                                     <div className="bg-red-500/10 text-red-400 px-2 py-1 rounded text-[10px] font-bold border border-red-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="alert-circle" c="w-3 h-3" /> Faltan Datos</div>
                                   ) : (
-                                    <div className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-[10px] font-bold border border-emerald-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="check-circle" c="w-3 h-3" /> Ficha Completa</div>
+                                    <div className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded text-[10px] font-bold border border-emerald-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="check-circle" c="w-3 h-3" /> Contacto Completo</div>
                                   )}
                                   
-                                  <div className="flex gap-1.5 w-full mt-1">
-                                    <button onClick={() => { setSelectedEmpForHistory(emp); setIsHistoryModalOpen(true); }} className="bg-slate-800 border border-slate-700 py-1.5 px-2 rounded-lg text-amber-400 relative hover:bg-slate-700 flex-1 flex flex-col items-center justify-center transition-colors" title="Abrir Bitácora y Observaciones">
-                                      <div className="flex items-center gap-1.5">
-                                        <Ico i="book-open" c="w-4 h-4" />
-                                        <span className="text-[10px] font-bold">Bitácora</span>
-                                      </div>
+                                  <div className="flex gap-2 w-full mt-1">
+                                    <button onClick={() => { setSelectedEmpForHistory(emp); setIsHistoryModalOpen(true); }} className="bg-slate-800 border border-slate-700 py-2 px-2 rounded-lg text-amber-400 relative hover:bg-slate-700 flex-1 flex items-center justify-center gap-1.5 transition-colors" title="Abrir Bitácora y Observaciones">
+                                      <Ico i="book-open" c="w-4 h-4" />
+                                      <span className="text-[10px] font-bold">Bitácora</span>
                                       {emp.historial?.length > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-amber-500 text-black text-[9px] font-bold rounded-full flex items-center justify-center shadow-lg border border-slate-900">{emp.historial.length}</span>}
                                     </button>
                                   </div>
-                                  <div className="flex gap-1.5 w-full">
-                                    <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="bg-slate-800 border border-slate-700 py-1.5 px-2 rounded-lg text-white hover:bg-slate-700 flex-1 flex items-center justify-center gap-1.5 transition-colors" title="Editar Ficha">
+                                  <div className="flex gap-2 w-full">
+                                    <button onClick={() => { setCurrentEmployee(emp); setFormData(emp); setIsModalOpen(true); }} className="bg-slate-800 border border-slate-700 py-2 px-2 rounded-lg text-white hover:bg-slate-700 flex-1 flex items-center justify-center gap-1.5 transition-colors" title="Editar Ficha">
                                       <Ico i="edit-2" c="w-3.5 h-3.5" /><span className="text-[10px] font-bold">Editar</span>
                                     </button>
                                     {(userSession.rol === 'Administrativo') && (
-                                      <button onClick={() => handleDelete(emp.id)} className="bg-red-500/10 border border-red-500/20 text-red-500 py-1.5 px-2 rounded-lg hover:bg-red-500/20 flex-1 flex items-center justify-center gap-1.5 transition-colors" title="Eliminar Trabajador">
+                                      <button onClick={() => handleDelete(emp.id)} className="bg-red-500/10 border border-red-500/20 text-red-500 py-2 px-2 rounded-lg hover:bg-red-500/20 flex-1 flex items-center justify-center gap-1.5 transition-colors" title="Eliminar Trabajador">
                                         <Ico i="trash" c="w-3.5 h-3.5" /><span className="text-[10px] font-bold">Eliminar</span>
                                       </button>
                                     )}
@@ -855,19 +826,9 @@
                           </div>
                         </div>
 
-                        <div className="mt-4">
-                           <label className="text-[10px] uppercase font-bold text-slate-500 mb-2 block">Checklist Documental</label>
-                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                             <RequisitoToggle label="Contrato" icon="file-signature" checked={formData.documentos?.contrato ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), contrato: e.target.checked }})} />
-                             <RequisitoToggle label="Inducción" icon="presentation" checked={formData.documentos?.induccion ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), induccion: e.target.checked }})} />
-                             <RequisitoToggle label="Exámenes" icon="stethoscope" checked={formData.documentos?.examenes ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), examenes: e.target.checked }})} />
-                             <RequisitoToggle label="E.P.P." icon="hard-hat" checked={formData.documentos?.epp ?? true} onChange={e => setFormData({...formData, documentos: { ...(formData.documentos || {}), epp: e.target.checked }})} />
-                           </div>
-                        </div>
-
                         <div className="flex justify-end gap-2 pt-5 mt-5 border-t border-slate-800">
                           <button type="button" onClick={() => setIsModalOpen(false)} className="bg-slate-800 border border-slate-700 px-5 py-2.5 rounded-xl text-xs font-bold text-white hover:bg-slate-700">Cancelar</button>
-                          <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-6 py-2.5 rounded-xl text-xs font-bold shadow-[0_0_15px_rgba(245,158,11,0.2)] flex items-center gap-2"><Ico i="cloud-upload" c="w-4 h-4" /> Confirmar y Subir</button>
+                          <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-6 py-2.5 rounded-xl text-xs font-bold shadow-[0_0_15px_rgba(245,158,11,0.2)] flex items-center gap-2"><Ico i="save" c="w-4 h-4" /> Guardar Ficha</button>
                         </div>
                       </form>
                     </div>
@@ -966,9 +927,9 @@
                           
                           <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
                             <input type="file" multiple ref={logFileRef} onChange={handleLogFileChange} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" />
-                            <button type="button" onClick={() => logFileRef.current.click()} className="w-full bg-slate-800 border border-slate-700 text-slate-300 py-2.5 rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors border-dashed"><Ico i="upload-cloud" c="w-4 h-4 inline mr-1" /> Adjuntar Evidencias</button>
+                            <button type="button" onClick={() => logFileRef.current.click()} className="w-full bg-slate-800 border border-slate-700 text-slate-300 py-2.5 rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors border-dashed"><Ico i="upload-cloud" c="w-4 h-4 mr-1 inline" /> Adjuntar Evidencias</button>
                             {logForm.archivos.length > 0 && <div className="mt-3 space-y-1.5 max-h-24 overflow-y-auto pr-1">
-                               {logForm.archivos.map((a,i) => <div key={i} className="text-[9px] bg-slate-900 p-2 rounded-lg flex justify-between items-center text-emerald-400 border border-emerald-500/20"><span className="truncate w-[85%]"><Ico i="check-circle" c="w-3 h-3 inline mr-1" />{a.nombre}</span><button type="button" onClick={()=>handleRemovePendingFile(i)} className="text-red-400 bg-red-500/10 p-1 rounded"><Ico i="x" c="w-3 h-3" /></button></div>)}
+                               {logForm.archivos.map((a,i) => <div key={i} className="text-[9px] bg-slate-900 p-2 rounded-lg flex justify-between items-center text-emerald-400 border border-emerald-500/20"><span className="truncate w-[85%]"><Ico i="check-circle" c="w-3 h-3 mr-1 inline" />{a.nombre}</span><button type="button" onClick={()=>handleRemovePendingFile(i)} className="text-red-400 bg-red-500/10 p-1 rounded"><Ico i="x" c="w-3 h-3" /></button></div>)}
                             </div>}
                           </div>
 
@@ -1016,7 +977,7 @@
                     </div>
                     
                     <div className="p-5 border-t border-slate-800 flex justify-end gap-3 bg-slate-900 rounded-b-3xl shrink-0">
-                      <button onClick={handleDownloadGlobalLogsExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold text-xs flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]"><Ico i="file-spreadsheet" c="w-4 h-4" /> Generar Excel Consolidado</button>
+                      <button onClick={handleDownloadGlobalLogsExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold text-xs flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]"><Ico i="file-spreadsheet" c="w-4 h-4 mr-1" /> Generar Excel Consolidado</button>
                     </div>
                   </div>
                 </div>
@@ -1026,7 +987,6 @@
           );
         }
 
-        // CARGA DIRECTA Y SEGURA
         const container = document.getElementById('root');
         if (container) {
             try {
@@ -1034,7 +994,7 @@
                 root.render(<ErrorBoundary><App /></ErrorBoundary>);
             } catch (e) {
                 console.error("Fallo React DOM:", e);
-                container.innerHTML = '<div style="color:#ef4444; padding:50px; text-align:center; font-family:sans-serif; font-weight:bold;">Error crítico en el renderizado de la aplicación. Verifique la consola o contacte al administrador.</div>';
+                container.innerHTML = '<div style="color:#ef4444; padding:50px; text-align:center; font-family:sans-serif; font-weight:bold;">Error crítico en el renderizado. Verifique consola.</div>';
             }
         }
     </script>
