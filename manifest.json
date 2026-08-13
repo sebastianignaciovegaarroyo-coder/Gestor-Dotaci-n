@@ -1,7 +1,7 @@
 {
   "name": "Gestor de Dotación BRAMAQ",
   "short_name": "BRAMAQ",
-  "start_url": "./index.html",
+  "start_url": "/Gestor-Dotaci-n/index.html",
   "display": "standalone",
   "background_color": "#020617",
   "theme_color": "#020617",
