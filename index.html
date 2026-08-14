@@ -168,7 +168,7 @@
         try {
           if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();
-          // CORRECCIÓN iOS: Se elimina synchronizeTabs para evitar el error de Client Terminated
+          // CORRECCIÓN APLICADA: Se eliminó synchronizeTabs para que en iOS el supervisor no pierda la sesión
           db.enablePersistence().catch(() => console.warn('Caché offline limitada'));
         } catch (e) { console.error("Error iniciando base de datos:", e); }
 
