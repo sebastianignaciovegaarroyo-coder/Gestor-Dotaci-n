@@ -12,8 +12,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="BRAMAQ">
     
-    <!-- NUEVO ÍCONO APP MÓVIL (Maquinaria Pesada) -->
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3063/3063822.png">
+    <!-- ÍCONOS CORPORATIVOS BRAMAQ (Cargador Pesado) -->
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/3063/3063822.png?v=bramaq">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3063/3063822.png?v=bramaq">
     
     <title>Gestor de Dotación BRAMAQ - Enterprise Cloud</title>
     
@@ -23,7 +24,9 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- EXCEL AVANZADO CON ESTILOS -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
     
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -180,7 +183,6 @@
           const [currentEmployee, setCurrentEmployee] = useState(null);
           const [formError, setFormError] = useState('');
           
-          // Estados para Modo Manual en Desplegables
           const [isCustomCargo, setIsCustomCargo] = useState(false);
           const [isCustomCity, setIsCustomCity] = useState(false);
           
@@ -198,7 +200,6 @@
             nombre: '', rut: '', direccion: '', numero: '', ciudad: '', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''
           });
 
-          // Estado del formulario de Bitácora dinámico
           const [logForm, setLogForm] = useState({
             tipo: 'Permiso Autorizado', modoFechas: 'unica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
             customTipo: '', nota: '', archivos: []
@@ -304,21 +305,19 @@
           };
 
           // ======================= EXPORTACIÓN EJECUTIVA EXCEL (ESTILOS Y DASHBOARD) =======================
-          // Función para colorear encabezados en Excel
           const styleHeader = (ws) => {
               const range = XLSX.utils.decode_range(ws['!ref']);
               for (let C = range.s.c; C <= range.e.c; ++C) {
                   const cellAddress = XLSX.utils.encode_cell({ r: 0, c: C });
                   if (!ws[cellAddress]) continue;
                   ws[cellAddress].s = {
-                      fill: { fgColor: { rgb: "0F172A" } }, // Slate 950
-                      font: { color: { rgb: "FFFFFF" }, bold: true }, // Texto Blanco
+                      fill: { fgColor: { rgb: "0F172A" } }, 
+                      font: { color: { rgb: "FFFFFF" }, bold: true }, 
                       alignment: { horizontal: "center", vertical: "center" }
                   };
               }
           };
 
-          // Función para crear barra gráfica en Excel ("█")
           const createBar = (val, maxVal) => {
               if (!val || val === 0) return "";
               const blocks = Math.ceil((val / Math.max(maxVal, 1)) * 20);
@@ -329,7 +328,6 @@
             try {
               if (employees.length === 0) { alert("Base de datos vacía."); return; }
               
-              // Ordenar A-Z
               const sortedEmployees = [...employees].sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }));
               
               const exportData = sortedEmployees.map(emp => {
@@ -360,7 +358,6 @@
               wsData['!cols'] = [{wch: 35}, {wch: 15}, {wch: 25}, {wch: 15}, {wch: 30}, {wch: 15}, {wch: 25}, {wch: 25}, {wch: 15}, {wch: 60}];
               styleHeader(wsData);
 
-              // HOJA DASHBOARD
               const maxVal = Math.max(kpis.adminContrato, kpis.supervisores, kpis.prevencionistas, kpis.administrativos, kpis.operadoresGrua, kpis.cargadorFrontal, kpis.mecanicos, ...Object.values(kpis.porCiudad), 1);
               
               const dashArr = [
@@ -384,14 +381,12 @@
               const wsDash = XLSX.utils.aoa_to_sheet(dashArr);
               wsDash['!cols'] = [{wch: 40}, {wch: 15}, {wch: 25}];
               
-              // Colorear el gráfico nativo
               const rangeDash = XLSX.utils.decode_range(wsDash['!ref']);
               for(let R = rangeDash.s.r; R <= rangeDash.e.r; ++R) {
                   const cell = wsDash[XLSX.utils.encode_cell({r: R, c: 2})];
                   if(cell && typeof cell.v === 'string' && cell.v.includes("█")) {
                       cell.s = { font: { color: { rgb: "F59E0B" } } };
                   }
-                  // Estilos para los mini-encabezados
                   const cellA = wsDash[XLSX.utils.encode_cell({r: R, c: 0})];
                   if(cellA && ["INDICADORES GENERALES", "DISTRIBUCIÓN POR CARGOS", "DISTRIBUCIÓN POR CIUDAD"].includes(cellA.v)) {
                       wsDash[XLSX.utils.encode_cell({r: R, c: 0})].s = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "0F172A" } } };
@@ -411,8 +406,7 @@
             try {
               if (filteredGlobalLogs.length === 0) { alert("No hay observaciones en este rango de fechas."); return; }
               
-              // 1. Hoja de Datos de Bitácora
-              let logsData = filteredGlobalLogs.map(h => ({
+              const logsData = filteredGlobalLogs.map(h => ({
                 "Trabajador (A-Z)": h.empleadoNombre || '', "RUT": h.empleadoRut || '', "Cargo": h.empleadoCargo || '', "Tipo Evento": h.tipo || '',
                 "Fecha": h.modoFechas === 'rango' ? `${h.fechaInicio || ''} a ${h.fechaTermino || ''}` : (h.fechaInicio || ''),
                 "Observación": h.nota || '', "Autor": h.autor || '', "Perfil": h.rolAutor || '',
@@ -424,7 +418,6 @@
               wsData['!cols'] = [{wch: 35}, {wch: 15}, {wch: 25}, {wch: 20}, {wch: 20}, {wch: 50}, {wch: 20}, {wch: 20}, {wch: 15}];
               styleHeader(wsData);
 
-              // 2. Hoja Dashboard de Eventos
               const eventCounts = {};
               filteredGlobalLogs.forEach(l => {
                   const t = l.tipo || 'Desconocido';
@@ -480,7 +473,6 @@
             }
           };
 
-          // IMPORTACIÓN INTELIGENTE DE EXCEL (SOLO ADMINISTRATIVO)
           const fileInputRef = useRef(null);
           const logFileRef = useRef(null);
 
@@ -557,7 +549,6 @@
             if (confirm("⚠️ ¿Eliminar permanentemente este trabajador y toda su hoja de vida?")) await db.collection('employees').doc(id).delete();
           };
 
-          // MULTIARCHIVO BITÁCORA SEGURO BASE64
           const handleLogFileChange = (e) => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
@@ -626,7 +617,6 @@
               await db.collection('employees').doc(selectedEmpForHistory.id).update({ historial: updatedHistorial });
               setSelectedEmpForHistory({ ...selectedEmpForHistory, historial: updatedHistorial });
               
-              // Reset respetando el rol
               setLogForm({ 
                 tipo: userSession.rol === 'Administrativo' ? 'Licencia Médica' : 'Permiso Autorizado', 
                 modoFechas: 'unica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0], customTipo: '', nota: '', archivos: [] 
@@ -650,7 +640,6 @@
           };
 
           const filtered = useMemo(() => {
-            // Se ordena la lista A-Z basándose en el primer caracter (el apellido)
             const sorted = [...employees].sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }));
             
             return sorted.filter(emp => {
@@ -701,10 +690,8 @@
             };
           }, [employees, citiesList]);
 
-          // LÓGICA DE FILTRADO POR RANGO DE FECHAS (HOJA GLOBAL)
           const allGlobalLogs = useMemo(() => {
             let logs = [];
-            // Ordenamos A-Z por empleado antes de procesar los logs
             const sortedEmployees = [...employees].sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }));
             
             sortedEmployees.forEach(emp => { if (emp.historial && Array.isArray(emp.historial)) emp.historial.forEach(h => logs.push({ ...h, empleadoNombre: emp.nombre || 'Desconocido', empleadoRut: emp.rut || '', empleadoCargo: emp.cargo || '' })); });
@@ -719,7 +706,7 @@
           }, [allGlobalLogs, filterStartDate, filterEndDate]);
 
 
-          // PANTALLA LOGIN OBLIGATORIA
+          // ======================= PANTALLA LOGIN OBLIGATORIA =======================
           if (!hasEntered) {
             return (
               <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative">
@@ -731,7 +718,7 @@
 
                 <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-md shadow-2xl flex flex-col items-center fade-in">
                   
-                  {/* LOGO BRAMAQ MÁQUINA PESADA */}
+                  {/* LOGO MÁQUINA PESADA BRAMAQ */}
                   <div className="flex flex-col items-center mb-8">
                     <div className="w-24 h-24 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center text-slate-950 mb-4 shadow-[0_0_20px_rgba(245,158,11,0.3)]">
                       <Ico i="tractor" c="w-14 h-14" />
@@ -764,13 +751,23 @@
                       ACCEDER AL SISTEMA
                     </button>
 
+                    {/* BOTÓN INSTALAR PWA ACTUALIZADO */}
                     {isInstallable && (
-                      <button onClick={handleInstallClick} className="w-full py-3 mt-2 rounded-xl font-bold text-xs text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-2 hover:bg-emerald-500/10 transition-colors"><Ico i="download-cloud" c="w-4 h-4" /> Instalar Aplicación</button>
+                      <button onClick={handleInstallClick} className="w-full py-3 mt-2 rounded-xl font-bold text-xs text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-2 hover:bg-emerald-500/10 transition-colors"><Ico i="download-cloud" c="w-4 h-4" /> Instalar Aplicación BRAMAQ</button>
                     )}
+                    
+                    {/* INSTRUCCIONES iOS Para Borrar Caché y Agregar a Inicio */}
                     {showInstallHelp && (
-                      <div className="w-full py-3 px-4 rounded-xl text-xs text-slate-300 border border-slate-800 bg-slate-950 text-center fade-in mt-2">
-                        {isIOS ? "En iPhone: Toca 'Compartir' (icono con flecha) y selecciona 'Agregar a inicio'." : "En el menú de tu navegador, selecciona 'Instalar aplicación'."}
-                        <br/><button onClick={()=>setShowInstallHelp(false)} className="text-[10px] text-slate-500 mt-2 underline cursor-pointer">Cerrar</button>
+                      <div className="w-full py-3 px-4 rounded-xl text-xs text-slate-300 border border-slate-800 bg-slate-950 text-left fade-in mt-2">
+                        {isIOS ? (
+                            <div>
+                                <strong className="text-amber-500 block mb-1">En iPhone / Safari:</strong>
+                                1. Toca el botón <b>Compartir</b> (cuadrado con flecha hacia arriba).<br/>
+                                2. Desliza hacia abajo y selecciona <b>"Agregar a inicio"</b>.<br/>
+                                <i className="text-[9px] text-slate-500 mt-2 block">Nota: Si el ícono antiguo sigue saliendo, borra el historial de Safari en la configuración de tu iPhone.</i>
+                            </div>
+                        ) : "En el menú de tu navegador, selecciona 'Instalar aplicación'."}
+                        <div className="text-center mt-3"><button onClick={()=>setShowInstallHelp(false)} className="text-[10px] text-slate-500 underline cursor-pointer">Cerrar</button></div>
                       </div>
                     )}
                   </div>
@@ -978,7 +975,7 @@
                                   ) : <div className="text-[10px] text-slate-500 italic py-1">Sin contacto de emergencia registrado</div>}
                                 </div>
 
-                                {/* ESTADOS Y BOTONES DE GESTIÓN */}
+                                {/* ESTADOS Y BOTONES DE GESTIÓN CON TEXTO */}
                                 <div className="flex flex-col justify-center gap-2 items-center lg:w-48 border-t border-slate-800 lg:border-none pt-3 lg:pt-0 shrink-0">
                                   {getMissingDataList(emp).length > 0 ? (
                                     <div className="bg-red-500/10 text-red-400 px-2 py-1 rounded text-[10px] font-bold border border-red-500/20 w-full text-center flex items-center justify-center gap-1"><Ico i="alert-circle" c="w-3 h-3" /> Faltan Datos</div>
@@ -1036,9 +1033,9 @@
                 </nav>
               </div>
 
-              {/* ======================= MODALES DE GESTIÓN ======================= */}
+              {/* ======================= MODALES ======================= */}
 
-              {/* MODAL CONTACTO PANTALLA COMPLETA */}
+              {/* MODAL CONTACTO COMPLETO */}
               {selectedPhone && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xs p-6 shadow-2xl text-center relative">
@@ -1055,7 +1052,7 @@
                 </div>
               )}
 
-              {/* MODAL FICHA TRABAJADOR (CREAR/EDITAR) */}
+              {/* MODAL FICHA TRABAJADOR */}
               {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm fade-in overflow-y-auto">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl my-auto">
@@ -1127,7 +1124,7 @@
                             )}
                           </div>
                           
-                          {/* Dirección */}
+                          {/* Dirección separada en Calle y N° */}
                           <div>
                             <label className="text-[10px] uppercase font-bold text-slate-500">Dirección Residencial</label>
                             <div className="flex gap-2 mt-1">
