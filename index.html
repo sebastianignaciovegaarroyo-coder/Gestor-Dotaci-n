@@ -11,7 +11,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="BRAMAQ">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3200/3200424.png">
+    
+    <!-- NUEVO ÍCONO APP MÓVIL (Maquinaria Pesada) -->
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3063/3063822.png">
     
     <title>Gestor de Dotación BRAMAQ - Enterprise Cloud</title>
     
@@ -21,9 +23,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- EXCEL AVANZADO CON ESTILOS (Soporte para colores y dashboards) -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -180,6 +180,7 @@
           const [currentEmployee, setCurrentEmployee] = useState(null);
           const [formError, setFormError] = useState('');
           
+          // Estados para Modo Manual en Desplegables
           const [isCustomCargo, setIsCustomCargo] = useState(false);
           const [isCustomCity, setIsCustomCity] = useState(false);
           
@@ -197,6 +198,7 @@
             nombre: '', rut: '', direccion: '', numero: '', ciudad: '', cargo: '', telefono: '', correo: '', emergenciaNombre: '', emergenciaFono: ''
           });
 
+          // Estado del formulario de Bitácora dinámico
           const [logForm, setLogForm] = useState({
             tipo: 'Permiso Autorizado', modoFechas: 'unica', fechaInicio: new Date().toISOString().split('T')[0], fechaTermino: new Date().toISOString().split('T')[0], fechaUnica: new Date().toISOString().split('T')[0],
             customTipo: '', nota: '', archivos: []
@@ -409,7 +411,8 @@
             try {
               if (filteredGlobalLogs.length === 0) { alert("No hay observaciones en este rango de fechas."); return; }
               
-              const logsData = filteredGlobalLogs.map(h => ({
+              // 1. Hoja de Datos de Bitácora
+              let logsData = filteredGlobalLogs.map(h => ({
                 "Trabajador (A-Z)": h.empleadoNombre || '', "RUT": h.empleadoRut || '', "Cargo": h.empleadoCargo || '', "Tipo Evento": h.tipo || '',
                 "Fecha": h.modoFechas === 'rango' ? `${h.fechaInicio || ''} a ${h.fechaTermino || ''}` : (h.fechaInicio || ''),
                 "Observación": h.nota || '', "Autor": h.autor || '', "Perfil": h.rolAutor || '',
@@ -421,7 +424,7 @@
               wsData['!cols'] = [{wch: 35}, {wch: 15}, {wch: 25}, {wch: 20}, {wch: 20}, {wch: 50}, {wch: 20}, {wch: 20}, {wch: 15}];
               styleHeader(wsData);
 
-              // Hoja Dashboard de Eventos
+              // 2. Hoja Dashboard de Eventos
               const eventCounts = {};
               filteredGlobalLogs.forEach(l => {
                   const t = l.tipo || 'Desconocido';
@@ -477,7 +480,7 @@
             }
           };
 
-          // IMPORTACIÓN INTELIGENTE DE EXCEL
+          // IMPORTACIÓN INTELIGENTE DE EXCEL (SOLO ADMINISTRATIVO)
           const fileInputRef = useRef(null);
           const logFileRef = useRef(null);
 
@@ -554,7 +557,7 @@
             if (confirm("⚠️ ¿Eliminar permanentemente este trabajador y toda su hoja de vida?")) await db.collection('employees').doc(id).delete();
           };
 
-          // MULTIARCHIVO BITÁCORA SEGURO EN BASE64
+          // MULTIARCHIVO BITÁCORA SEGURO BASE64
           const handleLogFileChange = (e) => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
@@ -716,7 +719,7 @@
           }, [allGlobalLogs, filterStartDate, filterEndDate]);
 
 
-          // ======================= PANTALLA LOGIN OBLIGATORIA =======================
+          // PANTALLA LOGIN OBLIGATORIA
           if (!hasEntered) {
             return (
               <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative">
@@ -727,9 +730,15 @@
                 </div>
 
                 <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-md shadow-2xl flex flex-col items-center fade-in">
-                  <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center text-slate-950 mb-4"><Ico i="shield-check" c="w-10 h-10" /></div>
-                  <h1 className="text-xl font-extrabold text-white">Gestor de Dotación</h1>
-                  <h2 className="text-sm font-bold text-amber-400 mb-8 uppercase tracking-widest">BRAMAQ Enterprise</h2>
+                  
+                  {/* LOGO BRAMAQ MÁQUINA PESADA */}
+                  <div className="flex flex-col items-center mb-8">
+                    <div className="w-24 h-24 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center text-slate-950 mb-4 shadow-[0_0_20px_rgba(245,158,11,0.3)]">
+                      <Ico i="tractor" c="w-14 h-14" />
+                    </div>
+                    <h1 className="text-4xl font-extrabold text-white tracking-tight text-center">BRAMAQ</h1>
+                    <h2 className="text-[10px] font-bold text-amber-500 uppercase tracking-[0.2em] mt-1 text-center">Gestor de Dotación Enterprise</h2>
+                  </div>
 
                   <div className="w-full space-y-4">
                     <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Seleccione Rol de Ingreso</label>
@@ -776,8 +785,8 @@
               {/* Sidebar Desktop */}
               <aside className="hidden lg:flex flex-col w-64 bg-slate-900 border-r border-slate-800 h-full">
                 <div className="h-20 flex items-center px-6 border-b border-slate-800 gap-3">
-                  <div className="bg-amber-500 p-2 rounded-xl text-slate-950"><Ico i="hard-hat" c="w-5 h-5" /></div>
-                  <div><div className="font-bold text-white">BRAMAQ</div><div className="text-[9px] text-amber-500 uppercase font-bold">Enterprise</div></div>
+                  <div className="bg-amber-500 p-2.5 rounded-xl text-slate-950 shadow-lg shadow-amber-500/20"><Ico i="tractor" c="w-6 h-6" /></div>
+                  <div><div className="font-extrabold text-white text-lg tracking-tight leading-none">BRAMAQ</div><div className="text-[9px] text-amber-500 uppercase font-bold tracking-wider mt-0.5">Enterprise</div></div>
                 </div>
                 <div className="p-4 space-y-2 flex-1">
                   <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${activeTab === 'dashboard' ? 'bg-amber-500/10 text-amber-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Ico i="layout-dashboard" c="w-4 h-4" /> Panel Gerencial</button>
@@ -807,7 +816,7 @@
               <div className="flex-1 flex flex-col h-screen relative">
                 {/* Header Mobile */}
                 <header className="lg:hidden h-16 flex items-center justify-between px-4 bg-slate-900 border-b border-slate-800 z-30">
-                  <div className="flex items-center gap-2 text-white font-bold"><Ico i="hard-hat" c="text-amber-500 w-5 h-5" /> BRAMAQ</div>
+                  <div className="flex items-center gap-2.5 text-white font-extrabold text-lg tracking-tight"><Ico i="tractor" c="text-amber-500 w-6 h-6" /> BRAMAQ</div>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 bg-slate-800 text-amber-500 rounded-lg border border-slate-700 mr-1"><Ico i={theme === 'dark' ? 'sun' : 'moon'} c="w-4 h-4" /></button>
                     <span className={`w-2 h-2 rounded-full mr-1 ${onlineStatus ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
@@ -1027,9 +1036,9 @@
                 </nav>
               </div>
 
-              {/* ======================= MODALES ======================= */}
+              {/* ======================= MODALES DE GESTIÓN ======================= */}
 
-              {/* MODAL CONTACTO COMPLETO */}
+              {/* MODAL CONTACTO PANTALLA COMPLETA */}
               {selectedPhone && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xs p-6 shadow-2xl text-center relative">
@@ -1046,7 +1055,7 @@
                 </div>
               )}
 
-              {/* MODAL FICHA TRABAJADOR */}
+              {/* MODAL FICHA TRABAJADOR (CREAR/EDITAR) */}
               {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm fade-in overflow-y-auto">
                   <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl my-auto">
@@ -1189,7 +1198,7 @@
                                       <div key={i} className="flex justify-between items-center bg-slate-950 p-2.5 rounded-lg border border-slate-800 group/file hover:border-slate-600">
                                         <a href={a.url} target="_blank" className="text-[10px] text-blue-400 truncate w-3/4 flex items-center hover:underline"><Ico i={a.tipo?.includes('image') ? 'image' : 'file-text'} c="w-3.5 h-3.5 mr-1.5 text-slate-500" /> {a.nombre}</a>
                                         {((userSession.rol === 'Administrativo' || userSession.rol === 'AdminContrato') || userSession.autor === h.autor) && (
-                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo"><Ico i="trash-2" c="w-3.5 h-3.5" /></button>
+                                          <button onClick={() => handleDeleteSavedAttachment(h.id, i)} className="text-red-500 opacity-0 group-hover/file:opacity-100 p-1 hover:bg-red-500/10 rounded transition-opacity" title="Eliminar archivo de la base de datos"><Ico i="trash-2" c="w-3.5 h-3.5" /></button>
                                         )}
                                       </div>
                                     ))}
@@ -1271,6 +1280,7 @@
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/90 backdrop-blur-sm fade-in">
                   <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl overflow-hidden">
                     
+                    {/* ENCABEZADO Y FILTRO DE FECHA AVANZADO */}
                     <div className="p-4 sm:p-5 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 rounded-t-3xl shrink-0">
                       <div className="flex items-center gap-3 w-full sm:w-auto justify-between">
                         <div className="flex items-center gap-3">
