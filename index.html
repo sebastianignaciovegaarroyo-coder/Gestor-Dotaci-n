@@ -168,7 +168,8 @@
         try {
           if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();
-          db.enablePersistence({ synchronizeTabs: true }).catch(() => console.warn('Caché offline limitada'));
+          // CORRECCIÓN iOS: Se elimina synchronizeTabs para evitar el error de Client Terminated
+          db.enablePersistence().catch(() => console.warn('Caché offline limitada'));
         } catch (e) { console.error("Error iniciando base de datos:", e); }
 
         function App() {
