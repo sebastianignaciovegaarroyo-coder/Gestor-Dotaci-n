@@ -14,7 +14,8 @@
     
     <!-- ÍCONOS CORPORATIVOS BRAMAQ (Cargador Pesado) -->
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/3063/3063822.png?v=bramaq">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3063/3063822.png?v=bramaq">
+    <!-- ETIQUETA iOS ACTUALIZADA CON TAMAÑO Y FORZADO DE CACHÉ (v2) -->
+    <link rel="apple-touch-icon" sizes="180x180" href="https://cdn-icons-png.flaticon.com/512/3063/3063822.png?v=bramaq_v2">
     
     <title>Gestor de Dotación BRAMAQ - Enterprise Cloud</title>
     
@@ -102,6 +103,16 @@
         }
         body.light-mode .hover\:bg-slate-800:hover { background-color: #e2e8f0 !important; }
         body.light-mode .hover\:border-slate-600:hover { border-color: #94a3b8 !important; }
+
+        /* ================= AVISO iOS PWA ================= */
+        #ios-install-prompt { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; background-color: rgba(15, 23, 42, 0.95); color: #f1f5f9; border: 1px solid #334155; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.8); padding: 16px; z-index: 9999; backdrop-filter: blur(12px); transition: opacity 0.4s ease, transform 0.4s ease; }
+        body.light-mode #ios-install-prompt { background-color: rgba(255, 255, 255, 0.95); color: #0f172a; border-color: #cbd5e1; box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+        #ios-install-prompt.hidden { display: none; opacity: 0; transform: translate(-50%, 20px); pointer-events: none; }
+        .prompt-content { position: relative; font-size: 14px; line-height: 1.5; text-align: center; }
+        .prompt-content p { margin: 8px 0; }
+        #close-prompt { position: absolute; top: -10px; right: -10px; background: #334155; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 12px; font-weight: bold; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center; }
+        body.light-mode #close-prompt { background: #e2e8f0; color: #334155; }
+        .icon-simulate { font-weight: bold; color: #3b82f6; font-size: 18px; vertical-align: middle; }
     </style>
 </head>
 <body class="antialiased selection:bg-amber-500/30 selection:text-amber-200" translate="no">
@@ -1345,6 +1356,38 @@
                 container.innerHTML = '<div style="color:#ef4444; padding:50px; text-align:center; font-family:sans-serif; font-weight:bold;">Error crítico en el renderizado. Verifique consola.</div>';
             }
         }
+    </script>
+    
+    <!-- SCRIPT DE POP-UP PARA INSTALACIÓN EN iOS (NUEVO) -->
+    <!-- ESTO DETECTA SI ES IPHONE Y MUESTRA LA TARJETA FLOTANTE DE INSTALACIÓN -->
+    <!-- POP-UP DE INSTALACIÓN EXCLUSIVO PARA iOS -->
+    <div id="ios-install-prompt" class="hidden">
+        <div class="prompt-content">
+            <button id="close-prompt" aria-label="Cerrar">✕</button>
+            <p><strong class="text-amber-500">Instala BRAMAQ en tu iPhone</strong></p>
+            <p>Toca el ícono Compartir <span class="icon-simulate">⍐</span> abajo y luego selecciona <br><strong>"Agregar a Inicio"</strong> <span class="icon-simulate">➕</span></p>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const isIOS = () => /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+            const isStandalone = () => ('standalone' in window.navigator && window.navigator.standalone) || window.matchMedia('(display-mode: standalone)').matches;
+            
+            const promptElement = document.getElementById('ios-install-prompt');
+            const closeButton = document.getElementById('close-prompt');
+
+            if (isIOS() && !isStandalone() && !localStorage.getItem('bramaq_ios_prompt_closed')) {
+                promptElement.classList.remove('hidden');
+            }
+
+            if(closeButton) {
+                closeButton.addEventListener('click', () => {
+                    promptElement.classList.add('hidden');
+                    localStorage.setItem('bramaq_ios_prompt_closed', 'true');
+                });
+            }
+        });
     </script>
 </body>
 </html>
