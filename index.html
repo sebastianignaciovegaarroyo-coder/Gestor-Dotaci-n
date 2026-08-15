@@ -164,15 +164,7 @@
         try {
           if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
           db = firebase.firestore();
-          
-          // ACTIVAR PERSISTENCIA OFFLINE PARA FUNCIONAMIENTO SIN CONEXIÓN
-          db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
-              if (err.code == 'failed-precondition') {
-                  console.warn('Persistencia múltiple pestaña activa.');
-              } else if (err.code == 'unimplemented') {
-                  console.warn('El navegador no soporta persistencia offline.');
-              }
-          });
+          // NOTA: Se eliminó enablePersistence() para evitar bloqueos por cierre de cliente en móviles.
         } catch (e) { console.error("Error iniciando base de datos:", e); }
 
         function App() {
@@ -734,6 +726,7 @@
           }, [allGlobalLogs, filterStartDate, filterEndDate]);
 
 
+          // ======================= PANTALLA LOGIN OBLIGATORIA =======================
           if (!hasEntered) {
             return (
               <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative">
@@ -745,6 +738,7 @@
 
                 <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-md shadow-2xl flex flex-col items-center fade-in">
                   
+                  {/* LOGO MÁQUINA PESADA BRAMAQ */}
                   <div className="flex flex-col items-center mb-8">
                     <div className="w-24 h-24 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center text-slate-950 mb-4 shadow-[0_0_20px_rgba(245,158,11,0.3)]">
                       <Ico i="tractor" c="w-14 h-14" />
@@ -786,10 +780,12 @@
                       ACCEDER AL SISTEMA
                     </button>
 
+                    {/* BOTÓN INSTALAR PWA ACTUALIZADO */}
                     {isInstallable && (
                       <button onClick={handleInstallClick} className="w-full py-3 mt-2 rounded-xl font-bold text-xs text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-2 hover:bg-emerald-500/10 transition-colors"><Ico i="download-cloud" c="w-4 h-4" /> Instalar Aplicación BRAMAQ</button>
                     )}
                     
+                    {/* INSTRUCCIONES iOS Para Borrar Caché y Agregar a Inicio */}
                     {showInstallHelp && (
                       <div className="w-full py-3 px-4 rounded-xl text-xs text-slate-300 border border-slate-800 bg-slate-950 text-left fade-in mt-2">
                         {isIOS ? (
@@ -809,8 +805,10 @@
             );
           }
 
+          // APLICACIÓN PRINCIPAL (GERENCIAL Y OPERATIVA)
           return (
             <div className="flex h-screen overflow-hidden bg-slate-950">
+              {/* Sidebar Desktop */}
               <aside className="hidden lg:flex flex-col w-64 bg-slate-900 border-r border-slate-800 h-full">
                 <div className="h-20 flex items-center px-6 border-b border-slate-800 gap-3">
                   <div className="bg-amber-500 p-2.5 rounded-xl text-slate-950 shadow-lg shadow-amber-500/20"><Ico i="tractor" c="w-6 h-6" /></div>
@@ -842,6 +840,7 @@
               </aside>
 
               <div className="flex-1 flex flex-col h-screen relative">
+                {/* Header Mobile */}
                 <header className="lg:hidden h-16 flex items-center justify-between px-4 bg-slate-900 border-b border-slate-800 z-30">
                   <div className="flex items-center gap-2.5 text-white font-extrabold text-lg tracking-tight"><Ico i="tractor" c="text-amber-500 w-6 h-6" /> BRAMAQ</div>
                   <div className="flex items-center gap-2">
@@ -855,6 +854,7 @@
                   {loading ? <div className="text-center py-20 text-amber-500"><Ico i="loader-2" c="w-10 h-10 animate-spin mx-auto" /><p className="mt-2 text-xs text-slate-400">Sincronizando información en tiempo real...</p></div> : (
                     <div className="max-w-7xl mx-auto space-y-6 fade-in pb-20">
                       
+                      {/* DASHBOARD */}
                       {activeTab === 'dashboard' && (
                         <>
                           <h1 className="text-2xl font-extrabold text-white">Resumen Ejecutivo</h1>
@@ -1279,7 +1279,7 @@
                           </div>
 
                           <div>
-                            <label className="text-[9px] text-slate-500 uppercase font-bold mb-1.5 block">Descripción / Details</label>
+                            <label className="text-[9px] text-slate-500 uppercase font-bold mb-1.5 block">Descripción / Detalles</label>
                             <textarea placeholder="Redactar nota o justificación..." value={logForm.nota} onChange={e=>setLogForm({...logForm, nota:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white h-24 resize-none outline-none focus:border-amber-500"></textarea>
                           </div>
                           
